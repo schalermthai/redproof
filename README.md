@@ -6,13 +6,9 @@ Redproof verifies the automated guardrails you already rely on: tests, linters, 
 
 ## The question Redproof asks
 
-Redproof does not replace your existing guardrails.
-
-It verifies the ones you already depend on.
-
 > **If this guardrail stopped detecting the problem tomorrow, would we know?**
 
-A green check tells you the current code passed.
+When a check goes green, it tells you the current code passed, but can you trust it?
 
 Redproof goes further by deliberately planting a controlled violation, running the same check, and confirming that the expected rule is detected.
 
@@ -86,8 +82,6 @@ const gate = defineGate({
     counting: counting.supported,
 
     async run(ctx) {
-      const startedAt = new Date().toISOString();
-
       const found = await text.find(ctx, {
         files: 'src/**/*.ts',
         find: /\bTODO\b/g,
