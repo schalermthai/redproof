@@ -27,16 +27,16 @@ jobs:
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
-      # Trusted Publishing needs npm >= 11.15.0. Pinned so a new major cannot outrun Node 22.
+      # Trusted Publishing needs npm >= 11.15.0. Pinned so a new major cannot outrun Node 24.
       - name: Upgrade npm
         run: npm install --global npm@^12
 
@@ -104,7 +104,7 @@ jobs:
           ls -l artifacts
 
       - name: Upload the tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-tarballs-${{ steps.version.outputs.version }}
           path: artifacts/*.tgz
