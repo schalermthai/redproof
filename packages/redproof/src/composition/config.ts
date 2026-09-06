@@ -33,7 +33,8 @@ export function defineConfig<const C extends RedproofConfig>(config: C): C {
 
 export function resolveConfig(config: RedproofConfig): ResolvedRedproofConfig {
   const gatesRoot = config.gatesRoot ?? 'gates/**/*.ts';
-  const execution = config.execution ?? { mode: 'in-place' as const };
+
+  const execution = config.execution ?? { mode: 'copies' as const };
 
   if (execution.mode === 'copies') {
     const maxAtOnce = execution.maxAtOnce ?? 4;

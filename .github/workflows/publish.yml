@@ -1,12 +1,10 @@
 name: Publish
 
-# Publishing runs when you publish a GitHub Release.
-# The release tag sets the version, for example v1.2.3 publishes 1.2.3.
+# The release tag sets the version: v1.2.3 publishes 1.2.3.
 on:
   release:
     types: [published]
 
-  # Lets you rehearse the whole job without publishing anything.
   workflow_dispatch:
     inputs:
       version:
@@ -19,9 +17,7 @@ on:
 
 permissions:
   contents: read
-  # Required by npm Trusted Publishing. It lets npm verify this workflow
-  # through OIDC, so no npm token is stored anywhere.
-  id-token: write
+  id-token: write # npm Trusted Publishing (OIDC)
 
 jobs:
   publish:
@@ -40,11 +36,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
-      # Trusted Publishing needs npm 11.15.0 or later, and the trust
-      # configuration on npm was created with npm 12. Node 22 ships an older
-      # npm, so upgrade it here.
-      # Pinned to a major range on purpose. npm@latest could move to a major
-      # that needs a newer Node than this job installs, and break publishing.
+      # Trusted Publishing needs npm >= 11.15.0. Pinned so a new major cannot outrun Node 22.
       - name: Upgrade npm
         run: npm install --global npm@^12
 
@@ -58,9 +50,7 @@ jobs:
 
       - name: Work out the version and the npm tag
         id: version
-        # The tag and the manual input are untrusted text. Pass them through
-        # the environment, never straight into the shell line, so a tag with
-        # shell characters cannot run before it is checked.
+        # Untrusted input goes through env, never into the shell line.
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_VERSION: ${{ github.event.inputs.version }}
@@ -79,10 +69,7 @@ jobs:
             exit 1
           fi
 
-          # A prerelease such as 1.2.3-beta.1 must never become the default
-          # install. Publish it under the "next" tag instead of "latest".
-          # Use a shell case, not grep. A lone "-" pattern reads as an option
-          # in some grep builds, which would silently tag a beta as latest.
+          # A prerelease goes to "next", never "latest". A lone "-" reads as an option in grep.
           case "$VERSION" in
             *-*) NPM_TAG=next ;;
             *)   NPM_TAG=latest ;;

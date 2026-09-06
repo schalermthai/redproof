@@ -40,8 +40,7 @@ type CruiseOutputLike = {
   };
 };
 
-// dependency-cruiser returns `output` as a JSON string for outputType 'json',
-// and as an object for some other output types. Accept both.
+// dependency-cruiser returns a JSON string for outputType 'json'.
 function readCruiseOutput(output: unknown): CruiseOutputLike | null {
   if (typeof output === 'string') {
     try {

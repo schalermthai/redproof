@@ -1,5 +1,4 @@
-// Sets the same version on every publishable package, and points each
-// internal `redproof` dependency at that same version.
+// Sets one version across every publishable package.
 //
 // Usage: node --experimental-strip-types scripts/set-version.ts 1.2.3
 
@@ -16,7 +15,6 @@ const PACKAGE_DIRS = [
 
 const INTERNAL_DEPENDENCY = 'redproof';
 
-// Semantic version, with an optional prerelease and build part.
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 type Manifest = {
@@ -32,7 +30,6 @@ function readVersionArgument(argv: readonly string[]): string {
     throw new Error('Missing version argument. Usage: set-version.ts <version>');
   }
 
-  // Accept a git tag such as v1.2.3 as well as a bare 1.2.3.
   const version = raw.startsWith('v') ? raw.slice(1) : raw;
 
   if (!SEMVER.test(version)) {

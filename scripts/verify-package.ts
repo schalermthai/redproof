@@ -1,14 +1,5 @@
-// Proves the built packages work as real npm packages, not just as source.
-//
-// It packs every publishable package, installs the tarballs into a throwaway
-// project outside this repository, then checks that a consumer can:
-//   1. import each package at run time,
-//   2. run the redproof command line tool,
-//   3. type-check against the published type declarations.
-//
-// It also proves the type check is a real gate, by feeding it code that must
-// fail. A type check that cannot fail would pass step 3 while shipping broken
-// types.
+// Packs the publishable packages, installs them into a throwaway project, and
+// drives them as a real consumer would.
 //
 // Usage: node --experimental-strip-types scripts/verify-package.ts
 
@@ -27,8 +18,7 @@ const PACKAGES = [
   { name: '@redproof/testing', tarballPrefix: 'redproof-testing-', probe: 'testing' },
 ] as const;
 
-// Files that must never reach npm. Source would make the package unusable,
-// because Node refuses to strip types under node_modules.
+// Node refuses to strip types under node_modules, so shipped source is unusable.
 const FORBIDDEN_IN_TARBALL = ['package/src/', 'package/tsconfig'];
 
 let failures = 0;
@@ -63,7 +53,6 @@ const consumer = join(workdir, 'consumer');
 try {
   console.log(`workspace: ${workdir}\n`);
 
-  // ---- pack -------------------------------------------------------------
   console.log('1. Pack the publishable packages');
   await writeFile(join(workdir, '.keep'), '');
   run('mkdir', ['-p', packDir, consumer], workdir);
@@ -73,7 +62,6 @@ try {
   const packed = run('ls', ['-1', packDir], workdir).trim().split('\n');
   report(packed.length === PACKAGES.length, `packed ${packed.length} of ${PACKAGES.length} packages`);
 
-  // ---- tarball contents -------------------------------------------------
   console.log('\n2. Check what each tarball contains');
   const tarballs = new Map<string, string>();
 
@@ -97,7 +85,6 @@ try {
     report(hasLicense, `${pkg.name}: ships LICENSE`);
   }
 
-  // ---- install ----------------------------------------------------------
   console.log('\n3. Install the tarballs into a clean project');
   await writeFile(
     join(consumer, 'package.json'),
@@ -109,7 +96,6 @@ try {
 
   if (!install.ok) throw new Error('cannot continue without a successful install');
 
-  // ---- runtime ----------------------------------------------------------
   console.log('\n4. Import each package at run time');
   for (const pkg of PACKAGES) {
     const probeFile = join(consumer, 'probe.mjs');
@@ -126,11 +112,6 @@ try {
     report(result.ok, `${pkg.name}: imports and exports ${pkg.probe}()`, result.ok ? '' : result.output.slice(0, 300));
   }
 
-  // ---- command line tool ------------------------------------------------
-  // A real project, driven through the installed binary. Checking that the
-  // binary merely starts would pass even if the gate could never detect
-  // anything, so the gate is run twice: once over clean code, once over code
-  // that must break it.
   console.log('\n5. Run the redproof command line tool on a real project');
   run('mkdir', ['-p', join(consumer, 'gates'), join(consumer, 'src')], consumer);
 
@@ -175,7 +156,6 @@ try {
   const cliGreen = tryRun('node', ['node_modules/.bin/redproof', 'check'], consumer);
   report(cliGreen.ok, 'redproof binary passes a clean project', cliGreen.ok ? '' : cliGreen.output.slice(0, 400));
 
-  // Red side: the same gate must fail once the rule is genuinely broken.
   await writeFile(join(consumer, 'src', 'clean.ts'), 'export const value = 1; // TODO fix\n');
   const cliRed = tryRun('node', ['node_modules/.bin/redproof', 'check'], consumer);
   report(!cliRed.ok, 'redproof binary fails a broken project', cliRed.ok ? 'check passed when it should have failed' : '');
@@ -189,7 +169,6 @@ try {
   await rm(join(consumer, 'gates'), { recursive: true, force: true });
   await rm(join(consumer, 'redproof.config.ts'), { force: true });
 
-  // ---- types ------------------------------------------------------------
   console.log('\n6. Type-check a consumer against the published types');
   await writeFile(
     join(consumer, 'tsconfig.json'),
@@ -212,15 +191,12 @@ try {
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
   report(typesOk.ok, 'valid consumer code type-checks', typesOk.ok ? '' : typesOk.output.slice(0, 400));
 
-  // Red-proof: the same gate must reject code that is genuinely wrong.
-  // Without this, broken or missing types would look identical to good ones.
   console.log('\n7. Red-proof: the type check must reject bad code');
   const red = "import { thisExportDoesNotExist } from 'redproof';\nvoid thisExportDoesNotExist;\n";
   await writeFile(join(consumer, 'consumer.ts'), red);
   const typesRed = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
   report(!typesRed.ok, 'invalid consumer code is rejected', typesRed.ok ? 'type check passed when it should have failed' : '');
 
-  // ---- version agreement ------------------------------------------------
   console.log('\n8. Check every package carries the same version');
   const versions = new Set<string>();
 

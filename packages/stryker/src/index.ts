@@ -53,10 +53,7 @@ function withCwd<T>(root: string, action: () => Promise<T>): Promise<T> {
   });
 }
 
-// Stryker spawns the subject's test suite as a child process, which inherits
-// our environment. NODE_TEST_CONTEXT makes a `node --test` child report to a
-// parent runner instead of setting a failing exit code, so every mutant would
-// look detected-as-survived. The child must run as its own root test process.
+// An inherited NODE_TEST_CONTEXT makes a `node --test` child exit 0 on failure.
 function withoutTestRunnerEnv<T>(action: () => Promise<T>): Promise<T> {
   const before = process.env.NODE_TEST_CONTEXT;
   if (before === undefined) return action();

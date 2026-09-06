@@ -104,19 +104,11 @@ function safeName(value: string): string {
   return safe || 'gate';
 }
 
-// The copy must NOT live inside the project. Tools such as ESLint, tsc and
-// dependency-cruiser search parent directories for their configuration. A copy
-// under the project would still see the project's own config files, so a
-// mutation that hides one inside the copy would have no effect, and a refuse
-// Proof would report a false PASS. The OS temporary directory has no such
-// ancestors.
+// Outside the project, so config lookups cannot escape the copy and find the original.
 async function createCopyRoot(gateId: string): Promise<string> {
   return mkdtemp(join(tmpdir(), `redproof-${safeName(gateId)}-`));
 }
 
-// Find the node_modules that the project itself would resolve against. Node
-// walks up from a file until it finds one, so a workspace package with hoisted
-// dependencies resolves against the repository root, not its own directory.
 async function findDependencies(projectRoot: string): Promise<string | null> {
   let current = resolve(projectRoot);
 
@@ -126,7 +118,7 @@ async function findDependencies(projectRoot: string): Promise<string | null> {
     try {
       if ((await lstat(candidate)).isDirectory()) return candidate;
     } catch {
-      // Not here. Keep walking up.
+      // keep walking up
     }
 
     const parent = dirname(current);
@@ -135,9 +127,7 @@ async function findDependencies(projectRoot: string): Promise<string | null> {
   }
 }
 
-// node_modules is never copied, because it is large and unchanged by a
-// mutation. Inside the project the copy could still resolve it from an ancestor
-// directory. Outside the project it cannot, so link it at the copy root.
+// node_modules is not copied, so link it for module resolution.
 async function linkDependencies(projectRoot: string, target: string): Promise<void> {
   const source = await findDependencies(projectRoot);
   if (source === null) return;
@@ -155,9 +145,6 @@ export async function copyGateWorkspace(projectRoot: string, gateId: string): Pr
 }
 
 export async function releaseGateWorkspace(workspace: GateWorkspace): Promise<void> {
-  // The copy root is a temporary directory of our own, so removing it is safe.
-  // rm does not follow the node_modules symlink, so the project's real
-  // dependencies are untouched.
   await rm(workspace.root, { recursive: true, force: true });
 }
 

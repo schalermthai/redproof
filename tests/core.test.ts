@@ -11,6 +11,7 @@ import {
   type CountingCapability,
   type Scan,
 } from 'redproof';
+import { resolveConfig } from '../packages/redproof/src/composition/config.ts';
 import { executionPolicy } from '../packages/redproof/src/runtime/core/execution-policy.ts';
 import { checkExitCode, proofExitCode } from '../packages/redproof/src/runtime/core/exit-code.ts';
 import { evaluateProof } from '../packages/redproof/src/runtime/core/proof-evaluation.ts';
@@ -42,6 +43,23 @@ function adapter(countingCapability: CountingCapability = counting.supported) {
     },
   });
 }
+
+test('a config with no execution block defaults to copies', () => {
+  assert.deepEqual(resolveConfig({}).execution, { mode: 'copies', maxAtOnce: 4 });
+  assert.deepEqual(resolveConfig({ root: 'x' }).execution, { mode: 'copies', maxAtOnce: 4 });
+});
+
+test('an explicit execution block overrides the default', () => {
+  assert.deepEqual(
+    resolveConfig({ execution: { mode: 'in-place' } }).execution,
+    { mode: 'in-place' },
+  );
+
+  assert.deepEqual(
+    resolveConfig({ execution: { mode: 'copies', maxAtOnce: 2 } }).execution,
+    { mode: 'copies', maxAtOnce: 2 },
+  );
+});
 
 test('execution policy makes in-place serial and copies Gate-parallel', () => {
   assert.deepEqual(executionPolicy({ mode: 'in-place' }), {

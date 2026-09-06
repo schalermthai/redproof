@@ -2,7 +2,7 @@
 
 Proofs intentionally modify a workspace. Redproof supports two execution modes for controlling that risk.
 
-Configure the mode in `redproof.config.ts`.
+Copies is the default. Configure the mode in `redproof.config.ts`.
 
 ## In-place mode
 
@@ -43,15 +43,16 @@ export default defineConfig({
 });
 ```
 
-Redproof creates a private working copy for each Gate.
+Redproof creates a private working copy for each Gate, outside the project. A copy inside the project would still expose the project's own configuration files to tools that search parent directories.
 
 ```text
-project
-   │
-   ├── Gate A copy + child process
-   ├── Gate B copy + child process
-   └── Gate C copy + child process
+project                    temporary directory
+                              ├── Gate A copy + child process
+                              ├── Gate B copy + child process
+                              └── Gate C copy + child process
 ```
+
+`node_modules` is not copied. Redproof links it into each copy so module resolution still works.
 
 Different Gates can run in parallel up to `maxAtOnce`.
 
@@ -97,9 +98,10 @@ For example, a test runner that leaves cache files can cause baseline verificati
 Start with:
 
 ```text
-local/simple Gate      → in-place
+default                → copies
 CI / destructive proof → copies
 parallel Gates         → copies
+Gate needs the real path → in-place
 ```
 
 The public Gate, Rule, Check, and Proof model does not change between modes.
