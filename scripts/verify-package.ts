@@ -79,10 +79,12 @@ try {
     const hasDist = entries.some(entry => entry.startsWith('package/dist/'));
     const leaked = entries.filter(entry => FORBIDDEN_IN_TARBALL.some(bad => entry.startsWith(bad)));
     const hasLicense = entries.includes('package/LICENSE');
+    const hasReadme = entries.includes('package/README.md');
 
     report(hasDist, `${pkg.name}: ships dist/`);
     report(leaked.length === 0, `${pkg.name}: ships no source`, leaked.join(', '));
     report(hasLicense, `${pkg.name}: ships LICENSE`);
+    report(hasReadme, `${pkg.name}: ships README.md`);
   }
 
   console.log('\n3. Install the tarballs into a clean project');

@@ -35,3 +35,6 @@ Thumbs.db
 # Temporary files
 tmp/
 *.tmp
+
+# Generated at build time from the root README
+packages/redproof/README.md

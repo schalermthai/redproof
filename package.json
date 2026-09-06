@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "clean": "rm -rf packages/*/dist",
-    "build": "npm run clean && tsc -p packages/redproof/tsconfig.build.json && tsc -p packages/eslint/tsconfig.build.json && tsc -p packages/dependency-cruiser/tsconfig.build.json && tsc -p packages/stryker/tsconfig.build.json && tsc -p packages/testing/tsconfig.build.json",
+    "build": "npm run clean && cp README.md packages/redproof/README.md && tsc -p packages/redproof/tsconfig.build.json && tsc -p packages/eslint/tsconfig.build.json && tsc -p packages/dependency-cruiser/tsconfig.build.json && tsc -p packages/stryker/tsconfig.build.json && tsc -p packages/testing/tsconfig.build.json",
     "pretest": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/*.test.ts tests/composition/*.test.ts tests/composition/mutation/*.test.ts tests/adapters/*.test.ts tests/reporter/*.test.ts",

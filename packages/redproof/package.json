@@ -20,7 +20,8 @@
     "redproof": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "schema"
   ],
   "engines": {
     "node": ">=22.6"
