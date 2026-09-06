@@ -2,7 +2,7 @@ import type { Adapter } from '../../domain/adapter.ts';
 import type { CheckResult } from '../../domain/check.ts';
 import type { Gate } from '../../domain/gate.ts';
 import type { MutationPlan, UndoMutation } from '../../domain/mutation.ts';
-import type { Proof } from '../../domain/proof.ts';
+import type { Proof, RedProof } from '../../domain/proof.ts';
 import type { RuleRef } from '../../domain/rule.ts';
 import { evaluateProof, proofSucceeded } from '../core/proof-evaluation.ts';
 import type {
@@ -41,6 +41,10 @@ function errorDetail(error: unknown): string {
   return error instanceof Error ? error.stack ?? error.message : String(error);
 }
 
+function targetIsBreached(proof: RedProof, result: CheckResult): boolean {
+  return result.verdict === 'fail' && result.breaches.some(item => item.rule === proof.target);
+}
+
 function proofError(
   gate: Gate<any>,
   proof: Proof,
@@ -63,6 +67,33 @@ function proofError(
 
 /** Imperative shell: apply mutation, invoke Check, restore mutation. Proof meaning is delegated to the pure core. */
 export async function runProof(gate: Gate<any>, proof: Proof, root: string): Promise<ProofOutcome> {
+  if (proof.expected === 'red') {
+    let baseline: CheckResult;
+    try {
+      baseline = await runGate(gate, root);
+    } catch (error) {
+      return proofError(
+        gate,
+        proof,
+        'check-threw',
+        'The baseline Check threw instead of returning a CheckResult.',
+        error,
+      );
+    }
+
+    if (targetIsBreached(proof, baseline)) {
+      return {
+        status: 'completed',
+        gate: gate.id,
+        proof: proof.name,
+        expected: proof.expected,
+        ok: false,
+        result: baseline,
+        workerPid: process.pid,
+      };
+    }
+  }
+
   let undos: UndoMutation[];
   try {
     undos = await applyMutations(root, proof.mutate);

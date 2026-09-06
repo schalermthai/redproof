@@ -57,3 +57,45 @@ test('RED proof does not pass when the Gate fails for another Rule', async () =>
   assert.equal(outcome.result.verdict, 'fail');
   assert.equal(outcome.ok, false);
 });
+
+test('RED proof does not pass when its target was already breached before mutation', async () => {
+  let mutationApplied = false;
+  const alreadyRedGate = defineGate({
+    id: 'already-red',
+    adapter: defineAdapter({
+      kind: 'test',
+      rules: { r1: R1 },
+      check: {
+        description: 'always breach R1',
+        counting: counting.supported,
+        async run() {
+          return fail(scan, [
+            breach(R1.id, {
+              code: 'r1',
+              message: 'R1 was already breached.',
+              location: null,
+            }),
+          ]);
+        },
+      },
+    }),
+  });
+
+  const outcome = await runProof(
+    alreadyRedGate,
+    proof.red(R1, 'prove R1 causally', {
+      description: 'irrelevant mutation',
+      async apply() {
+        mutationApplied = true;
+        return async () => {};
+      },
+    }),
+    process.cwd(),
+  );
+
+  assert.equal(outcome.status, 'completed');
+  if (outcome.status !== 'completed') throw new Error('expected completed proof');
+  assert.equal(outcome.result.verdict, 'fail');
+  assert.equal(outcome.ok, false);
+  assert.equal(mutationApplied, false);
+});
