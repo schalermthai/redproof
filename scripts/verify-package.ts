@@ -82,6 +82,9 @@ try {
     const leaked = entries.filter(entry => FORBIDDEN_IN_TARBALL.some(bad => entry.startsWith(bad)));
     const hasLicense = entries.includes('package/LICENSE');
     const hasReadme = entries.includes('package/README.md');
+    const readme = hasReadme
+      ? run('tar', ['-xzOf', join(packDir, file), 'package/README.md'], workdir)
+      : '';
 
     const manifest = JSON.parse(
       run('tar', ['-xzOf', join(packDir, file), 'package/package.json'], workdir),
@@ -91,6 +94,12 @@ try {
     report(leaked.length === 0, `${pkg.name}: ships no source`, leaked.join(', '));
     report(hasLicense, `${pkg.name}: ships LICENSE`);
     report(hasReadme, `${pkg.name}: ships README.md`);
+    if (pkg.name === 'redproof' && hasReadme) {
+      report(
+        !/\]\((?:\.\/)?docs\//.test(readme),
+        `${pkg.name}: README has no links to unshipped relative docs`,
+      );
+    }
     report(
       manifest.types === './dist/index.d.ts',
       `${pkg.name}: declares a top-level types field`,
