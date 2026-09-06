@@ -112,6 +112,26 @@ test('freshness comparison is pure and checks both digest and entry count', () =
   );
 });
 
+test('freshness diagnostics identify added, removed, and modified paths', () => {
+  const freshness = assessFreshness(
+    {
+      digest: 'before',
+      entries: 2,
+      fingerprints: { 'removed.ts': 'old', 'modified.ts': 'old' },
+    },
+    {
+      digest: 'after',
+      entries: 2,
+      fingerprints: { 'added.ts': 'new', 'modified.ts': 'new' },
+    },
+  );
+
+  assert.deepEqual(freshness, {
+    kind: 'stale',
+    why: 'workspace changed from before to after; changed paths: added added.ts, modified modified.ts, removed removed.ts',
+  });
+});
+
 test('restoration failure replaces proof success and prevents copy reuse', () => {
   const result = pass(scan);
   const completed: ProofOutcome = {

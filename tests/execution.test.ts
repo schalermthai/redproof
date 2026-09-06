@@ -80,6 +80,7 @@ test('copies mode rejects a proof when UndoMutation leaves the Gate copy stale',
   assert.equal(outcome.status, 'error');
   if (outcome.status !== 'error') throw new Error('expected infrastructure error');
   assert.equal(outcome.error.code, 'workspace-not-restored');
+  assert.match(outcome.error.detail ?? '', /modified src\/state\.txt/);
   assert.equal(outcome.result?.verdict, 'fail');
   assert.equal(await readFile(source, 'utf8'), before, 'the original workspace must stay untouched');
 
