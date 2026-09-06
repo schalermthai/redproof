@@ -1,6 +1,6 @@
 {
   "name": "redproof",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Prove your guardrails can fail. Redproof verifies that tests, linters, and architecture rules actually go red.",
   "keywords": [
     "testing",
