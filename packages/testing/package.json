@@ -1,12 +1,30 @@
 {
   "name": "@redproof/testing",
-  "version": "0.0.0",
+  "version": "0.5.0",
+  "description": "Redproof adapter for test suites and JUnit XML reports.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.6"
   },
   "dependencies": {
-    "redproof": "0.0.0"
+    "redproof": "0.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schalermthai/redproof.git",
+    "directory": "packages/testing"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "Apache-2.0"
 }

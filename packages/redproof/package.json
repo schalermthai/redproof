@@ -1,9 +1,34 @@
 {
   "name": "redproof",
-  "version": "0.0.0",
+  "version": "0.5.0",
+  "description": "Prove your guardrails can fail. Redproof verifies that tests, linters, and architecture rules actually go red.",
+  "keywords": [
+    "testing",
+    "guardrails",
+    "mutation-testing",
+    "lint",
+    "quality-gate"
+  ],
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "redproof": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schalermthai/redproof.git",
+    "directory": "packages/redproof"
   },
   "license": "Apache-2.0"
 }

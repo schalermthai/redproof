@@ -1,15 +1,33 @@
 {
   "name": "@redproof/stryker",
-  "version": "0.0.0",
+  "version": "0.5.0",
+  "description": "Redproof adapter for Stryker mutation testing.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.6"
   },
   "dependencies": {
-    "redproof": "0.0.0"
+    "redproof": "0.5.0"
   },
   "peerDependencies": {
     "@stryker-mutator/core": ">=10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schalermthai/redproof.git",
+    "directory": "packages/stryker"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "Apache-2.0"
 }

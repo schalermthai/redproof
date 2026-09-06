@@ -22,7 +22,13 @@ export async function mapLimit<T, R>(
   return results;
 }
 
-const gateWorkerFile = fileURLToPath(new URL('../gate-worker.ts', import.meta.url));
+// This module runs both as TypeScript source and as compiled JavaScript.
+// The sibling worker file has the same extension as this file, so read it
+// from import.meta.url instead of hard-coding one extension.
+const workerExtension = import.meta.url.endsWith('.ts') ? 'ts' : 'js';
+const gateWorkerFile = fileURLToPath(
+  new URL(`../gate-worker.${workerExtension}`, import.meta.url),
+);
 
 export function runGateWorker(job: GateWorkerJob): Promise<GateWorkerResult> {
   return new Promise((resolve, reject) => {

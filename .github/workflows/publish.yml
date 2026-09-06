@@ -1,0 +1,133 @@
+name: Publish
+
+# Publishing runs when you publish a GitHub Release.
+# The release tag sets the version, for example v1.2.3 publishes 1.2.3.
+on:
+  release:
+    types: [published]
+
+  # Lets you rehearse the whole job without publishing anything.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, for example 1.2.3'
+        required: true
+      dry-run:
+        description: 'Build and verify, but do not publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # Required by npm Trusted Publishing. It lets npm verify this workflow
+  # through OIDC, so no npm token is stored anywhere.
+  id-token: write
+
+jobs:
+  publish:
+    name: Build, verify and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      # Trusted Publishing needs npm 11.5.1 or later.
+      # Node 22 ships an older npm, so upgrade it here.
+      - name: Upgrade npm
+        run: npm install --global npm@latest
+
+      - name: Show tool versions
+        run: |
+          echo "node: $(node --version)"
+          echo "npm:  $(npm --version)"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Work out the version and the npm tag
+        id: version
+        # The tag and the manual input are untrusted text. Pass them through
+        # the environment, never straight into the shell line, so a tag with
+        # shell characters cannot run before it is checked.
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            RAW="$RELEASE_TAG"
+          else
+            RAW="$INPUT_VERSION"
+          fi
+
+          VERSION="${RAW#v}"
+
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Not a valid semantic version: $RAW"
+            exit 1
+          fi
+
+          # A prerelease such as 1.2.3-beta.1 must never become the default
+          # install. Publish it under the "next" tag instead of "latest".
+          # Use a shell case, not grep. A lone "-" pattern reads as an option
+          # in some grep builds, which would silently tag a beta as latest.
+          case "$VERSION" in
+            *-*) NPM_TAG=next ;;
+            *)   NPM_TAG=latest ;;
+          esac
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "npm-tag=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION (npm tag: $NPM_TAG)"
+
+      - name: Run the full project check
+        run: npm run check
+
+      - name: Set the version on every package
+        run: npm run set-version -- "${{ steps.version.outputs.version }}"
+
+      - name: Build the production artifact
+        run: npm run build
+
+      - name: Verify the packages a consumer would install
+        run: npm run verify:package
+
+      - name: Build the tarballs
+        run: |
+          mkdir -p artifacts
+          npm pack \
+            -w redproof \
+            -w @redproof/eslint \
+            -w @redproof/dependency-cruiser \
+            -w @redproof/stryker \
+            -w @redproof/testing \
+            --pack-destination artifacts
+          ls -l artifacts
+
+      - name: Upload the tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarballs-${{ steps.version.outputs.version }}
+          path: artifacts/*.tgz
+          retention-days: 30
+
+      - name: Publish to npm
+        if: github.event_name == 'release' || github.event.inputs.dry-run == 'false'
+        run: |
+          for PKG in redproof @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing; do
+            echo "Publishing $PKG"
+            npm publish -w "$PKG" --tag "${{ steps.version.outputs.npm-tag }}" --provenance
+          done
+
+      - name: Report a dry run
+        if: github.event_name != 'release' && github.event.inputs.dry-run != 'false'
+        run: echo "Dry run finished. Tarballs are attached to this workflow run. Nothing was published."

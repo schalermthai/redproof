@@ -10,6 +10,9 @@
     "fixtures/*"
   ],
   "scripts": {
+    "clean": "rm -rf packages/*/dist",
+    "build": "npm run clean && tsc -p packages/redproof/tsconfig.build.json && tsc -p packages/eslint/tsconfig.build.json && tsc -p packages/dependency-cruiser/tsconfig.build.json && tsc -p packages/stryker/tsconfig.build.json && tsc -p packages/testing/tsconfig.build.json",
+    "pretest": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/*.test.ts tests/composition/*.test.ts tests/composition/mutation/*.test.ts tests/adapters/*.test.ts tests/reporter/*.test.ts",
     "test:core": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/core.test.ts",
@@ -60,7 +63,9 @@
     "demo:report:compact": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-reporter.ts compact fail-single",
     "demo:report:json": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-reporter.ts json mixed",
     "demo:report:sarif": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-reporter.ts sarif fail-single",
-    "demo:reporters": "npm run demo:report:default && npm run demo:report:compact && npm run demo:report:json && npm run demo:report:sarif"
+    "demo:reporters": "npm run demo:report:default && npm run demo:report:compact && npm run demo:report:json && npm run demo:report:sarif",
+    "verify:package": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/verify-package.ts",
+    "set-version": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/set-version.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
