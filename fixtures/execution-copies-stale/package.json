@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "redproof": "0.0.0"
+    "redproof": "file:../../packages/redproof"
   },
   "scripts": {
     "redproof:check": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts check --config redproof.config.ts",

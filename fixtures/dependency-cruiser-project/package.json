@@ -8,8 +8,8 @@
     "redproof:describe": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts describe --config redproof.config.ts"
   },
   "dependencies": {
-    "@redproof/dependency-cruiser": "0.0.0",
-    "redproof": "0.0.0"
+    "@redproof/dependency-cruiser": "file:../../packages/dependency-cruiser",
+    "redproof": "file:../../packages/redproof"
   },
   "devDependencies": {
     "dependency-cruiser": "^18.2.0"

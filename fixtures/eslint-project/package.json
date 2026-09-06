@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@redproof/eslint": "0.0.0",
-    "redproof": "0.0.0"
+    "@redproof/eslint": "file:../../packages/eslint",
+    "redproof": "file:../../packages/redproof"
   },
   "devDependencies": {
     "eslint": "^9.0.0"

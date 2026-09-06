@@ -8,7 +8,7 @@
     "redproof:describe": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts describe --config redproof.config.ts"
   },
   "dependencies": {
-    "@redproof/testing": "0.0.0",
-    "redproof": "0.0.0"
+    "@redproof/testing": "file:../../packages/testing",
+    "redproof": "file:../../packages/redproof"
   }
 }
