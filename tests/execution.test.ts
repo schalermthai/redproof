@@ -85,3 +85,17 @@ test('copies mode rejects a proof when UndoMutation leaves the Gate copy stale',
 
   await assert.rejects(stat(resolve('fixtures/execution-copies-stale/.redproof')));
 });
+
+test('project commands reject a config that discovers no Gates', async () => {
+  const config = configOf('empty-discovery');
+
+  await assert.rejects(checkProject(config), /No Gate modules found/);
+  await assert.rejects(proveProject(config), /No Gate modules found/);
+});
+
+test('prove rejects a project with Gates but no Proofs', async () => {
+  await assert.rejects(
+    proveProject(configOf('pass-single')),
+    /No Proofs found/,
+  );
+});
