@@ -21,6 +21,8 @@ const PACKAGES = [
 // Node refuses to strip types under node_modules, so shipped source is unusable.
 const FORBIDDEN_IN_TARBALL = ['package/src/', 'package/tsconfig'];
 
+const REQUIRED_NODE = '>=24';
+
 let failures = 0;
 
 function report(ok: boolean, label: string, detail = ''): void {
@@ -83,7 +85,7 @@ try {
 
     const manifest = JSON.parse(
       run('tar', ['-xzOf', join(packDir, file), 'package/package.json'], workdir),
-    ) as { types?: string };
+    ) as { types?: string; engines?: { node?: string } };
 
     report(hasDist, `${pkg.name}: ships dist/`);
     report(leaked.length === 0, `${pkg.name}: ships no source`, leaked.join(', '));
@@ -93,6 +95,11 @@ try {
       manifest.types === './dist/index.d.ts',
       `${pkg.name}: declares a top-level types field`,
       manifest.types ?? '(missing)',
+    );
+    report(
+      manifest.engines?.node === REQUIRED_NODE,
+      `${pkg.name}: requires node ${REQUIRED_NODE}`,
+      manifest.engines?.node ?? '(missing)',
     );
   }
 

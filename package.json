@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.6"
+    "node": ">=24"
   },
   "workspaces": [
     "packages/*",
@@ -68,7 +68,7 @@
     "set-version": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/set-version.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "typescript": "^5.9.0"
   },
   "license": "Apache-2.0"
