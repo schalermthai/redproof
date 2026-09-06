@@ -66,6 +66,7 @@ import {
   text,
 } from 'redproof';
 
+// defining Rules
 const rules = defineRules({
   noTodo: {
     id: 'source/no-todo',
@@ -73,20 +74,24 @@ const rules = defineRules({
   },
 });
 
+// defining a Gate
 const gate = defineGate({
   id: 'no-todo',
-  rules,
+  rules,  // assigning rules to a gate
 
   check: {
     description: 'scan TypeScript source files for TODO comments',
     counting: counting.supported,
 
     async run(ctx) {
+
+      // scan all Typescript to find //TODO comment
       const found = await text.find(ctx, {
         files: 'src/**/*.ts',
         find: /\bTODO\b/g,
       });
-      
+
+      // should detect a breach
       return result.fromBreaches(
         found.scan,
         found.matches.map(match =>
@@ -101,10 +106,14 @@ const gate = defineGate({
   },
 });
 
+// defining Proofs
 export const proofs = defineProofs(gate, [
   proof.red(
     rules.noTodo,
     'detects a TODO comment',
+
+    // deliberately inject //TODO into src/example.ts
+    // healthy Gate should catch it!
     mutate.appendText(
       'src/example.ts',
       '\n// TODO: proof mutation\n',
