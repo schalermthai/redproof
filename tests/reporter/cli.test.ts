@@ -47,6 +47,24 @@ test('CLI writes JSON output relative to the project root', async () => {
   await rm(resolve('fixtures/pass-single/.redproof'), { recursive: true, force: true });
 });
 
+test('CLI keeps Check logs out of machine-readable stdout', () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    'packages/redproof/src/cli.ts',
+    'check',
+    '--config',
+    'fixtures/logging-check/redproof.config.ts',
+    '--reporter=json',
+  ], { cwd: resolve('.'), encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.status, 'passed');
+  assert.doesNotMatch(result.stdout, /message from Check/);
+  assert.match(result.stderr, /message from Check/);
+});
+
 test('CLI describe can target one discovered Gate file', () => {
   const result = spawnSync(process.execPath, [
     '--disable-warning=ExperimentalWarning',
