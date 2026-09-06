@@ -52,7 +52,18 @@ async function copyEntry(source: string, target: string): Promise<void> {
   }
 }
 
-async function collectStamp(root: string, current: string, hash: ReturnType<typeof createHash>): Promise<number> {
+function fingerprint(...parts: (string | Buffer)[]): string {
+  const hash = createHash('sha256');
+  for (const part of parts) hash.update(part);
+  return hash.digest('hex');
+}
+
+async function collectStamp(
+  root: string,
+  current: string,
+  hash: ReturnType<typeof createHash>,
+  fingerprints: Record<string, string>,
+): Promise<number> {
   const entries = await readdir(current, { withFileTypes: true });
   let count = 0;
 
@@ -65,22 +76,29 @@ async function collectStamp(root: string, current: string, hash: ReturnType<type
     const mode = info.mode & 0o777;
 
     if (info.isDirectory()) {
-      hash.update(`D\0${rel}\0${mode}\0`);
+      const metadata = `D\0${rel}\0${mode}\0`;
+      hash.update(metadata);
+      fingerprints[rel] = fingerprint(metadata);
       count += 1;
-      count += await collectStamp(root, absolute, hash);
+      count += await collectStamp(root, absolute, hash, fingerprints);
       continue;
     }
 
     if (info.isSymbolicLink()) {
-      hash.update(`L\0${rel}\0${mode}\0${await readlink(absolute)}\0`);
+      const metadata = `L\0${rel}\0${mode}\0${await readlink(absolute)}\0`;
+      hash.update(metadata);
+      fingerprints[rel] = fingerprint(metadata);
       count += 1;
       continue;
     }
 
     if (info.isFile()) {
-      hash.update(`F\0${rel}\0${mode}\0`);
-      hash.update(await readFile(absolute));
+      const metadata = `F\0${rel}\0${mode}\0`;
+      const contents = await readFile(absolute);
+      hash.update(metadata);
+      hash.update(contents);
       hash.update('\0');
+      fingerprints[rel] = fingerprint(metadata, contents, '\0');
       count += 1;
     }
   }
@@ -91,8 +109,9 @@ async function collectStamp(root: string, current: string, hash: ReturnType<type
 export async function stampTree(root: string): Promise<TreeStamp> {
   const absolute = resolve(root);
   const hash = createHash('sha256');
-  const entries = await collectStamp(absolute, absolute, hash);
-  return { digest: hash.digest('hex'), entries };
+  const fingerprints: Record<string, string> = Object.create(null);
+  const entries = await collectStamp(absolute, absolute, hash, fingerprints);
+  return { digest: hash.digest('hex'), entries, fingerprints };
 }
 
 export async function verifyTree(root: string, baseline: TreeStamp): Promise<Freshness> {
