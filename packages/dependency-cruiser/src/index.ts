@@ -31,8 +31,6 @@ type DependencyCruiserConfig = {
   readonly forbidden?: readonly { readonly name?: string }[];
   readonly required?: readonly { readonly name?: string }[];
   readonly allowed?: readonly unknown[];
-  readonly allowedSeverity?: string;
-  readonly options?: Readonly<Record<string, unknown>>;
 };
 
 type CruiseOutputLike = {
@@ -41,6 +39,22 @@ type CruiseOutputLike = {
     readonly violations?: readonly DependencyCruiserViolation[];
   };
 };
+
+// dependency-cruiser returns `output` as a JSON string for outputType 'json',
+// and as an object for some other output types. Accept both.
+function readCruiseOutput(output: unknown): CruiseOutputLike | null {
+  if (typeof output === 'string') {
+    try {
+      return JSON.parse(output) as CruiseOutputLike;
+    } catch {
+      return null;
+    }
+  }
+
+  return typeof output === 'object' && output !== null
+    ? output as CruiseOutputLike
+    : null;
+}
 
 function now(): string {
   return new Date().toISOString();
@@ -127,8 +141,8 @@ export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
               },
             );
 
-            const output = cruiseResult.output as CruiseOutputLike;
-            if (!output.summary || !Array.isArray(output.summary.violations)) {
+            const output = readCruiseOutput(cruiseResult.output);
+            if (!output?.summary || !Array.isArray(output.summary.violations)) {
               return result.refuse(
                 {
                   source: 'dependency-cruiser',
