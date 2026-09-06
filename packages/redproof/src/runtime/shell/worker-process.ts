@@ -31,8 +31,10 @@ export function runGateWorker(job: GateWorkerJob): Promise<GateWorkerResult> {
   return new Promise((resolve, reject) => {
     const child = fork(gateWorkerFile, [], {
       execArgv: ['--disable-warning=ExperimentalWarning', '--experimental-strip-types'],
-      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      stdio: ['ignore', 'pipe', 'inherit', 'ipc'],
     });
+
+    child.stdout?.pipe(process.stderr);
 
     let settled = false;
 

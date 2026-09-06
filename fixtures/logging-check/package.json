@@ -1,0 +1,8 @@
+{
+  "name": "logging-check",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "redproof": "file:../../packages/redproof"
+  }
+}
