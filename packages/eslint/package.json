@@ -1,0 +1,15 @@
+{
+  "name": "@redproof/eslint",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "redproof": "0.0.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
+  },
+  "license": "Apache-2.0"
+}

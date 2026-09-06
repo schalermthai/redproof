@@ -1,0 +1,5 @@
+import { breach, counting, defineAdapter, defineGate, fail } from 'redproof';
+const domain = { id: 'architecture/domain-no-infrastructure', description: 'domain must not import infrastructure' } as const;
+const app = { id: 'architecture/application-no-adapters', description: 'application must not import adapters' } as const;
+const ports = { id: 'architecture/ports-only', description: 'infrastructure dependencies stay behind ports' } as const;
+export default defineGate({ id: 'architecture', adapter: defineAdapter({ kind: 'fixture', rules: { domain, app, ports }, check: { description: 'inspect dependencies', counting: counting.supported, async run() { const startedAt = new Date().toISOString(); return fail({ source: 'architecture', startedAt, finishedAt: new Date().toISOString(), inspected: 2 }, [breach(app.id, { code: 'forbidden-import', message: 'Application code imports adapter code.', location: null }), breach(app.id, { code: 'forbidden-import', message: 'Application code imports adapter code.', location: null })]); } } }) });

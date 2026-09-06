@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ],
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "redproof": [
+        "packages/redproof/src/index.ts"
+      ],
+      "@redproof/eslint": [
+        "packages/eslint/src/index.ts"
+      ],
+      "@redproof/dependency-cruiser": [
+        "packages/dependency-cruiser/src/index.ts"
+      ],
+      "@redproof/stryker": [
+        "packages/stryker/src/index.ts"
+      ],
+      "@redproof/testing": [
+        "packages/testing/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "packages/**/*.ts",
+    "fixtures/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}

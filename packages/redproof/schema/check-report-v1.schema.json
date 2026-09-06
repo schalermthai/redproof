@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "redproof-check-report-v1",
+  "title": "Redproof check report v1",
+  "type": "object",
+  "required": ["version", "command", "status", "startedAt", "durationMs", "gates", "summary"],
+  "properties": {
+    "version": { "const": 1 },
+    "command": { "const": "check" },
+    "status": { "enum": ["passed", "failed", "refused"] },
+    "startedAt": { "type": "string" },
+    "durationMs": { "type": "number", "minimum": 0 },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "file", "adapter", "check", "verdict", "durationMs", "counting", "scan", "rules"],
+        "properties": {
+          "id": { "type": "string" },
+          "file": { "type": "string" },
+          "adapter": { "type": "string" },
+          "check": { "type": "string" },
+          "verdict": { "enum": ["pass", "fail", "refuse"] },
+          "durationMs": { "type": "number", "minimum": 0 },
+          "counting": { "type": "object" },
+          "scan": { "type": "object" },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "description", "status", "breachCount", "breaches"],
+              "properties": {
+                "id": { "type": "string" },
+                "description": { "type": "string" },
+                "status": { "enum": ["held", "breached", "undecided", "unknown"] },
+                "breachCount": { "type": ["integer", "null"], "minimum": 0 },
+                "breaches": { "type": "array" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "refusal": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["gates", "rules", "breaches"],
+      "properties": {
+        "gates": { "type": "object" },
+        "rules": { "type": "object" },
+        "breaches": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind", "count"],
+              "properties": {
+                "kind": { "const": "exact" },
+                "count": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind"],
+              "properties": { "kind": { "const": "not-countable" } },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

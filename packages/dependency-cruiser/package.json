@@ -1,0 +1,15 @@
+{
+  "name": "@redproof/dependency-cruiser",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "redproof": "0.0.0"
+  },
+  "peerDependencies": {
+    "dependency-cruiser": ">=18"
+  },
+  "license": "Apache-2.0"
+}
