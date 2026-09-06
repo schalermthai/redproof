@@ -16,6 +16,7 @@
       "default": "./dist/index.js"
     }
   },
+  "types": "./dist/index.d.ts",
   "bin": {
     "redproof": "./dist/cli.js"
   },

@@ -81,10 +81,19 @@ try {
     const hasLicense = entries.includes('package/LICENSE');
     const hasReadme = entries.includes('package/README.md');
 
+    const manifest = JSON.parse(
+      run('tar', ['-xzOf', join(packDir, file), 'package/package.json'], workdir),
+    ) as { types?: string };
+
     report(hasDist, `${pkg.name}: ships dist/`);
     report(leaked.length === 0, `${pkg.name}: ships no source`, leaked.join(', '));
     report(hasLicense, `${pkg.name}: ships LICENSE`);
     report(hasReadme, `${pkg.name}: ships README.md`);
+    report(
+      manifest.types === './dist/index.d.ts',
+      `${pkg.name}: declares a top-level types field`,
+      manifest.types ?? '(missing)',
+    );
   }
 
   console.log('\n3. Install the tarballs into a clean project');
