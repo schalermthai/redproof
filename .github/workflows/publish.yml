@@ -40,10 +40,13 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
-      # Trusted Publishing needs npm 11.5.1 or later.
-      # Node 22 ships an older npm, so upgrade it here.
+      # Trusted Publishing needs npm 11.15.0 or later, and the trust
+      # configuration on npm was created with npm 12. Node 22 ships an older
+      # npm, so upgrade it here.
+      # Pinned to a major range on purpose. npm@latest could move to a major
+      # that needs a newer Node than this job installs, and break publishing.
       - name: Upgrade npm
-        run: npm install --global npm@latest
+        run: npm install --global npm@^12
 
       - name: Show tool versions
         run: |
