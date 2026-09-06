@@ -121,6 +121,14 @@ export type ProveProjectRun = {
 
 export async function proveProject(configPath: string): Promise<ProveProjectRun> {
   const project = await loadProject(configPath);
+  const proofCount = project.modules.reduce(
+    (count, module) => count + (module.proofs?.proofs.length ?? 0),
+    0,
+  );
+  if (proofCount === 0) {
+    throw new Error('No Proofs found. Export a non-empty `proofs` suite from at least one Gate module.');
+  }
+
   const policy = executionPolicy(project.execution);
   const outcomes = policy.mode === 'copies'
     ? await proveInCopies(project, policy.maxAtOnce)

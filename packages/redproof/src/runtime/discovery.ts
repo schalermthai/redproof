@@ -46,6 +46,12 @@ export async function loadProject(configPath: string): Promise<LoadedProject> {
     }
   }
 
+  if (files.size === 0) {
+    throw new Error(
+      `No Gate modules found under ${projectRoot} for ${config.gatesRoot.map(pattern => JSON.stringify(pattern)).join(', ')}.`,
+    );
+  }
+
   const modules: LoadedGateModule[] = [];
   for (const file of [...files].sort()) {
     modules.push(await loadGateModule(file));
