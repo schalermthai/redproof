@@ -220,20 +220,20 @@ REFUSE   the Check could not decide safely
 
 You do not need to build every Gate yourself.
 
-- **[`@redproof/testing`](docs/adapters.md#testing)** — test suites, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
-- **[`@redproof/eslint`](docs/adapters.md#eslint)** — selected ESLint rules as Redproof Rules
-- **[`@redproof/dependency-cruiser`](docs/adapters.md#dependency-cruiser)** — architecture and dependency boundaries
-- **[`@redproof/stryker`](docs/adapters.md#stryker)** — mutation detection and mutation-score policies
+- **[`@redproof/testing`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#testing)** — test suites, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
+- **[`@redproof/eslint`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#eslint)** — selected ESLint rules as Redproof Rules
+- **[`@redproof/dependency-cruiser`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#dependency-cruiser)** — architecture and dependency boundaries
+- **[`@redproof/stryker`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#stryker)** — mutation detection and mutation-score policies
 
-See **[Built-in integrations](docs/adapters.md)** for examples.
+See **[Built-in integrations](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md)** for examples.
 
 ## Build your own
 
 Redproof is designed to be composed when an existing integration does not fit your guardrail.
 
-See **[Composing Redproof](docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, Mutations, and Adapters.
+See **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, Mutations, and Adapters.
 
-For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](docs/tutorials/README.md)**.
+For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**.
 
 ## Install
 
@@ -299,9 +299,9 @@ npm run redproof:describe -- gates/no-todo.ts
 
 ## Learn more
 
-- **[Built-in integrations](docs/adapters.md)**
-- **[Composing Redproof](docs/composition.md)**
-- **[Tutorials](docs/tutorials/README.md)**
+- **[Built-in integrations](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md)**
+- **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)**
+- **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**
 
 ## License
 
