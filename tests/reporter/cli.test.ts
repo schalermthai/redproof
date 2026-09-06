@@ -25,6 +25,48 @@ test('reporter CLI parser rejects two reporters writing to stdout', () => {
   );
 });
 
+test('CLI prints help without loading a project', () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    'packages/redproof/src/cli.ts',
+    '--help',
+  ], { cwd: resolve('.'), encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^Usage: redproof/m);
+  assert.match(result.stdout, /--config <path>/);
+});
+
+test('CLI prints its package version', async () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    'packages/redproof/src/cli.ts',
+    '--version',
+  ], { cwd: resolve('.'), encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  const manifest = JSON.parse(
+    await readFile(resolve('packages/redproof/package.json'), 'utf8'),
+  ) as { version: string };
+  assert.equal(result.stdout.trim(), manifest.version);
+});
+
+test('CLI reports a missing config value without an internal stack trace', () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    'packages/redproof/src/cli.ts',
+    'check',
+    '--config',
+  ], { cwd: resolve('.'), encoding: 'utf8' });
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /^Option --config requires a path\.\n$/);
+  assert.doesNotMatch(result.stderr, /node:path|at main|ERR_/);
+});
+
 test('CLI writes JSON output relative to the project root', async () => {
   const output = resolve('fixtures/pass-single/.redproof/reporter-test.json');
   await rm(output, { force: true });
