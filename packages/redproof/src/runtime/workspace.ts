@@ -11,6 +11,7 @@ import {
   rm,
   symlink,
 } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { assessFreshness, type Freshness, type TreeStamp } from './core/restoration.ts';
@@ -103,28 +104,61 @@ function safeName(value: string): string {
   return safe || 'gate';
 }
 
+// The copy must NOT live inside the project. Tools such as ESLint, tsc and
+// dependency-cruiser search parent directories for their configuration. A copy
+// under the project would still see the project's own config files, so a
+// mutation that hides one inside the copy would have no effect, and a refuse
+// Proof would report a false PASS. The OS temporary directory has no such
+// ancestors.
+async function createCopyRoot(gateId: string): Promise<string> {
+  return mkdtemp(join(tmpdir(), `redproof-${safeName(gateId)}-`));
+}
+
+// Find the node_modules that the project itself would resolve against. Node
+// walks up from a file until it finds one, so a workspace package with hoisted
+// dependencies resolves against the repository root, not its own directory.
+async function findDependencies(projectRoot: string): Promise<string | null> {
+  let current = resolve(projectRoot);
+
+  for (;;) {
+    const candidate = join(current, 'node_modules');
+
+    try {
+      if ((await lstat(candidate)).isDirectory()) return candidate;
+    } catch {
+      // Not here. Keep walking up.
+    }
+
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+// node_modules is never copied, because it is large and unchanged by a
+// mutation. Inside the project the copy could still resolve it from an ancestor
+// directory. Outside the project it cannot, so link it at the copy root.
+async function linkDependencies(projectRoot: string, target: string): Promise<void> {
+  const source = await findDependencies(projectRoot);
+  if (source === null) return;
+
+  await symlink(source, join(target, 'node_modules'), 'dir');
+}
+
 export async function copyGateWorkspace(projectRoot: string, gateId: string): Promise<GateWorkspace> {
-  const copiesRoot = join(projectRoot, '.redproof', 'copies');
-  await mkdir(copiesRoot, { recursive: true });
-  const target = await mkdtemp(join(copiesRoot, `${safeName(gateId)}-`));
+  const target = await createCopyRoot(gateId);
 
   await copyEntry(projectRoot, target);
+  await linkDependencies(projectRoot, target);
   const baseline = await stampTree(target);
   return { root: target, baseline };
 }
 
 export async function releaseGateWorkspace(workspace: GateWorkspace): Promise<void> {
+  // The copy root is a temporary directory of our own, so removing it is safe.
+  // rm does not follow the node_modules symlink, so the project's real
+  // dependencies are untouched.
   await rm(workspace.root, { recursive: true, force: true });
-
-  // Best effort cleanup of empty Redproof directories. The next run can reuse them.
-  const copiesRoot = dirname(workspace.root);
-  const redproofRoot = dirname(copiesRoot);
-  try {
-    if ((await readdir(copiesRoot)).length === 0) await rm(copiesRoot, { recursive: true, force: true });
-    if ((await readdir(redproofRoot)).length === 0) await rm(redproofRoot, { recursive: true, force: true });
-  } catch {
-    // Another concurrent Gate may still own a sibling workspace.
-  }
 }
 
 export function pathInsideCopy(projectRoot: string, workspaceRoot: string, projectFile: string): string {
