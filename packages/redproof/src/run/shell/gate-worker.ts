@@ -1,10 +1,9 @@
 import { performance } from 'node:perf_hooks';
-import { loadGateModule } from '../../project/shell/loader.ts';
-import type { ProofOutcome } from '../../proof/core/outcome.ts';
-import { canReuseWorkspace, verifyProofRestoration } from '../../proof/core/restoration.ts';
-import { runGate, runProof } from '../../proof/shell/runner.ts';
+import { loadGateModule } from '../../project/index.ts';
+import type { ProofOutcome } from '../../proof/index.ts';
+import { canReuseWorkspace, verifyProofRestoration, runGate, runProof } from '../../proof/index.ts';
 import type { GateWorkerJob, GateWorkerResult } from '../core/protocol.ts';
-import { verifyTree } from '../../workspace/shell/copy.ts';
+import { verifyTree } from '../../workspace/index.ts';
 
 function send(result: GateWorkerResult): void {
   if (!process.send) throw new Error('Gate worker requires an IPC channel.');

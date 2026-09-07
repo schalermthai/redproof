@@ -1,4 +1,4 @@
-import type { CheckProjectRun } from '../../run/core/run.ts';
+import type { CheckProjectRun } from '../../run/index.ts';
 import { renderRun, type ReportOptions } from '../core/terminal.ts';
 import { loadSourceExcerpts } from './sources.ts';
 

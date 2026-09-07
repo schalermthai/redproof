@@ -24,6 +24,31 @@ module.exports = {
       from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
       to: {
         path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|cli[.]ts$)',
+        pathNot: '^packages/redproof/src/domain/index[.]ts$',
+      },
+    },
+    {
+      name: 'contexts-import-through-index',
+      severity: 'error',
+      comment: 'A context uses another context only through its index.ts or core/index.ts.',
+      from: { path: '^packages/redproof/src/([^/]+)/' },
+      to: {
+        path: '^packages/redproof/src/[^/]+/',
+        pathNot: [
+          '^packages/redproof/src/$1/',
+          '^packages/redproof/src/[^/]+/index[.]ts$',
+          '^packages/redproof/src/[^/]+/core/index[.]ts$',
+        ],
+      },
+    },
+    {
+      name: 'entrypoints-import-through-index',
+      severity: 'error',
+      comment: 'The package entrypoints use a context only through its index.ts.',
+      from: { path: '^packages/redproof/src/[^/]+[.]ts$' },
+      to: {
+        path: '^packages/redproof/src/[^/]+/',
+        pathNot: '^packages/redproof/src/[^/]+/index[.]ts$',
       },
     },
     {

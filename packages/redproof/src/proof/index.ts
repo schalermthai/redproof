@@ -1,7 +1,2 @@
-export type {
-  CompletedProofOutcome,
-  InfrastructureProofOutcome,
-  ProofInfrastructureError,
-  ProofOutcome,
-} from './core/outcome.ts';
+export * from './core/index.ts';
 export { runGate, runProof } from './shell/runner.ts';

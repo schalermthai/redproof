@@ -1,9 +1,12 @@
-import type { Adapter } from '../../domain/adapter.ts';
-import type { CheckResult } from '../../domain/check.ts';
-import type { Gate } from '../../domain/gate.ts';
-import type { MutationPlan, UndoMutation } from '../../domain/mutation.ts';
-import type { Proof } from '../../domain/proof.ts';
-import type { RuleRef } from '../../domain/rule.ts';
+import type {
+  Adapter,
+  CheckResult,
+  Gate,
+  MutationPlan,
+  UndoMutation,
+  Proof,
+  RuleRef,
+} from '../../domain/index.ts';
 import {
   baselineBlocksProof,
   baselineOutcome,

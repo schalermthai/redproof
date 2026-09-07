@@ -1,14 +1,14 @@
 import { cp, lstat, mkdtemp, mkdir, rm, rmdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
-import type { UndoMutation } from '../../domain/mutation.ts';
+import type { UndoMutation } from '../../../domain/index.ts';
 import {
   files as fileOps,
   json as jsonOps,
   text as textOps,
   type FileSelection,
   type RootContext,
-} from '../../inspect/index.ts';
+} from '../../../inspect/index.ts';
 
 async function existsAbsolute(path: string): Promise<boolean> {
   try {

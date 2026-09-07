@@ -1,4 +1,4 @@
-import type { ResolvedExecutionConfig } from '../../composition/config.ts';
+import type { ResolvedExecutionConfig } from '../../composition/core/index.ts';
 
 export type ExecutionPolicy =
   | {

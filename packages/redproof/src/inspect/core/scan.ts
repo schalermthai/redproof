@@ -1,4 +1,4 @@
-import type { Scan } from '../../domain/check.ts';
+import type { Scan } from '../../domain/index.ts';
 
 export type ScanOptions = {
   /** Defaults to the search kind, `'text'` or `'json'`. */

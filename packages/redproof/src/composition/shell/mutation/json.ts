@@ -1,5 +1,5 @@
-import type { Mutation } from '../../domain/mutation.ts';
-import { resolveJsonLocator, type JsonLocator } from '../../inspect/index.ts';
+import type { Mutation } from '../../../domain/index.ts';
+import { resolveJsonLocator, type JsonLocator } from '../../../inspect/index.ts';
 import { defineMutation } from './define.ts';
 
 export type JsonValue =

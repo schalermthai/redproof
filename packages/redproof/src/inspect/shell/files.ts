@@ -1,6 +1,11 @@
 import { glob, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { isExcluded, normalizePath, selectionParts, type FileSelection } from '../core/selection.ts';
+import {
+  isExcluded,
+  normalizePath,
+  selectionParts,
+  type FileSelection,
+} from '../core/selection.ts';
 
 export type RootContext = { readonly root: string };
 

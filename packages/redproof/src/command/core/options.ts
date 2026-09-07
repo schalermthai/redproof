@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import type { Rule, RuleRef } from '../../domain/rule.ts';
+import type { Rule, RuleRef } from '../../domain/index.ts';
 import type { CommandExitCodes } from './exit-codes.ts';
 
 export const DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
