@@ -186,6 +186,11 @@ When `knownViolationsFile` is set, the adapter ignores matching committed baseli
 violations while still reporting new violations. The adapter disables dependency-
 cruiser caching so RED mutations cannot reuse a stale pre-mutation result.
 
+A baseline makes the Gate quieter on purpose. That is a weakening, so keep it
+honest. A baseline that grows every time somebody adds debt guards nothing, and
+it still reports PASS. Keep a RED proof that plants a new violation, and confirm
+the Gate still fails. A malformed baseline file is refused, not ignored.
+
 ## Stryker
 
 Package:

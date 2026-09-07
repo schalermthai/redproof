@@ -105,12 +105,16 @@ function selfExport(manifest: PackageManifest, subpath: string): string {
   return target;
 }
 
-async function loadDependencyCruiser(root: string): Promise<DependencyCruiserModules> {
-  const manifest = JSON.parse(
-    await readFile(resolve(root, 'package.json'), 'utf8'),
-  ) as PackageManifest;
+async function selfManifest(root: string): Promise<PackageManifest | null> {
+  const manifest = await readFile(resolve(root, 'package.json'), 'utf8')
+    .then(text => JSON.parse(text) as PackageManifest, () => null);
+  return manifest?.name === 'dependency-cruiser' ? manifest : null;
+}
 
-  if (manifest.name === 'dependency-cruiser') {
+async function loadDependencyCruiser(root: string): Promise<DependencyCruiserModules> {
+  const manifest = await selfManifest(root);
+
+  if (manifest) {
     const loadSelf = (subpath: string) => import(pathToFileURL(
       resolve(root, selfExport(manifest, subpath)),
     ).href);
@@ -136,6 +140,25 @@ async function loadDependencyCruiser(root: string): Promise<DependencyCruiserMod
     extractConfig: config.default,
     extractOptions: options.default,
   };
+}
+
+async function readKnownViolations(path: string): Promise<KnownViolations | Error> {
+  const text = await readFile(path, 'utf8').catch(
+    (error: NodeJS.ErrnoException) => error,
+  );
+  if (text instanceof Error) return new Error(`Cannot read ${path}. ${text.message}`);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    return new Error(`${path} is not valid JSON. ${(error as Error).message}`);
+  }
+
+  if (!Array.isArray(parsed)) {
+    return new Error(`${path} must hold a JSON array of known violations.`);
+  }
+  return parsed as KnownViolations;
 }
 
 export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
@@ -198,11 +221,27 @@ export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
             }
 
             const cruiseOptions = await dependencyCruiser.extractOptions(configPath);
-            const knownViolations = options.knownViolationsFile
-              ? JSON.parse(
-                await readFile(resolve(ctx.root, options.knownViolationsFile), 'utf8'),
-              ) as KnownViolations
+            const baselineFile = options.knownViolationsFile;
+            const knownViolations = baselineFile
+              ? await readKnownViolations(resolve(ctx.root, baselineFile))
               : undefined;
+
+            if (knownViolations instanceof Error) {
+              return result.refuse(
+                {
+                  source: 'dependency-cruiser',
+                  startedAt,
+                  finishedAt: now(),
+                  inspected: null,
+                },
+                {
+                  code: 'dependency-cruiser-known-violations-invalid',
+                  message: 'The known-violations baseline could not be read.',
+                  location: { file: baselineFile!, line: null, column: null },
+                  detail: knownViolations.message,
+                },
+              );
+            }
             const cruiseResult = await dependencyCruiser.cruise(
               files,
               {

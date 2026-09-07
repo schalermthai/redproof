@@ -46,6 +46,11 @@ baseline. Matching known violations are ignored; new violations still breach
 their selected Redproof Rules. Checks run without dependency-cruiser caching so
 proof mutations cannot reuse stale architecture results.
 
+A baseline weakens the Gate on purpose. Keep a RED proof that plants a new
+violation, so the Gate is known to still fail. A baseline that grows with every
+new violation guards nothing and still reports PASS. A baseline file that is not
+a JSON array produces REFUSE, never a pass.
+
 Then run:
 
 ```bash

@@ -130,3 +130,85 @@ test('dependency-cruiser self-hosts with baseline violations and cache disabled'
     assert.equal(check.scan.inspected, 1);
   });
 });
+
+async function writeFakeDependencyCruiser(root: string, cruiseBody: string): Promise<void> {
+  await mkdir(join(root, 'config-utl'), { recursive: true });
+  await writeFile(join(root, 'package.json'), JSON.stringify({
+    name: 'dependency-cruiser',
+    type: 'module',
+    exports: {
+      '.': './main.mjs',
+      './config-utl/extract-depcruise-config': './config-utl/config.mjs',
+      './config-utl/extract-depcruise-options': './config-utl/options.mjs',
+    },
+  }), 'utf8');
+  await writeFile(join(root, 'main.mjs'), cruiseBody, 'utf8');
+  await writeFile(
+    join(root, 'config-utl/config.mjs'),
+    "export default async function extractConfig() { return { forbidden: [{ name: 'no-new-debt' }] }; }\n",
+    'utf8',
+  );
+  await writeFile(
+    join(root, 'config-utl/options.mjs'),
+    'export default async function extractOptions() { return { cache: true }; }\n',
+    'utf8',
+  );
+  await writeFile(join(root, '.dependency-cruiser.mjs'), 'export default {};\n', 'utf8');
+}
+
+test('dependency-cruiser still reports a new violation when a baseline is in place', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, `export async function cruise(_files, options) {
+  if (options.ignoreKnown !== true) throw new Error('baseline was not forwarded');
+  return {
+    output: JSON.stringify({
+      summary: {
+        totalCruised: 3,
+        violations: [{
+          rule: { name: 'no-new-debt', severity: 'error' },
+          from: 'src/domain/order.ts',
+          to: 'src/infrastructure/db.ts',
+        }],
+      },
+    }),
+  };
+}
+`);
+    await writeFile(
+      join(root, '.dependency-cruiser-known-violations.json'),
+      JSON.stringify([{ rule: { name: 'no-new-debt', severity: 'error' } }]),
+      'utf8',
+    );
+
+    const adapter = dependencyCruiser({
+      configFile: '.dependency-cruiser.mjs',
+      knownViolationsFile: '.dependency-cruiser-known-violations.json',
+      rules: { noNewDebt: 'no-new-debt' },
+    });
+    const check = await adapter.check.run({ root, rules: [adapter.rules.noNewDebt.id] });
+
+    assert.equal(check.verdict, 'fail');
+    assert.equal(check.breaches.length, 1);
+    assert.equal(check.breaches[0]?.rule, 'dependency-cruiser/no-new-debt');
+  });
+});
+
+test('dependency-cruiser refuses when the baseline file is not a JSON array', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, `export async function cruise() {
+  throw new Error('cruise must not run with an invalid baseline');
+}
+`);
+    await writeFile(join(root, '.dependency-cruiser-known-violations.json'), '{ "not": "an array" }', 'utf8');
+
+    const adapter = dependencyCruiser({
+      configFile: '.dependency-cruiser.mjs',
+      knownViolationsFile: '.dependency-cruiser-known-violations.json',
+      rules: { noNewDebt: 'no-new-debt' },
+    });
+    const check = await adapter.check.run({ root, rules: [adapter.rules.noNewDebt.id] });
+
+    assert.equal(check.verdict, 'refuse');
+    assert.equal(check.why.code, 'dependency-cruiser-known-violations-invalid');
+  });
+});
