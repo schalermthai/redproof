@@ -57,7 +57,7 @@ test('a diagnostic without a line never asks for source', () => {
 });
 
 function completed(expected: 'red' | 'green' | 'refuse', reason: Extract<ProofOutcome, { status: 'completed' }>['reason'], result: CheckResult): ProofOutcome {
-  return { status: 'completed', gate: 'lint', proof: 'a var is flagged', expected, ok: reason.kind === 'proved', reason, result, workerPid: 1 };
+  return { status: 'completed', gate: 'lint', proof: 'a var is flagged', expected, reason, result, workerPid: 1 };
 }
 
 test('a proof line says why it was judged as it was', () => {

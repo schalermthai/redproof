@@ -110,13 +110,17 @@ export type {
   LoadedProject,
 } from './project/index.ts';
 
-export { runGate, runProof } from './proof/index.ts';
+export { proofEstablished, runGate, runProof } from './proof/index.ts';
 export type {
+  AbortedProofOutcome,
   CompletedProofOutcome,
   InfrastructureProofOutcome,
   ProofEvaluation,
   ProofInfrastructureError,
+  ProofInfrastructureErrorCode,
   ProofOutcome,
+  RestorationErrorCode,
+  UnrestoredProofOutcome,
 } from './proof/index.ts';
 
 export {

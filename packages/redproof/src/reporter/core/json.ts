@@ -1,5 +1,5 @@
 import type { CheckResult } from '../../domain/index.ts';
-import type { ProofEvaluation } from '../../proof/core/index.ts';
+import { proofEstablished, type ProofEvaluation } from '../../proof/core/index.ts';
 import type { CheckProjectRun, ProveProjectRun } from '../../run/core/index.ts';
 import { buildJsonCheckReport, type JsonBreachV1, type JsonDiagnosticV1 } from './check-report.ts';
 
@@ -79,13 +79,13 @@ export function buildJsonProveReport(run: ProveProjectRun): JsonProveReportV1 {
       gate: outcome.gate,
       proof: outcome.proof,
       expected: outcome.expected,
-      status: outcome.status === 'error'
+      status: outcome.status !== 'completed'
         ? 'infrastructure-error'
-        : outcome.ok ? 'proved' : 'not-proved',
+        : proofEstablished(outcome) ? 'proved' : 'not-proved',
       workerPid: outcome.workerPid,
       ...(outcome.status === 'completed' ? { reason: outcome.reason } : {}),
-      ...(outcome.result ? { check: jsonCheck(outcome.result) } : {}),
-      ...(outcome.status === 'error'
+      ...(outcome.status !== 'aborted' ? { check: jsonCheck(outcome.result) } : {}),
+      ...(outcome.status !== 'completed'
         ? {
             error: {
               code: outcome.error.code,

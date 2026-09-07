@@ -1,7 +1,7 @@
 import { relative } from 'node:path';
 import type { CheckResult, Diagnostic, Rule } from '../../domain/index.ts';
 import type { GateDescription } from '../../project/core/index.ts';
-import type { CompletedProofOutcome, ProofOutcome } from '../../proof/core/index.ts';
+import { proofEstablished, type CompletedProofOutcome, type ProofOutcome } from '../../proof/core/index.ts';
 import type { CheckProjectRun, GateRun } from '../../run/core/index.ts';
 import { buildGateReportModel, summarizeGateReports, type RunSummary } from './model.ts';
 
@@ -282,9 +282,9 @@ export function proofReason(outcome: CompletedProofOutcome): string {
 }
 
 export function formatProof(outcome: ProofOutcome): string {
-  const mark = outcome.ok ? '✓' : '✗';
-  if (outcome.status === 'error') {
-    const actual = outcome.result ? ` actual=${outcome.result.verdict}` : '';
+  const mark = proofEstablished(outcome) ? '✓' : '✗';
+  if (outcome.status !== 'completed') {
+    const actual = outcome.status === 'unrestored' ? ` actual=${outcome.result.verdict}` : '';
     return `${mark} ${outcome.gate} / ${outcome.proof} expected=${outcome.expected}${actual} error=${outcome.error.code}\n  ${outcome.error.message}${outcome.error.detail ? `\n  ${outcome.error.detail}` : ''}`;
   }
   const line = `${mark} ${outcome.gate} / ${outcome.proof} expected=${outcome.expected} actual=${outcome.result.verdict}`;

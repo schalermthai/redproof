@@ -19,7 +19,6 @@ test('prove JSON distinguishes proved and infrastructure-error outcomes', () => 
         gate: 'architecture',
         proof: 'detects forbidden import',
         expected: 'red',
-        ok: true,
         reason: { kind: 'proved', target: 'architecture/no-infra' },
         result: {
           verdict: 'fail',
@@ -34,11 +33,10 @@ test('prove JSON distinguishes proved and infrastructure-error outcomes', () => 
         workerPid: 10,
       },
       {
-        status: 'error',
+        status: 'aborted',
         gate: 'workspace',
         proof: 'restores mutation',
         expected: 'green',
-        ok: false,
         workerPid: 11,
         error: {
           code: 'workspace-not-restored',
@@ -71,7 +69,6 @@ test('prove JSON says why a proof was judged and what the Check found', () => {
         gate: 'lint',
         proof: 'a var in src is flagged',
         expected: 'red',
-        ok: false,
         reason: { kind: 'target-rule-not-breached', target: 'lint/no-var', breached: ['lint/no-let'] },
         result: {
           verdict: 'fail',
@@ -85,7 +82,6 @@ test('prove JSON says why a proof was judged and what the Check found', () => {
         gate: 'policy',
         proof: 'refuses without input',
         expected: 'refuse',
-        ok: true,
         reason: { kind: 'proved' },
         result: { verdict: 'refuse', scan, why: { code: 'unavailable', message: 'No input', location: null } },
         workerPid: 1,

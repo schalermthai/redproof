@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, rename, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { checkProject, loadProject, proveProject } from 'redproof';
+import { checkProject, loadProject, proofEstablished, proveProject } from 'redproof';
 
 const config = resolve('fixtures/eslint-project/redproof.config.ts');
 const source = resolve('fixtures/eslint-project/src/clean.js');
@@ -34,7 +34,7 @@ test('fixture proves ESLint red, green, and refuse and restores mutations', asyn
   assert.deepEqual(
     run.outcomes.map(outcome => [
       outcome.expected,
-      outcome.ok,
+      proofEstablished(outcome),
       outcome.status === 'completed' ? outcome.result.verdict : outcome.error.code,
     ]),
     [

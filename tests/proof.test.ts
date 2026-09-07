@@ -8,6 +8,7 @@ import {
   fail,
   pass,
   proof,
+  proofEstablished,
   refuse,
   runGate,
   runProof,
@@ -110,9 +111,9 @@ test('RED proof proves when its mutation breaches the target, then restores the 
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1', breachRule(state, 'r1')), '/project');
 
   assert.equal(outcome.status, 'completed');
-  assert.equal(outcome.ok, true);
+  assert.equal(proofEstablished(outcome), true);
   assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'proved', target: 'r1' });
-  assert.equal(outcome.result?.verdict, 'fail');
+  assert.equal(outcome.status === 'completed' && outcome.result.verdict, 'fail');
   assert.deepEqual(state.log, ['apply r1', 'undo r1']);
   assert.deepEqual(state.breached, []);
 });
@@ -122,9 +123,9 @@ test('RED proof does not pass when the Gate fails for another Rule', async () =>
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1', breachRule(state, 'r2')), '/project');
 
   assert.equal(outcome.status, 'completed');
-  assert.equal(outcome.ok, false);
+  assert.equal(proofEstablished(outcome), false);
   assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'target-rule-not-breached', target: 'r1', breached: ['r2'] });
-  assert.equal(outcome.result?.verdict, 'fail');
+  assert.equal(outcome.status === 'completed' && outcome.result.verdict, 'fail');
   assert.deepEqual(state.log, ['apply r2', 'undo r2']);
 });
 
@@ -133,9 +134,9 @@ test('RED proof does not pass when its target was already breached before mutati
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1 causally', breachRule(state, 'r1')), '/project');
 
   assert.equal(outcome.status, 'completed');
-  assert.equal(outcome.ok, false);
+  assert.equal(proofEstablished(outcome), false);
   assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'target-already-breached', target: 'r1', breached: ['r1'] });
-  assert.equal(outcome.result?.verdict, 'fail');
+  assert.equal(outcome.status === 'completed' && outcome.result.verdict, 'fail');
   assert.deepEqual(state.log, [], 'the mutation must never be applied');
   assert.equal(state.contexts.length, 1, 'only the baseline Check runs');
 });
@@ -144,12 +145,12 @@ test('GREEN passes on PASS and REFUSE passes on REFUSE, and both restore', async
   const state = world();
   const green = await runProof(gateOver(state), proof.green('stays green'), '/project');
   assert.equal(green.status, 'completed');
-  assert.equal(green.ok, true);
+  assert.equal(proofEstablished(green), true);
 
   const refused = await runProof(gateOver(state), proof.refuse('refuses', setFlag(state, 'refused')), '/project');
   assert.equal(refused.status, 'completed');
-  assert.equal(refused.ok, true);
-  assert.equal(refused.result?.verdict, 'refuse');
+  assert.equal(proofEstablished(refused), true);
+  assert.equal(refused.status === 'completed' && refused.result.verdict, 'refuse');
   assert.equal(state.refused, false);
 });
 
@@ -161,11 +162,10 @@ test('a mutation that cannot be applied yields mutation-apply-failed and undoes 
     '/project',
   );
 
-  assert.equal(outcome.status, 'error');
-  if (outcome.status !== 'error') throw new Error('expected infrastructure error');
+  assert.equal(outcome.status, 'aborted');
+  if (outcome.status !== 'aborted') throw new Error('expected an aborted proof');
   assert.equal(outcome.error.code, 'mutation-apply-failed');
   assert.match(outcome.error.detail ?? '', /cannot apply/);
-  assert.equal(outcome.result, undefined);
   assert.deepEqual(state.log, ['apply r1', 'undo r1']);
   assert.deepEqual(state.breached, []);
 });
@@ -174,8 +174,8 @@ test('a Check that throws after mutation yields check-threw, and the mutation is
   const state = world();
   const outcome = await runProof(gateOver(state), proof.green('sees the throw', setFlag(state, 'checkThrows')), '/project');
 
-  assert.equal(outcome.status, 'error');
-  if (outcome.status !== 'error') throw new Error('expected infrastructure error');
+  assert.equal(outcome.status, 'aborted');
+  if (outcome.status !== 'aborted') throw new Error('expected an aborted proof');
   assert.equal(outcome.error.code, 'check-threw');
   assert.doesNotMatch(outcome.error.message, /baseline/);
   assert.match(outcome.error.detail ?? '', /check exploded/);
@@ -187,8 +187,8 @@ test('a baseline Check that throws blocks a RED proof before any mutation', asyn
   const state = world({ checkThrows: true });
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1', breachRule(state, 'r1')), '/project');
 
-  assert.equal(outcome.status, 'error');
-  if (outcome.status !== 'error') throw new Error('expected infrastructure error');
+  assert.equal(outcome.status, 'aborted');
+  if (outcome.status !== 'aborted') throw new Error('expected an aborted proof');
   assert.equal(outcome.error.code, 'check-threw');
   assert.match(outcome.error.message, /baseline/);
   assert.deepEqual(state.log, []);
@@ -198,11 +198,11 @@ test('an undo that fails yields mutation-restore-failed and keeps the Check resu
   const state = world();
   const outcome = await runProof(gateOver(state), proof.green('undo fails', setFlag(state, 'refused', true)), '/project');
 
-  assert.equal(outcome.status, 'error');
-  if (outcome.status !== 'error') throw new Error('expected infrastructure error');
+  assert.equal(outcome.status, 'unrestored');
+  if (outcome.status !== 'unrestored') throw new Error('expected an unrestored proof');
   assert.equal(outcome.error.code, 'mutation-restore-failed');
   assert.match(outcome.error.detail ?? '', /undo of refused exploded/);
-  assert.equal(outcome.result?.verdict, 'refuse');
+  assert.equal(outcome.result.verdict, 'refuse');
 });
 
 test('a Check that throws and an undo that fails yields mutation-restore-failed without a result', async () => {
@@ -213,10 +213,9 @@ test('a Check that throws and an undo that fails yields mutation-restore-failed 
     '/project',
   );
 
-  assert.equal(outcome.status, 'error');
-  if (outcome.status !== 'error') throw new Error('expected infrastructure error');
+  assert.equal(outcome.status, 'aborted');
+  if (outcome.status !== 'aborted') throw new Error('expected an aborted proof');
   assert.equal(outcome.error.code, 'mutation-restore-failed');
   assert.match(outcome.error.message, /Check threw/);
   assert.match(outcome.error.detail ?? '', /undo of checkThrows exploded/);
-  assert.equal(outcome.result, undefined);
 });
