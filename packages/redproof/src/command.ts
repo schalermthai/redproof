@@ -29,6 +29,23 @@ export type CommandCheckOptions<R extends RuleRef> = {
   readonly exitCodes?: CommandExitCodes;
 };
 
+export type CommandGroupExecution =
+  | {
+      readonly mode?: 'sequential';
+      readonly maxAtOnce?: never;
+    }
+  | {
+      readonly mode: 'parallel';
+      /** Maximum number of child processes running together. Defaults to 4. */
+      readonly maxAtOnce?: number;
+    };
+
+export type CommandGroupOptions<R extends RuleRef> = {
+  readonly entries: readonly [CommandCheckOptions<R>, ...CommandCheckOptions<R>[]];
+  readonly label?: string;
+  readonly description?: string;
+} & CommandGroupExecution;
+
 type CompletedCommand = {
   readonly kind: 'completed';
   readonly exitCode: number;
@@ -301,6 +318,95 @@ export function command<const R extends RuleRef>(options: CommandCheckOptions<R>
         location: null,
         ...(detail ? { detail } : {}),
       });
+    },
+  };
+}
+
+async function mapLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  run: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      results[index] = await run(items[index]!);
+    }
+  }
+
+  await Promise.all(Array.from(
+    { length: Math.min(limit, items.length) },
+    () => worker(),
+  ));
+  return results;
+}
+
+function groupSource<R extends RuleRef>(options: CommandGroupOptions<R>): string {
+  return options.label
+    ?? options.entries.map(entry => entry.label ?? entry.command).join(', ');
+}
+
+function aggregateResults<R extends RuleRef>(
+  outcomes: readonly CheckResult<R>[],
+  source: string,
+  startedAt: string,
+): CheckResult<R> {
+  const aggregateScan: Scan = {
+    source,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    inspected: outcomes.length,
+  };
+  const refused = outcomes.find(outcome => outcome.verdict === 'refuse');
+  if (refused?.verdict === 'refuse') {
+    return result.refuse(aggregateScan, refused.why);
+  }
+
+  const breaches = outcomes.flatMap(outcome =>
+    outcome.verdict === 'fail' ? outcome.breaches : []
+  );
+  return result.fromBreaches(aggregateScan, breaches);
+}
+
+/** Create one Check from multiple commands with deterministic sequential or bounded-parallel aggregation. */
+export function commands<const R extends RuleRef>(options: CommandGroupOptions<R>): Check<R> {
+  if (options.entries.length === 0) throw new Error('commands requires at least one entry.');
+  if (options.mode !== 'parallel' && options.maxAtOnce !== undefined) {
+    throw new Error('maxAtOnce is only available in parallel mode.');
+  }
+  if (options.mode === 'parallel') validatePositiveInteger('maxAtOnce', options.maxAtOnce);
+
+  const checks = options.entries.map(entry => command(entry));
+  const source = groupSource(options);
+
+  return {
+    description: options.description ?? `run ${checks.length} commands`,
+    counting: counting.supported,
+
+    async run(ctx): Promise<CheckResult<R>> {
+      const startedAt = new Date().toISOString();
+
+      if (options.mode === 'parallel') {
+        const outcomes = await mapLimit(
+          checks,
+          options.maxAtOnce ?? 4,
+          check => check.run(ctx),
+        );
+        return aggregateResults(outcomes, source, startedAt);
+      }
+
+      const outcomes: CheckResult<R>[] = [];
+      for (const check of checks) {
+        const outcome = await check.run(ctx);
+        outcomes.push(outcome);
+        if (outcome.verdict === 'refuse') break;
+      }
+      return aggregateResults(outcomes, source, startedAt);
     },
   };
 }
