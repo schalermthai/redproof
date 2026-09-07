@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import test from 'node:test';
-import { testing, report, parseJestJson, parseJunitXml, testRunBreaches, type TestRunner } from '@redproof/testing';
+import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, type TestRunner } from '@redproof/testing';
 import { defineRule } from 'redproof';
 import { withWorkspace } from '../helpers/workspace.ts';
 
@@ -220,4 +220,37 @@ test('the testing adapter rejects a rule name it does not know', () => {
     }),
     /Unknown testing rule option: "noPurpleTests"\. Known options: testsPass, noSkippedTests, noTodoTests\./,
   );
+});
+
+test('a command runner states the command line it will run', () => {
+  const built = runner.command({ command: '/usr/local/bin/npm', args: ['run', 'test'] });
+
+  assert.deepEqual(built.plan, { command: '/usr/local/bin/npm', args: ['run', 'test'] });
+  assert.equal(built.description, 'run npm run test');
+  assert.doesNotMatch(built.description, /\//, 'a description must not carry a machine path');
+});
+
+test('a computed argument list is reported per run, not in the plan', () => {
+  const built = runner.command({
+    command: 'node',
+    args: ctx => ['--test', `--out=${ctx.reportFile}`],
+  });
+
+  assert.deepEqual(built.plan, { command: 'node' });
+  assert.equal(built.description, 'run node');
+  assert.deepEqual(
+    built.argsFor?.({ root: '/tmp', reportFile: '/tmp/report.xml' }),
+    ['--test', '--out=/tmp/report.xml'],
+  );
+});
+
+test('an explicit runner description still wins over the command line', () => {
+  const built = runner.command({
+    command: 'npm',
+    args: ['test'],
+    description: 'run the acceptance suite',
+  });
+
+  assert.equal(built.description, 'run the acceptance suite');
+  assert.deepEqual(built.plan, { command: 'npm', args: ['test'] });
 });

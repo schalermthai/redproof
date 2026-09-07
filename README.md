@@ -277,6 +277,9 @@ const gate = defineGate({
 
 Completed failure exits breach the selected Rule. Missing executables, timeouts, signals, output overflow, and explicitly unclassified exits produce **REFUSE**. Use `commands()` from the same subpath for deterministic sequential or bounded-parallel command groups.
 
+See **[Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/commands.md)** for exit-code policy,
+command groups, and what a Check reports about itself.
+
 See **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, Mutations, and Adapters.
 
 For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**.
@@ -350,6 +353,7 @@ npm run redproof:describe -- gates/no-todo.ts
 ## Learn more
 
 - **[Built-in integrations](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md)**
+- **[Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/commands.md)**
 - **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)**
 - **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**
 - **[Legacy modernization](https://github.com/schalermthai/redproof/blob/main/docs/legacy-modernization.md)**

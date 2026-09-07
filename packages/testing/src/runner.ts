@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import type { TestRunner, TestRunnerContext, TestRunnerResult } from './model.ts';
+import { basename } from 'node:path';
+import type { CommandPlan, TestRunner, TestRunnerContext, TestRunnerResult } from './model.ts';
 
 export type CommandArgs = readonly string[] | ((ctx: TestRunnerContext) => readonly string[]);
 
@@ -15,9 +16,25 @@ function argsFor(args: CommandArgs | undefined, ctx: TestRunnerContext): readonl
   return typeof args === 'function' ? args(ctx) : args;
 }
 
+function planFor(options: CommandRunnerOptions): CommandPlan {
+  return typeof options.args === 'function' || options.args === undefined
+    ? { command: options.command }
+    : { command: options.command, args: options.args };
+}
+
+/** The command line, with no machine-specific directory in front of it. */
+function describePlan(plan: CommandPlan): string {
+  const name = basename(plan.command);
+  return plan.args?.length ? `run ${name} ${plan.args.join(' ')}` : `run ${name}`;
+}
+
 export function command(options: CommandRunnerOptions): TestRunner {
+  const plan = planFor(options);
+
   return {
-    description: options.description ?? `run ${options.command}`,
+    description: options.description ?? describePlan(plan),
+    plan,
+    argsFor: ctx => argsFor(options.args, ctx),
 
     async run(ctx): Promise<TestRunnerResult> {
       const args = argsFor(options.args, ctx);

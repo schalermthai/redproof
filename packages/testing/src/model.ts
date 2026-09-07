@@ -80,8 +80,18 @@ export type TestRunnerUnavailable = {
 
 export type TestRunnerResult = TestRunnerCompleted | TestRunnerUnavailable;
 
+export type CommandPlan = {
+  readonly command: string;
+  /** Absent when the arguments are computed from the run context. */
+  readonly args?: readonly string[];
+};
+
 export type TestRunner = {
   readonly description: string;
+  /** What this runner will execute, known without a run. */
+  readonly plan?: CommandPlan;
+  /** The exact arguments for one run. Present on command runners. */
+  argsFor?(ctx: TestRunnerContext): readonly string[];
   run(ctx: TestRunnerContext): Promise<TestRunnerResult>;
 };
 

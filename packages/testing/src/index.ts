@@ -259,6 +259,7 @@ export type {
   CommandArgs,
   CommandRunnerOptions,
 } from './runner.ts';
+export type { CommandPlan } from './model.ts';
 export type {
   TestCase,
   TestFailure,

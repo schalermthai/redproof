@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import { breach, counting, result } from './composition/check.ts';
 import type { Check, CheckResult, Scan } from './domain/check.ts';
 import type { Rule, RuleRef } from './domain/rule.ts';
@@ -261,9 +261,10 @@ export function command<const R extends RuleRef>(options: CommandCheckOptions<R>
   const exitCodes = normalizeExitCodes(options.exitCodes);
   const label = options.label ?? options.command;
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+  const invocation = [basename(options.command), ...(options.args ?? [])].join(' ');
 
   return {
-    description: options.description ?? `run ${label}`,
+    description: options.description ?? `run ${invocation}`,
     counting: counting.supported,
 
     async run(ctx): Promise<CheckResult<R>> {
@@ -385,7 +386,9 @@ export function commands<const R extends RuleRef>(options: CommandGroupOptions<R
   const source = groupSource(options);
 
   return {
-    description: options.description ?? `run ${checks.length} commands`,
+    description: options.description
+      ?? `run ${checks.length} commands: `
+        + options.entries.map(entry => entry.label ?? basename(entry.command)).join(', '),
     counting: counting.supported,
 
     async run(ctx): Promise<CheckResult<R>> {

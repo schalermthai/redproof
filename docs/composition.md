@@ -397,70 +397,12 @@ This keeps the set of Rules the Check may breach type-safe.
 
 ### Command Checks
 
-Use `redproof/command` when an existing guardrail is exposed as an executable and its process status is the trustworthy policy result:
+When the guardrail is already an executable, `command()` and `commands()` from
+`redproof/command` build the Check for you. They handle exit-code policy,
+timeouts, output limits, and REFUSE.
 
-```ts fragment
-import { command } from 'redproof/command';
-
-const check = command({
-  rule: rules.docs,
-  command: 'npm',
-  args: ['run', 'lint:docs'],
-  timeoutMs: 60_000,
-});
-```
-
-By default, exit code `0` produces PASS and any other ordinary exit code breaches `rule`. Process infrastructure failures produce REFUSE:
-
-- the executable cannot start
-- the process exceeds `timeoutMs`
-- the process is terminated by a signal
-- combined stdout and stderr exceed `maxOutputBytes` (10 MiB by default)
-- the process returns an exit code not covered by an explicit policy
-
-Use an explicit policy when the tool distinguishes findings from configuration or invocation errors:
-
-```ts fragment
-const check = command({
-  rule: rules.lint,
-  command: 'eslint',
-  args: ['src'],
-  exitCodes: {
-    pass: [0],
-    breach: [1],
-  },
-});
-```
-
-Here, exit code `2` produces REFUSE because it is neither a passing nor a breach exit. Child stdout and stderr are captured for diagnostics and never inherited by reporter stdout. Relative `cwd` values resolve inside the Gate workspace and cannot escape it.
-
-Use `commands()` when one Gate depends on several executables. Sequential execution is the safe default:
-
-```ts fragment
-import { commands } from 'redproof/command';
-
-const check = commands({
-  entries: [
-    { rule: rules.metadata, command: 'npm', args: ['run', 'lint:package-json'] },
-    { rule: rules.ordering, command: 'npm', args: ['run', 'lint:package-json-sorting'] },
-  ],
-});
-```
-
-Parallel execution is explicit and bounded:
-
-```ts fragment
-const check = commands({
-  mode: 'parallel',
-  maxAtOnce: 2,
-  entries: [
-    { rule: rules.docs, command: 'npm', args: ['run', 'lint:docs'] },
-    { rule: rules.types, command: 'npm', args: ['run', 'lint:types'] },
-  ],
-});
-```
-
-Results remain in declaration order even when commands finish in a different order. Sequential execution stops at the first REFUSE. Parallel execution waits for the started group, and REFUSE takes precedence over collected Breaches because the Gate could not make a complete decision.
+See **[Command Checks](commands.md)** for the full API, command groups,
+sequential and parallel execution, and what a Check reports about itself.
 
 ## Creating an Adapter
 
