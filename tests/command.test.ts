@@ -286,3 +286,27 @@ test('commands validates its execution policy at composition time', () => {
     /maxAtOnce must be a positive integer/,
   );
 });
+
+test('a command Check describes the real invocation, not an absolute path', () => {
+  const rule = defineRule({ id: 'probe/lint', description: 'Lint must pass.' });
+  const check = command({ rule, command: '/usr/local/bin/npm', args: ['run', 'lint'] });
+
+  assert.equal(check.description, 'run npm run lint');
+  assert.doesNotMatch(check.description, /\//, 'a description must not carry a machine path');
+});
+
+test('a command group names the commands it will run', () => {
+  const lint = defineRule({ id: 'probe/lint', description: 'Lint must pass.' });
+  const types = defineRule({ id: 'probe/types', description: 'Types must pass.' });
+
+  const check = commands({
+    mode: 'parallel',
+    maxAtOnce: 2,
+    entries: [
+      { rule: lint, command: 'npm', args: ['run', 'lint'], label: 'lint' },
+      { rule: types, command: '/usr/local/bin/tsc', args: ['--noEmit'] },
+    ],
+  });
+
+  assert.equal(check.description, 'run 2 commands: lint, tsc');
+});

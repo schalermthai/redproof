@@ -94,6 +94,29 @@ defineTestReport(...)
 
 Create a new full Adapter only when a tool introduces a genuinely different policy model.
 
+### What a command runner reports about itself
+
+A command runner states what it will run. `redproof describe` uses this, so a
+Gate does not need a hand-written sentence that can drift from the real command.
+
+```ts
+import { runner } from '@redproof/testing';
+
+const built = runner.command({ command: 'npm', args: ['test'] });
+
+built.description;                                  // 'run npm test'
+built.plan;                                         // { command: 'npm', args: ['test'] }
+built.argsFor?.({ root: '.', reportFile: 'r.xml' }); // ['test']
+```
+
+`plan.args` is present only when the arguments are a fixed list. When `args` is
+a function, the arguments depend on the run, so `plan` carries the command
+alone and `argsFor` answers for one run.
+
+The default description uses the command's base name. A description therefore
+reads the same on every machine, even when `command` is an absolute path. Set
+`description` yourself when a sentence explains more than the command line does.
+
 ## ESLint
 
 Package:
