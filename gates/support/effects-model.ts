@@ -27,12 +27,13 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/dependency-cruiser/src/index.ts',
   'packages/eslint/src/index.ts',
   'packages/redproof/src/cli.ts',
+  'packages/redproof/src/cli/shell/main.ts',
   'packages/redproof/src/command/shell/check.ts',
   'packages/redproof/src/command/shell/spawn.ts',
   'packages/redproof/src/composition/inspect.ts',
   'packages/redproof/src/composition/mutation/context.ts',
   'packages/redproof/src/composition/mutation/filesystem.ts',
-  'packages/redproof/src/reporter/terminal.ts',
+  'packages/redproof/src/reporter/shell/sources.ts',
   'packages/redproof/src/project/shell/loader.ts',
   'packages/redproof/src/proof/shell/runner.ts',
   'packages/redproof/src/run/shell/gate-worker.ts',
@@ -94,7 +95,8 @@ function ambientEffect(node: ts.Node): string | undefined {
 
   if (ts.isNewExpression(node)
       && ts.isIdentifier(node.expression)
-      && node.expression.text === 'Date') {
+      && node.expression.text === 'Date'
+      && (node.arguments?.length ?? 0) === 0) {
     return 'new Date';
   }
 

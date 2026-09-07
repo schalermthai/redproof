@@ -16,16 +16,17 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
+import { copiesEntry, copyName, stampsEntry } from '../core/copy-policy.ts';
 import { assessFreshness, type Freshness, type TreeStamp } from '../core/freshness.ts';
+import { fingerprint, stampRecord, type StampEntry } from '../core/stamp.ts';
 
 export type { Freshness, TreeStamp } from '../core/freshness.ts';
+export { pathInsideCopy } from '../core/copy-policy.ts';
 
 export type GateWorkspace = {
   readonly root: string;
   readonly baseline: TreeStamp;
 };
-
-const OMIT_FROM_COPY = new Set(['.git', '.redproof']);
 
 async function copyEntry(source: string, target: string, sourceRoot: string): Promise<void> {
   const info = await lstat(source);
@@ -35,10 +36,7 @@ async function copyEntry(source: string, target: string, sourceRoot: string): Pr
     await chmod(target, info.mode);
     const entries = await readdir(source, { withFileTypes: true });
     for (const entry of entries) {
-      if (
-        OMIT_FROM_COPY.has(entry.name)
-        || (source === sourceRoot && entry.name === 'node_modules')
-      ) continue;
+      if (!copiesEntry(entry.name, source === sourceRoot)) continue;
       await copyEntry(join(source, entry.name), join(target, entry.name), sourceRoot);
     }
     return;
@@ -57,10 +55,15 @@ async function copyEntry(source: string, target: string, sourceRoot: string): Pr
   }
 }
 
-function fingerprint(...parts: (string | Buffer)[]): string {
-  const hash = createHash('sha256');
-  for (const part of parts) hash.update(part);
-  return hash.digest('hex');
+async function readStampEntry(root: string, absolute: string): Promise<StampEntry | null> {
+  const path = relative(root, absolute).replaceAll('\\', '/');
+  const info = await lstat(absolute);
+  const mode = info.mode;
+
+  if (info.isDirectory()) return { kind: 'directory', path, mode };
+  if (info.isSymbolicLink()) return { kind: 'link', path, mode, target: await readlink(absolute) };
+  if (info.isFile()) return { kind: 'file', path, mode, contents: await readFile(absolute) };
+  return null;
 }
 
 async function collectStamp(
@@ -73,39 +76,18 @@ async function collectStamp(
   let count = 0;
 
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    if (current === root && entry.name === '.redproof') continue;
+    if (!stampsEntry(entry.name, current === root)) continue;
 
     const absolute = join(current, entry.name);
-    const rel = relative(root, absolute).replaceAll('\\', '/');
-    const info = await lstat(absolute);
-    const mode = info.mode & 0o777;
+    const stampEntry = await readStampEntry(root, absolute);
+    if (!stampEntry) continue;
 
-    if (info.isDirectory()) {
-      const metadata = `D\0${rel}\0${mode}\0`;
-      hash.update(metadata);
-      fingerprints[rel] = fingerprint(metadata);
-      count += 1;
-      count += await collectStamp(root, absolute, hash, fingerprints);
-      continue;
-    }
+    const record = stampRecord(stampEntry);
+    for (const part of record) hash.update(part);
+    fingerprints[stampEntry.path] = fingerprint(record);
+    count += 1;
 
-    if (info.isSymbolicLink()) {
-      const metadata = `L\0${rel}\0${mode}\0${await readlink(absolute)}\0`;
-      hash.update(metadata);
-      fingerprints[rel] = fingerprint(metadata);
-      count += 1;
-      continue;
-    }
-
-    if (info.isFile()) {
-      const metadata = `F\0${rel}\0${mode}\0`;
-      const contents = await readFile(absolute);
-      hash.update(metadata);
-      hash.update(contents);
-      hash.update('\0');
-      fingerprints[rel] = fingerprint(metadata, contents, '\0');
-      count += 1;
-    }
+    if (stampEntry.kind === 'directory') count += await collectStamp(root, absolute, hash, fingerprints);
   }
 
   return count;
@@ -123,14 +105,9 @@ export async function verifyTree(root: string, baseline: TreeStamp): Promise<Fre
   return assessFreshness(baseline, await stampTree(root));
 }
 
-function safeName(value: string): string {
-  const safe = value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-  return safe || 'gate';
-}
-
 // Outside the project, so config lookups cannot escape the copy and find the original.
 async function createCopyRoot(gateId: string): Promise<string> {
-  return mkdtemp(join(tmpdir(), `redproof-${safeName(gateId)}-`));
+  return mkdtemp(join(tmpdir(), `redproof-${copyName(gateId)}-`));
 }
 
 async function findDependencies(projectRoot: string): Promise<string | null> {
@@ -175,8 +152,4 @@ export async function copyGateWorkspace(projectRoot: string, gateId: string): Pr
 
 export async function releaseGateWorkspace(workspace: GateWorkspace): Promise<void> {
   await rm(workspace.root, { recursive: true, force: true });
-}
-
-export function pathInsideCopy(projectRoot: string, workspaceRoot: string, projectFile: string): string {
-  return join(workspaceRoot, relative(projectRoot, projectFile));
 }

@@ -1,4 +1,11 @@
-import type { ReporterSpec } from './reporter.ts';
+export type CheckReporterName = 'default' | 'compact' | 'json' | 'sarif';
+export type ProveReporterName = 'default' | 'json';
+export type ReporterName = CheckReporterName;
+
+export type ReporterSpec = {
+  readonly name: ReporterName;
+  readonly outputFile?: string;
+};
 
 const names = new Set(['default', 'compact', 'json', 'sarif']);
 

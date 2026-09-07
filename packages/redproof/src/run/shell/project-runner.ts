@@ -4,26 +4,12 @@ import { executionPolicy } from '../core/policy.ts';
 import { checkExitCode, proofExitCode } from '../core/exit-code.ts';
 import type { ProofOutcome } from '../../proof/core/outcome.ts';
 import type { LoadedGateModule, LoadedProject } from '../../project/core/discovery.ts';
+import type { CheckProjectRun, GateRun, ProveProjectRun } from '../core/run.ts';
 import { loadProject, selectGateModules } from '../../project/shell/loader.ts';
 import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../../workspace/shell/copy.ts';
 import { runGate, runProof } from '../../proof/shell/runner.ts';
 import { mapLimit } from '../../support/map-limit.ts';
 import { runGateWorker, unwrapWorker } from './worker-process.ts';
-
-export type GateRun = {
-  readonly module: LoadedGateModule;
-  readonly result: CheckResult;
-  readonly durationMs: number;
-  readonly workerPid: number;
-};
-
-export type CheckProjectRun = {
-  readonly project: LoadedProject;
-  readonly results: readonly GateRun[];
-  readonly exitCode: number;
-  readonly startedAt: Date;
-  readonly durationMs: number;
-};
 
 async function checkInPlace(
   project: LoadedProject,
@@ -130,12 +116,6 @@ async function proveInCopies(
 
   return perGate.flat();
 }
-
-export type ProveProjectRun = {
-  readonly project: LoadedProject;
-  readonly outcomes: readonly ProofOutcome[];
-  readonly exitCode: number;
-};
 
 export async function proveProject(
   configPath: string,
