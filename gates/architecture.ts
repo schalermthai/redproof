@@ -68,32 +68,32 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.coreNoEffectImports,
     'keeps effect imports out of the functional core',
-    mutate.appendText('packages/redproof/src/runtime/core/exit-code.ts', "\nimport 'node:fs/promises';\n"),
+    mutate.appendText('packages/redproof/src/run/core/exit-code.ts', "\nimport 'node:fs/promises';\n"),
   ),
   proof.red(
     rules.coreNoAmbientInputs,
     'keeps ambient process state out of the functional core',
-    mutate.appendText('packages/redproof/src/runtime/core/exit-code.ts', '\nvoid process.cwd();\n'),
+    mutate.appendText('packages/redproof/src/run/core/exit-code.ts', '\nvoid process.cwd();\n'),
   ),
   proof.red(
     rules.coreNoShell,
     'keeps the imperative shell out of the functional core',
-    mutate.appendText('packages/redproof/src/runtime/core/exit-code.ts', "\nimport '../shell/worker-process.ts';\n"),
+    mutate.appendText('packages/redproof/src/run/core/exit-code.ts', "\nimport '../shell/worker-process.ts';\n"),
   ),
   proof.red(
     rules.domainInwardOnly,
     'keeps domain types independent of outer layers',
-    mutate.appendText('packages/redproof/src/domain/rule.ts', "\nimport '../runtime/core/exit-code.ts';\n"),
+    mutate.appendText('packages/redproof/src/domain/rule.ts', "\nimport '../run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.compositionNoRuntimeOrReporters,
     'keeps declarative composition independent of runtime orchestration',
-    mutate.appendText('packages/redproof/src/composition/options.ts', "\nimport '../runtime/core/exit-code.ts';\n"),
+    mutate.appendText('packages/redproof/src/composition/options.ts', "\nimport '../run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.adaptersPublicCoreApiOnly,
     'keeps adapters on the public Redproof API',
-    mutate.appendText('packages/eslint/src/index.ts', "\nimport '../../redproof/src/runtime/core/exit-code.ts';\n"),
+    mutate.appendText('packages/eslint/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.productionNoTestFixtureDependencies,

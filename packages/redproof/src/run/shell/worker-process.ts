@@ -1,6 +1,6 @@
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import type { GateWorkerJob, GateWorkerResult } from '../worker-protocol.ts';
+import type { GateWorkerJob, GateWorkerResult } from '../core/protocol.ts';
 
 export async function mapLimit<T, R>(
   items: readonly T[],
@@ -24,7 +24,7 @@ export async function mapLimit<T, R>(
 
 const workerExtension = import.meta.url.endsWith('.ts') ? 'ts' : 'js';
 const gateWorkerFile = fileURLToPath(
-  new URL(`../gate-worker.${workerExtension}`, import.meta.url),
+  new URL(`./gate-worker.${workerExtension}`, import.meta.url),
 );
 
 export function runGateWorker(job: GateWorkerJob): Promise<GateWorkerResult> {

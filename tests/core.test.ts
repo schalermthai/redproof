@@ -12,13 +12,13 @@ import {
   type Scan,
 } from 'redproof';
 import { resolveConfig } from '../packages/redproof/src/composition/config.ts';
-import { executionPolicy } from '../packages/redproof/src/runtime/core/execution-policy.ts';
-import { checkExitCode, proofExitCode } from '../packages/redproof/src/runtime/core/exit-code.ts';
-import { evaluateProof } from '../packages/redproof/src/runtime/core/proof-evaluation.ts';
-import type { ProofOutcome } from '../packages/redproof/src/runtime/core/proof-outcome.ts';
-import { canReuseWorkspace, verifyProofRestoration } from '../packages/redproof/src/runtime/core/proof-restoration.ts';
+import { executionPolicy } from '../packages/redproof/src/run/core/policy.ts';
+import { checkExitCode, proofExitCode } from '../packages/redproof/src/run/core/exit-code.ts';
+import { evaluateProof } from '../packages/redproof/src/proof/core/evaluation.ts';
+import type { ProofOutcome } from '../packages/redproof/src/proof/core/outcome.ts';
+import { canReuseWorkspace, verifyProofRestoration } from '../packages/redproof/src/proof/core/restoration.ts';
 import { buildGateReportModel, summarizeGateReports } from '../packages/redproof/src/reporter/model.ts';
-import { assessFreshness } from '../packages/redproof/src/runtime/core/restoration.ts';
+import { assessFreshness } from '../packages/redproof/src/workspace/core/freshness.ts';
 
 
 const scan: Scan = {

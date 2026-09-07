@@ -16,9 +16,9 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 
-import { assessFreshness, type Freshness, type TreeStamp } from './core/restoration.ts';
+import { assessFreshness, type Freshness, type TreeStamp } from '../core/freshness.ts';
 
-export type { Freshness, TreeStamp } from './core/restoration.ts';
+export type { Freshness, TreeStamp } from '../core/freshness.ts';
 
 export type GateWorkspace = {
   readonly root: string;

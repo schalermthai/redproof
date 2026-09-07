@@ -6,7 +6,7 @@ import test from 'node:test';
 import {
   copyGateWorkspace,
   releaseGateWorkspace,
-} from '../packages/redproof/src/runtime/workspace.ts';
+} from '../packages/redproof/src/workspace/shell/copy.ts';
 import { withWorkspace } from './helpers/workspace.ts';
 
 test('copies tracked nested node_modules fixtures while linking root dependencies', async () => {

@@ -4,12 +4,12 @@ import type { Gate } from '../../domain/gate.ts';
 import type { MutationPlan, UndoMutation } from '../../domain/mutation.ts';
 import type { Proof, RedProof } from '../../domain/proof.ts';
 import type { RuleRef } from '../../domain/rule.ts';
-import { evaluateProof, proofSucceeded } from '../core/proof-evaluation.ts';
+import { evaluateProof, proofSucceeded } from '../core/evaluation.ts';
 import type {
   InfrastructureProofOutcome,
   ProofInfrastructureError,
   ProofOutcome,
-} from '../core/proof-outcome.ts';
+} from '../core/outcome.ts';
 
 function ruleRefs(adapter: Adapter<any>): RuleRef[] {
   return Object.values(adapter.rules as Record<string, { readonly id: RuleRef }>).map(rule => rule.id);

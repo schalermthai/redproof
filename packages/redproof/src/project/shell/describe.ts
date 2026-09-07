@@ -1,5 +1,5 @@
-import type { LoadedGateModule, LoadedProject } from './discovery.ts';
-import { loadProject, selectGateModules } from './discovery.ts';
+import type { LoadedGateModule, LoadedProject } from './loader.ts';
+import { loadProject, selectGateModules } from './loader.ts';
 
 export type DescribedRule = {
   readonly label: string;

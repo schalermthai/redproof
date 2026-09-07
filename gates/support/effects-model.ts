@@ -19,7 +19,7 @@ export type EffectAnalysis = {
   readonly unapprovedBoundaries: readonly EffectFinding[];
 };
 
-const CORE_PATH = /^packages\/redproof\/src\/(?:domain|runtime\/core)\//;
+const CORE_PATH = /^packages\/redproof\/src\/(?:domain|[^/]+\/core)\//;
 
 const EFFECT_MODULE = /^(?:node:)?(?:fs(?:\/promises)?|child_process|os|stream(?:\/.*)?|net|http|https|worker_threads|timers(?:\/promises)?)$/;
 
@@ -32,12 +32,12 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/redproof/src/composition/mutation/context.ts',
   'packages/redproof/src/composition/mutation/filesystem.ts',
   'packages/redproof/src/reporter/terminal.ts',
-  'packages/redproof/src/runtime/discovery.ts',
-  'packages/redproof/src/runtime/gate-worker.ts',
-  'packages/redproof/src/runtime/shell/gate-runner.ts',
-  'packages/redproof/src/runtime/shell/project-runner.ts',
-  'packages/redproof/src/runtime/shell/worker-process.ts',
-  'packages/redproof/src/runtime/workspace.ts',
+  'packages/redproof/src/project/shell/loader.ts',
+  'packages/redproof/src/proof/shell/runner.ts',
+  'packages/redproof/src/run/shell/gate-worker.ts',
+  'packages/redproof/src/run/shell/project-runner.ts',
+  'packages/redproof/src/run/shell/worker-process.ts',
+  'packages/redproof/src/workspace/shell/copy.ts',
   'packages/stryker/src/index.ts',
   'packages/testing/src/index.ts',
   'packages/testing/src/runner.ts',

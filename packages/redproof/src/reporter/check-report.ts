@@ -1,7 +1,7 @@
 import { relative } from 'node:path';
 import type { Breach, CountingCapability, Scan } from '../domain/check.ts';
 import type { Diagnostic } from '../domain/diagnostic.ts';
-import type { CheckProjectRun, GateRun } from '../runtime/shell/project-runner.ts';
+import type { CheckProjectRun, GateRun } from '../run/shell/project-runner.ts';
 import { buildGateReportModel, summarizeGateReports } from './model.ts';
 
 export type ReportVersion = 1;

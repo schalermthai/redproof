@@ -1,4 +1,4 @@
-import type { CheckProjectRun, ProveProjectRun } from '../runtime/shell/project-runner.ts';
+import type { CheckProjectRun, ProveProjectRun } from '../run/shell/project-runner.ts';
 import { formatCompactRun } from './compact.ts';
 import { formatJsonProofs, formatJsonRun } from './json.ts';
 import { formatSarifRun } from './sarif.ts';
