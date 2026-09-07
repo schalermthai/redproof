@@ -23,9 +23,9 @@ export type GateWorkspace = {
   readonly baseline: TreeStamp;
 };
 
-const OMIT_FROM_COPY = new Set(['.git', '.redproof', 'node_modules']);
+const OMIT_FROM_COPY = new Set(['.git', '.redproof']);
 
-async function copyEntry(source: string, target: string): Promise<void> {
+async function copyEntry(source: string, target: string, sourceRoot: string): Promise<void> {
   const info = await lstat(source);
 
   if (info.isDirectory()) {
@@ -33,8 +33,11 @@ async function copyEntry(source: string, target: string): Promise<void> {
     await chmod(target, info.mode);
     const entries = await readdir(source, { withFileTypes: true });
     for (const entry of entries) {
-      if (OMIT_FROM_COPY.has(entry.name)) continue;
-      await copyEntry(join(source, entry.name), join(target, entry.name));
+      if (
+        OMIT_FROM_COPY.has(entry.name)
+        || (source === sourceRoot && entry.name === 'node_modules')
+      ) continue;
+      await copyEntry(join(source, entry.name), join(target, entry.name), sourceRoot);
     }
     return;
   }
@@ -156,9 +159,10 @@ async function linkDependencies(projectRoot: string, target: string): Promise<vo
 
 export async function copyGateWorkspace(projectRoot: string, gateId: string): Promise<GateWorkspace> {
   const target = await createCopyRoot(gateId);
+  const sourceRoot = resolve(projectRoot);
 
-  await copyEntry(projectRoot, target);
-  await linkDependencies(projectRoot, target);
+  await copyEntry(sourceRoot, target, sourceRoot);
+  await linkDependencies(sourceRoot, target);
   const baseline = await stampTree(target);
   return { root: target, baseline };
 }
