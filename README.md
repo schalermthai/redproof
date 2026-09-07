@@ -230,7 +230,7 @@ No Gate matched: gates/missing.ts
 
 Gate files choose **which Gates run**. They never change **what a Gate inspects**. A Gate owns its own scope:
 
-```ts
+```ts fragment
 text.find(ctx, { files: 'src/**/*.ts' })
 ```
 
@@ -261,7 +261,7 @@ Redproof is designed to be composed when an existing integration does not fit yo
 
 For a guardrail exposed as an executable, use the official `redproof/command` Check:
 
-```ts
+```ts fragment
 import { command } from 'redproof/command';
 
 const gate = defineGate({

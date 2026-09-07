@@ -80,14 +80,14 @@ const adapter = testing({
 
 Built-in report formats:
 
-```ts
+```ts fragment
 report.jestJson()
 report.junitXml()
 ```
 
 For a custom test system, implement only the runner or report normalization layer:
 
-```ts
+```ts fragment
 defineTestRunner(...)
 defineTestReport(...)
 ```

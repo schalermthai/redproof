@@ -40,7 +40,7 @@ The aliases (`noTodo`, `noFixme`) are for authoring. The `id` is the stable Rule
 
 A Check evaluates the Gate as a whole.
 
-```ts
+```ts fragment
 check: {
   description: 'scan source files for unfinished-work markers',
   counting: counting.supported,
@@ -54,13 +54,13 @@ check: {
 
 Every Check declares whether it supports reliable breach counting:
 
-```ts
+```ts fragment
 counting.supported
 ```
 
 or:
 
-```ts
+```ts fragment
 counting.unsupported('The external command only exposes a process status.')
 ```
 
@@ -70,7 +70,7 @@ Countability is a standing capability of the Check, not something inferred from 
 
 Use the result constructors rather than manually rebuilding the union:
 
-```ts
+```ts fragment
 result.pass(scan)
 result.fail(scan, breaches)
 result.refuse(scan, diagnostic)
@@ -78,7 +78,7 @@ result.refuse(scan, diagnostic)
 
 For the common case where you collect zero or more breaches:
 
-```ts
+```ts fragment
 return result.fromBreaches(scan, breaches);
 ```
 
@@ -95,7 +95,7 @@ This means:
 
 A Breach is one concrete violation of one Rule:
 
-```ts
+```ts fragment
 breach(rules.noTodo, {
   code: 'todo-found',
   message: 'TODO comment found.',
@@ -109,7 +109,7 @@ breach(rules.noTodo, {
 
 A diagnostic can also be locationless:
 
-```ts
+```ts fragment
 {
   code: 'budget-exceeded',
   message: 'CPU budget exceeded.',
@@ -127,13 +127,13 @@ A refusal carries a Diagnostic, not a Breach, because Redproof has not establish
 
 Redproof filesystem helpers are scoped to the Check or Mutation root:
 
-```ts
+```ts fragment
 const paths = await files.find(ctx, 'src/**/*.ts');
 ```
 
 Include and exclude patterns:
 
-```ts
+```ts fragment
 const paths = await files.find(ctx, {
   include: ['src/**/*.ts'],
   exclude: ['src/**/*.test.ts'],
@@ -142,7 +142,7 @@ const paths = await files.find(ctx, {
 
 Other basic helpers:
 
-```ts
+```ts fragment
 files.read(ctx, 'src/example.ts')
 files.write(ctx, 'src/example.ts', content)
 files.exists(ctx, 'src/example.ts')
@@ -154,7 +154,7 @@ files.rename(ctx, 'from.ts', 'to.ts')
 
 Search selected files:
 
-```ts
+```ts fragment
 const found = await text.find(ctx, {
   files: 'src/**/*.ts',
   find: /\bTODO\b/g,
@@ -163,7 +163,7 @@ const found = await text.find(ctx, {
 
 Each match includes:
 
-```ts
+```ts fragment
 match.file
 match.text
 match.range
@@ -172,7 +172,7 @@ match.location
 
 For one match:
 
-```ts
+```ts fragment
 const first = await text.findFirst(ctx, {
   files: 'src/**/*.ts',
   find: 'export class Order',
@@ -183,7 +183,7 @@ const first = await text.findFirst(ctx, {
 
 `text.find` and `json.query` both return a `scan()` function. It describes that one search:
 
-```ts
+```ts fragment
 const found = await text.find(ctx, { files: 'src/**/*.ts', find: /\bTODO\b/g });
 
 return result.fromBreaches(found.scan(), breaches);
@@ -193,13 +193,13 @@ return result.fromBreaches(found.scan(), breaches);
 
 Override either default when it helps:
 
-```ts
+```ts fragment
 found.scan({ source: 'todo-scan' })
 ```
 
 Pass `startedAt` when the Check began working before the search:
 
-```ts
+```ts fragment
 async run(ctx) {
   const startedAt = new Date().toISOString();
   const policy = JSON.parse(await files.read(ctx, 'policy.json'));
@@ -211,7 +211,7 @@ async run(ctx) {
 
 **One `scan()` describes one search.** A Check that runs several searches must build its own `Scan`, or `inspected` will under-count:
 
-```ts
+```ts fragment
 const scan = {
   source: 'markers',
   startedAt,
@@ -226,7 +226,7 @@ That matters because a Check declaring `counting.supported` promises a reliable 
 
 A RED proof targets one specific Rule:
 
-```ts
+```ts fragment
 proof.red(
   rules.noTodo,
   'detects a TODO comment',
@@ -238,13 +238,13 @@ A RED proof only succeeds when that target Rule appears in the Check breaches. A
 
 GREEN proves that the healthy state passes:
 
-```ts
+```ts fragment
 proof.green('accepts clean source')
 ```
 
 REFUSE proves that the Check declines to guess when required evidence is unavailable:
 
-```ts
+```ts fragment
 proof.refuse(
   'refuses when configuration is unavailable',
   mutate.rename('tool.config.ts', 'tool.config.off.ts'),
@@ -253,7 +253,7 @@ proof.refuse(
 
 Bind proofs to a Gate:
 
-```ts
+```ts fragment
 export const proofs = defineProofs(gate, [
   proof.red(...),
   proof.green(...),
@@ -266,7 +266,7 @@ A locator describes where a mutation should operate when the proof runs.
 
 Text locator:
 
-```ts
+```ts fragment
 locate.text({
   files: 'src/example.ts',
   find: 'export const answer = 42;',
@@ -285,7 +285,7 @@ occurrence: 0
 
 JSON locator:
 
-```ts
+```ts fragment
 locate.json({
   files: 'package.json',
   path: '$.scripts.test',
@@ -307,7 +307,7 @@ $.scripts.*
 
 Filesystem:
 
-```ts
+```ts fragment
 mutate.createFile(path, content)
 mutate.writeText(path, content)
 mutate.deleteFile(path)
@@ -318,7 +318,7 @@ mutate.move(from, to)
 
 Text:
 
-```ts
+```ts fragment
 mutate.appendText(path, text)
 mutate.replaceText(locator, replacement)
 mutate.replaceAllText(query, replacement)
@@ -331,7 +331,7 @@ mutate.removeLine(path, line)
 
 JSON:
 
-```ts
+```ts fragment
 mutate.jsonSet(locator, value)
 mutate.jsonDelete(locator)
 mutate.jsonMerge(locator, patch)
@@ -363,7 +363,7 @@ const breakState = defineMutation({
 
 For complete control, return the undo yourself:
 
-```ts
+```ts fragment
 const mutation = defineMutation({
   description: 'custom mutation',
 
@@ -382,7 +382,7 @@ const mutation = defineMutation({
 
 When a Check is useful outside one Gate definition, bind it to a Rule catalog explicitly:
 
-```ts
+```ts fragment
 const check = defineCheck(rules, {
   description: 'scan source markers',
   counting: counting.supported,
@@ -399,7 +399,7 @@ This keeps the set of Rules the Check may breach type-safe.
 
 Use `redproof/command` when an existing guardrail is exposed as an executable and its process status is the trustworthy policy result:
 
-```ts
+```ts fragment
 import { command } from 'redproof/command';
 
 const check = command({
@@ -420,7 +420,7 @@ By default, exit code `0` produces PASS and any other ordinary exit code breache
 
 Use an explicit policy when the tool distinguishes findings from configuration or invocation errors:
 
-```ts
+```ts fragment
 const check = command({
   rule: rules.lint,
   command: 'eslint',
@@ -436,7 +436,7 @@ Here, exit code `2` produces REFUSE because it is neither a passing nor a breach
 
 Use `commands()` when one Gate depends on several executables. Sequential execution is the safe default:
 
-```ts
+```ts fragment
 import { commands } from 'redproof/command';
 
 const check = commands({
@@ -449,7 +449,7 @@ const check = commands({
 
 Parallel execution is explicit and bounded:
 
-```ts
+```ts fragment
 const check = commands({
   mode: 'parallel',
   maxAtOnce: 2,
@@ -466,7 +466,7 @@ Results remain in declaration order even when commands finish in a different ord
 
 Use an Adapter when an external system introduces its own policy model.
 
-```ts
+```ts fragment
 import {
   breach,
   counting,
