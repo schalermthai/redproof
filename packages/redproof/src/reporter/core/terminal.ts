@@ -1,9 +1,9 @@
 import { relative } from 'node:path';
 import type { CheckResult, Diagnostic, Rule } from '../../domain/index.ts';
 import type { GateDescription } from '../../project/core/index.ts';
-import type { CompletedProofOutcome, ProofOutcome } from '../../proof/core/index.ts';
+import { proofEstablished, type CompletedProofOutcome, type ProofOutcome } from '../../proof/core/index.ts';
 import type { CheckProjectRun, GateRun } from '../../run/core/index.ts';
-import { buildGateReportModel, summarizeGateReports, type RunSummary } from './model.ts';
+import { buildGateReportModel, countBreachedRules, countBreaches, summarizeGateReports, type RunSummary } from './model.ts';
 
 /** Source lines by the file named in a Diagnostic location. A file that is absent shows no excerpt. */
 export type SourceExcerpts = ReadonlyMap<string, readonly string[]>;
@@ -66,7 +66,8 @@ function gateStatusSuffix(run: GateRun): string {
   if (model.verdict === 'refuse') return `(${label} | refused)`;
   if (model.counting.kind === 'unsupported') return `(${label} | breach detected)`;
 
-  return `(${label} | ${model.breachedRules} breached | ${model.breachCount} ${model.breachCount === 1 ? 'breach' : 'breaches'})`;
+  const total = countBreaches(model);
+  return `(${label} | ${countBreachedRules(model)} breached | ${total} ${total === 1 ? 'breach' : 'breaches'})`;
 }
 
 function renderGateLine(run: GateRun, root: string, color: boolean): string {
@@ -91,9 +92,10 @@ function renderRuleTree(run: GateRun, color: boolean): string[] {
     if (item.state.kind === 'unknown') return `   ${yellow(color, glyph.unknown)} ${name} ${dim(color, '(not established)')}`;
     if (item.state.kind === 'undecided') return '';
 
-    const suffix = item.state.count == null
+    const count = item.state.breaches.length;
+    const suffix = model.counting.kind === 'unsupported'
       ? 'breach detected'
-      : `${item.state.count} ${item.state.count === 1 ? 'breach' : 'breaches'}`;
+      : `${count} ${count === 1 ? 'breach' : 'breaches'}`;
     return `   ${red(color, glyph.fail)} ${name}\n     ${red(color, glyph.breach)} ${suffix}`;
   }).filter(Boolean);
 }
@@ -156,11 +158,12 @@ function renderFailureDetails(run: GateRun, projectRoot: string, sources: Source
     if (item.state.kind !== 'breached') continue;
     const name = ruleName(item.rule);
     sections.push('', '', ` ${red(options.color, 'FAIL')}  ${file} > ${name}`, '');
-    if (item.state.count != null && item.state.count > 1) sections.push(`${item.state.count} breaches`, '');
+    const breaches = item.state.breaches;
+    if (model.counting.kind === 'supported' && breaches.length > 1) sections.push(`${breaches.length} breaches`, '');
 
-    for (let index = 0; index < item.breaches.length; index++) {
+    for (let index = 0; index < breaches.length; index++) {
       if (index > 0) sections.push('');
-      sections.push(...renderDiagnostic(sources, item.breaches[index]!, options));
+      sections.push(...renderDiagnostic(sources, breaches[index]!, options));
     }
   }
 
@@ -193,7 +196,7 @@ function ruleParts(summary: RunSummary, color: boolean): string[] {
   const parts: string[] = [];
   if (summary.heldRules) parts.push(green(color, `${summary.heldRules} held`));
   if (summary.breachedRules) {
-    const count = summary.exactBreachCount ? String(summary.breachedRules) : `${summary.breachedRules}+`;
+    const count = summary.breaches.kind === 'exact' ? String(summary.breachedRules) : `${summary.breachedRules}+`;
     parts.push(red(color, `${count} breached`));
   }
   if (summary.undecidedRules) parts.push(yellow(color, `${summary.undecidedRules} undecided`));
@@ -211,7 +214,7 @@ function summaryRows(run: CheckProjectRun, options: Required<ReportOptions>): st
   ];
 
   if (summary.failedGates) {
-    rows.push(` Breaches   ${summary.exactBreachCount ? String(summary.breaches) : 'not countable'}`);
+    rows.push(` Breaches   ${summary.breaches.kind === 'exact' ? String(summary.breaches.count) : 'not countable'}`);
   }
   rows.push(` Start at   ${time(run.startedAt)}`);
   rows.push(` Duration   ${ms(run.durationMs)}`);
@@ -259,32 +262,38 @@ function checkOutcomeDetail(result: CheckResult, rule?: string): string {
 }
 
 /** One line that says why a completed proof was judged as it was. Empty when there is nothing to add. */
-export function proofReason(outcome: CompletedProofOutcome): string {
-  const reason = outcome.reason;
-  const result = outcome.result;
-
-  if (reason.kind === 'proved') {
-    if (outcome.expected === 'red') return `breached ${checkOutcomeDetail(result, reason.target)}`;
-    if (outcome.expected === 'refuse') return `refused ${checkOutcomeDetail(result)}`;
-    return '';
-  }
-  if (reason.kind === 'target-rule-not-breached') {
-    return `target ${reason.target} not breached; breached ${reason.breached.join(', ')}`;
-  }
-  if (reason.kind === 'target-already-breached') {
-    return `target ${reason.target} was already breached before the mutation; breached ${reason.breached.join(', ')}`;
-  }
-  const detail = checkOutcomeDetail(result);
-  if (result.verdict === 'pass' && reason.expected === 'fail') {
+function mismatchReason(reason: { readonly expected: string; readonly actual: string }, result: CheckResult): string {
+  if (reason.expected === 'fail' && reason.actual === 'pass') {
     return `expected ${reason.expected}, got ${reason.actual}; the mutation did not reach what the Rule guards`;
   }
+  const detail = checkOutcomeDetail(result);
   return `expected ${reason.expected}, got ${reason.actual}${detail ? `: ${detail}` : ''}`;
 }
 
+export function proofReason(outcome: CompletedProofOutcome): string {
+  const result = outcome.result;
+
+  if (outcome.expected === 'red') {
+    const reason = outcome.reason;
+    if (reason.kind === 'proved') return `breached ${checkOutcomeDetail(result, reason.target)}`;
+    if (reason.kind === 'target-rule-not-breached') {
+      return `target ${reason.target} not breached; breached ${reason.breached.join(', ')}`;
+    }
+    if (reason.kind === 'target-already-breached') {
+      return `target ${reason.target} was already breached before the mutation; breached ${reason.breached.join(', ')}`;
+    }
+    return mismatchReason(reason, result);
+  }
+
+  const reason = outcome.reason;
+  if (reason.kind === 'verdict-mismatch') return mismatchReason(reason, result);
+  return outcome.expected === 'refuse' ? `refused ${checkOutcomeDetail(result)}` : '';
+}
+
 export function formatProof(outcome: ProofOutcome): string {
-  const mark = outcome.ok ? '✓' : '✗';
-  if (outcome.status === 'error') {
-    const actual = outcome.result ? ` actual=${outcome.result.verdict}` : '';
+  const mark = proofEstablished(outcome) ? '✓' : '✗';
+  if (outcome.status !== 'completed') {
+    const actual = outcome.status === 'unrestored' ? ` actual=${outcome.result.verdict}` : '';
     return `${mark} ${outcome.gate} / ${outcome.proof} expected=${outcome.expected}${actual} error=${outcome.error.code}\n  ${outcome.error.message}${outcome.error.detail ? `\n  ${outcome.error.detail}` : ''}`;
   }
   const line = `${mark} ${outcome.gate} / ${outcome.proof} expected=${outcome.expected} actual=${outcome.result.verdict}`;

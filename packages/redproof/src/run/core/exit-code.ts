@@ -1,4 +1,5 @@
 import type { CheckResult } from '../../domain/index.ts';
+import { proofEstablished, type ProofOutcome } from '../../proof/core/index.ts';
 
 /** Pure process-status policy for a project Check run. REFUSE takes precedence over FAIL. */
 export function checkExitCode(results: readonly CheckResult[], refusalExit: number): number {
@@ -8,6 +9,6 @@ export function checkExitCode(results: readonly CheckResult[], refusalExit: numb
 }
 
 /** Pure process-status policy for proof runs. */
-export function proofExitCode(outcomes: readonly { readonly ok: boolean }[]): number {
-  return outcomes.every(outcome => outcome.ok) ? 0 : 1;
+export function proofExitCode(outcomes: readonly ProofOutcome[]): number {
+  return outcomes.every(proofEstablished) ? 0 : 1;
 }

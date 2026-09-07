@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { checkProject, loadProject, proveProject } from 'redproof';
+import { checkProject, loadProject, proofEstablished, proveProject } from 'redproof';
 
 const configOf = (name: string) => resolve(`fixtures/${name}/redproof.config.ts`);
 
@@ -29,7 +29,7 @@ test('in-place mode runs in the coordinator process and UndoMutation restores th
   const proof = await proveProject(config);
   assert.equal(proof.exitCode, 0);
   assert.equal(proof.outcomes.length, 2);
-  assert.ok(proof.outcomes.every(outcome => outcome.status === 'completed' && outcome.ok));
+  assert.ok(proof.outcomes.every(proofEstablished));
   assert.equal(await readFile(source, 'utf8'), before);
 });
 
@@ -57,7 +57,7 @@ test('copies mode reuses one Gate copy across proofs but returns to the baseline
 
   assert.equal(run.exitCode, 0);
   assert.deepEqual(
-    run.outcomes.map(outcome => [outcome.proof, outcome.status, outcome.ok]),
+    run.outcomes.map(outcome => [outcome.proof, outcome.status, proofEstablished(outcome)]),
     [
       ['first RED reuses the Gate copy', 'completed', true],
       ['second RED starts from the same clean baseline', 'completed', true],
@@ -77,11 +77,11 @@ test('copies mode rejects a proof when UndoMutation leaves the Gate copy stale',
   assert.equal(run.exitCode, 1);
   assert.equal(run.outcomes.length, 1, 'the stale Gate copy must not be reused for later proofs');
   const outcome = run.outcomes[0]!;
-  assert.equal(outcome.status, 'error');
-  if (outcome.status !== 'error') throw new Error('expected infrastructure error');
+  assert.equal(outcome.status, 'unrestored');
+  if (outcome.status !== 'unrestored') throw new Error('expected an unrestored proof');
   assert.equal(outcome.error.code, 'workspace-not-restored');
   assert.match(outcome.error.detail ?? '', /modified src\/state\.txt/);
-  assert.equal(outcome.result?.verdict, 'fail');
+  assert.equal(outcome.result.verdict, 'fail');
   assert.equal(await readFile(source, 'utf8'), before, 'the original workspace must stay untouched');
 
   await assert.rejects(stat(resolve('fixtures/execution-copies-stale/.redproof')));

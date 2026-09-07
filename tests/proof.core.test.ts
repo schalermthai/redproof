@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { breach, fail, pass, proof, refuse, type Scan } from 'redproof';
+import { breach, fail, pass, proof, proofEstablished, refuse, type Scan } from 'redproof';
 import { evaluateProof } from '../packages/redproof/src/proof/core/evaluation.ts';
 import type { ProofOutcome } from '../packages/redproof/src/proof/core/outcome.ts';
 import { canReuseWorkspace, verifyProofRestoration } from '../packages/redproof/src/proof/core/restoration.ts';
@@ -46,7 +46,6 @@ test('restoration failure replaces proof success and prevents copy reuse', () =>
     gate: 'g',
     proof: 'p',
     expected: 'green',
-    ok: true,
     reason: { kind: 'proved' },
     result,
     workerPid: 10,
@@ -58,11 +57,30 @@ test('restoration failure replaces proof success and prevents copy reuse', () =>
     10,
   );
 
-  assert.equal(outcome.status, 'error');
-  assert.equal(outcome.ok, false);
-  if (outcome.status !== 'error') throw new Error('expected error');
+  assert.equal(outcome.status, 'unrestored');
+  assert.equal(proofEstablished(outcome), false);
+  if (outcome.status !== 'unrestored') throw new Error('expected an unrestored proof');
   assert.equal(outcome.error.code, 'workspace-not-restored');
   assert.equal(outcome.result, result);
   assert.equal(canReuseWorkspace(outcome), false);
   assert.equal(canReuseWorkspace(completed), true);
+});
+
+test('a stale workspace after an aborted proof stays aborted, because no Check result exists', () => {
+  const aborted: ProofOutcome = {
+    status: 'aborted',
+    gate: 'g',
+    proof: 'p',
+    expected: 'green',
+    error: { code: 'mutation-apply-failed', message: 'cannot apply' },
+    workerPid: 10,
+  };
+
+  const outcome = verifyProofRestoration(aborted, { kind: 'stale', why: 'workspace changed' }, 10);
+
+  assert.equal(outcome.status, 'aborted');
+  if (outcome.status !== 'aborted') throw new Error('expected an aborted proof');
+  assert.equal(outcome.error.code, 'workspace-not-restored');
+  assert.equal(canReuseWorkspace(outcome), false);
+  assert.equal(canReuseWorkspace(aborted), true);
 });

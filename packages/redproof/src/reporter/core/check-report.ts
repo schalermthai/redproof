@@ -1,7 +1,7 @@
 import { relative } from 'node:path';
 import type { Breach, CountingCapability, Scan, Diagnostic } from '../../domain/index.ts';
 import type { CheckProjectRun, GateRun } from '../../run/core/index.ts';
-import { buildGateReportModel, summarizeGateReports } from './model.ts';
+import { buildGateReportModel, summarizeGateReports, type RuleReportState } from './model.ts';
 
 export type ReportVersion = 1;
 
@@ -86,6 +86,12 @@ function breachToJson(breach: Breach): JsonBreachV1 {
   };
 }
 
+function ruleBreachCount(state: RuleReportState, counting: CountingCapability): number | null {
+  if (state.kind === 'held') return 0;
+  if (state.kind !== 'breached') return null;
+  return counting.kind === 'supported' ? state.breaches.length : null;
+}
+
 function gateToJson(run: GateRun, root: string): JsonGateV1 {
   const gate = run.module.gate;
   const model = buildGateReportModel(gate.adapter, run.result);
@@ -103,8 +109,8 @@ function gateToJson(run: GateRun, root: string): JsonGateV1 {
       id: item.rule.id,
       description: item.rule.description,
       status: item.state.kind,
-      breachCount: item.state.kind === 'breached' ? item.state.count : item.state.kind === 'held' ? 0 : null,
-      breaches: item.breaches.map(breachToJson),
+      breachCount: ruleBreachCount(item.state, model.counting),
+      breaches: item.state.kind === 'breached' ? item.state.breaches.map(breachToJson) : [],
     })),
     ...(run.result.verdict === 'refuse' ? { refusal: diagnosticToJson(run.result.why) } : {}),
   };
@@ -140,9 +146,7 @@ export function buildJsonCheckReport(run: CheckProjectRun): JsonCheckReportV1 {
         unknown: summary.unknownRules,
         total: summary.totalRules,
       },
-      breaches: summary.exactBreachCount
-        ? { kind: 'exact', count: summary.breaches }
-        : { kind: 'not-countable' },
+      breaches: summary.breaches,
     },
   };
 }

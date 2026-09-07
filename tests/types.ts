@@ -17,6 +17,7 @@ import {
   type Breach,
   type Check,
   type CheckResult,
+  type CompletedProofOutcome,
   type Diagnostic,
   type ExecutionConfig,
   type Scan,
@@ -83,6 +84,23 @@ void badRefuse;
 // @ts-expect-error Breach must name one Rule.
 const rulelessBreach: Breach<'r1'> = diagnostic;
 void rulelessBreach;
+
+const judged = { status: 'completed', gate: 'g', proof: 'p', result: { verdict: 'pass', scan }, workerPid: 1 } as const;
+
+const provedRed: CompletedProofOutcome = { ...judged, expected: 'red', reason: { kind: 'proved', target: 'r1' } };
+void provedRed;
+
+// @ts-expect-error A proved RED proof names the Rule it breached.
+const targetlessRed: CompletedProofOutcome = { ...judged, expected: 'red', reason: { kind: 'proved' } };
+void targetlessRed;
+
+// @ts-expect-error Only a RED proof can find its target already breached.
+const greenWithTarget: CompletedProofOutcome = { ...judged, expected: 'green', reason: { kind: 'target-already-breached', target: 'r1', breached: ['r1'] } };
+void greenWithTarget;
+
+// @ts-expect-error A verdict mismatch cannot report the verdict it expected.
+const sameVerdict: CompletedProofOutcome = { ...judged, expected: 'green', reason: { kind: 'verdict-mismatch', expected: 'pass', actual: 'pass' } };
+void sameVerdict;
 
 // @ts-expect-error Diagnostic location is required, even when null.
 const missingLocation: Diagnostic = { code: 'x', message: 'x' };

@@ -1,5 +1,5 @@
-import type { CheckResult, Gate, Proof } from '../../domain/index.ts';
-import { evaluateProof, proofSucceeded } from './evaluation.ts';
+import type { CheckResult, Gate, Proof, RedProof } from '../../domain/index.ts';
+import { evaluateGreenProof, evaluateRedProof, evaluateRefuseProof } from './evaluation.ts';
 import type {
   CompletedProofOutcome,
   InfrastructureProofOutcome,
@@ -13,13 +13,13 @@ export type ProofFailure =
   | { readonly step: 'restore-after-check-threw'; readonly error: unknown }
   | { readonly step: 'restore'; readonly error: unknown; readonly result: CheckResult };
 
-const FAILURE_CODES: Record<ProofFailure['step'], ProofInfrastructureError['code']> = {
+const FAILURE_CODES = {
   baseline: 'check-threw',
   apply: 'mutation-apply-failed',
   check: 'check-threw',
   'restore-after-check-threw': 'mutation-restore-failed',
   restore: 'mutation-restore-failed',
-};
+} as const satisfies Record<ProofFailure['step'], ProofInfrastructureError['code']>;
 
 const FAILURE_MESSAGES: Record<ProofFailure['step'], string> = {
   baseline: 'The baseline Check threw instead of returning a CheckResult.',
@@ -34,15 +34,13 @@ function errorDetail(error: unknown): string {
 }
 
 /** A RED proof needs a mutation to cause the breach. A target already breached before mutation proves nothing. */
-export function baselineBlocksProof(proof: Proof, baseline: CheckResult): boolean {
-  return proof.expected === 'red'
-    && baseline.verdict === 'fail'
-    && baseline.breaches.some(item => item.rule === proof.target);
+export function baselineBlocksProof(proof: RedProof, baseline: CheckResult): boolean {
+  return baseline.verdict === 'fail' && baseline.breaches.some(item => item.rule === proof.target);
 }
 
 export function baselineOutcome(
   gate: Gate<any>,
-  proof: Proof,
+  proof: RedProof,
   baseline: CheckResult,
   workerPid: number,
 ): CompletedProofOutcome {
@@ -52,8 +50,7 @@ export function baselineOutcome(
     gate: gate.id,
     proof: proof.name,
     expected: proof.expected,
-    ok: false,
-    reason: { kind: 'target-already-breached', target: proof.expected === 'red' ? proof.target : '', breached },
+    reason: { kind: 'target-already-breached', target: proof.target, breached },
     result: baseline,
     workerPid,
   };
@@ -65,17 +62,10 @@ export function completedOutcome(
   result: CheckResult,
   workerPid: number,
 ): CompletedProofOutcome {
-  const reason = evaluateProof(proof, result);
-  return {
-    status: 'completed',
-    gate: gate.id,
-    proof: proof.name,
-    expected: proof.expected,
-    ok: proofSucceeded(reason),
-    reason,
-    result,
-    workerPid,
-  };
+  const completed = { status: 'completed', gate: gate.id, proof: proof.name, result, workerPid } as const;
+  if (proof.expected === 'red') return { ...completed, expected: 'red', reason: evaluateRedProof(proof, result) };
+  if (proof.expected === 'green') return { ...completed, expected: 'green', reason: evaluateGreenProof(result) };
+  return { ...completed, expected: 'refuse', reason: evaluateRefuseProof(result) };
 }
 
 export function failedOutcome(
@@ -84,18 +74,32 @@ export function failedOutcome(
   failure: ProofFailure,
   workerPid: number,
 ): InfrastructureProofOutcome {
+  if (failure.step === 'restore') {
+    return {
+      status: 'unrestored',
+      gate: gate.id,
+      proof: proof.name,
+      expected: proof.expected,
+      error: {
+        code: FAILURE_CODES.restore,
+        message: FAILURE_MESSAGES.restore,
+        detail: errorDetail(failure.error),
+      },
+      result: failure.result,
+      workerPid,
+    };
+  }
+
   return {
-    status: 'error',
+    status: 'aborted',
     gate: gate.id,
     proof: proof.name,
     expected: proof.expected,
-    ok: false,
     error: {
       code: FAILURE_CODES[failure.step],
       message: FAILURE_MESSAGES[failure.step],
       detail: errorDetail(failure.error),
     },
-    ...(failure.step === 'restore' ? { result: failure.result } : {}),
     workerPid,
   };
 }

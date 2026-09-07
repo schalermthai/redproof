@@ -25,7 +25,7 @@ export function formatCompactRun(run: CheckProjectRun): string {
       const model = buildGateReportModel(item.module.gate.adapter, item.result);
       for (const rule of model.rules) {
         if (rule.state.kind !== 'breached') continue;
-        for (const breach of rule.breaches) {
+        for (const breach of rule.state.breaches) {
           lines.push(diagnosticLine(breach.rule, breach));
         }
       }

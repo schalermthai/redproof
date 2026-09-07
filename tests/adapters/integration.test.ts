@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { checkProject, proveProject } from 'redproof';
+import { checkProject, proofEstablished, proveProject } from 'redproof';
 
 const configOf = (name: string) => resolve(`fixtures/${name}/redproof.config.ts`);
 
@@ -15,7 +15,7 @@ test('dependency-cruiser adapter passes clean architecture and proves both mappe
   assert.deepEqual(
     proof.outcomes.map(outcome => [
       outcome.expected,
-      outcome.ok,
+      proofEstablished(outcome),
       outcome.status === 'completed' ? outcome.result.verdict : outcome.error.code,
     ]),
     [
@@ -37,7 +37,7 @@ test('Stryker adapter passes strong tests and proves mutant detection, score, an
   assert.deepEqual(
     proof.outcomes.map(outcome => [
       outcome.expected,
-      outcome.ok,
+      proofEstablished(outcome),
       outcome.status === 'completed' ? outcome.result.verdict : outcome.error.code,
     ]),
     [

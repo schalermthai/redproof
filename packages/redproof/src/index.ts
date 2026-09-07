@@ -110,13 +110,20 @@ export type {
   LoadedProject,
 } from './project/index.ts';
 
-export { runGate, runProof } from './proof/index.ts';
+export { proofEstablished, runGate, runProof } from './proof/index.ts';
 export type {
+  AbortedProofOutcome,
   CompletedProofOutcome,
+  GreenProofEvaluation,
   InfrastructureProofOutcome,
   ProofEvaluation,
   ProofInfrastructureError,
+  ProofInfrastructureErrorCode,
   ProofOutcome,
+  RedProofEvaluation,
+  RefuseProofEvaluation,
+  RestorationErrorCode,
+  UnrestoredProofOutcome,
 } from './proof/index.ts';
 
 export {
@@ -136,6 +143,8 @@ export {
   buildJsonCheckReport,
   buildJsonProveReport,
   buildSarif,
+  countBreachedRules,
+  countBreaches,
   formatCheck,
   formatCompactRun,
   formatGateDescription,
@@ -152,6 +161,7 @@ export {
   summarizeGateReports,
 } from './reporter/index.ts';
 export type {
+  BreachTotal,
   CheckReporterName,
   GateReportModel,
   JsonBreachV1,
