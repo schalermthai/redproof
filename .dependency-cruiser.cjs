@@ -20,7 +20,7 @@ module.exports = {
     {
       name: 'core-no-shell',
       severity: 'error',
-      comment: 'The functional core cannot depend on orchestration or presentation.',
+      comment: 'The functional core cannot depend on orchestration or presentation. A context barrel carries its shell, so a core uses core/index.ts instead. The domain barrel is types only.',
       from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
       to: {
         path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|cli[.]ts$)',
@@ -64,9 +64,12 @@ module.exports = {
     {
       name: 'composition-no-runtime-or-reporters',
       severity: 'error',
-      comment: 'Composition cannot depend on runtime orchestration or presentation.',
+      comment: 'Composition may depend only on itself, the domain, and inspection. Every other context is downstream of it.',
       from: { path: '^packages/redproof/src/composition/' },
-      to: { path: '^packages/redproof/src/(?:(?:cli|command|project|proof|workspace|run|reporter)/|cli[.]ts$)' },
+      to: {
+        path: '^packages/redproof/src/',
+        pathNot: '^packages/redproof/src/(?:composition|domain|inspect)/',
+      },
     },
     {
       name: 'adapters-public-core-api-only',
