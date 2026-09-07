@@ -4,6 +4,7 @@ import {
   breach,
   counting,
   defineAdapter,
+  defineGate,
   fail,
   pass,
   proof,
@@ -15,6 +16,13 @@ import { resolveConfig } from '../packages/redproof/src/composition/config.ts';
 import { executionPolicy } from '../packages/redproof/src/run/core/policy.ts';
 import { checkExitCode, proofExitCode } from '../packages/redproof/src/run/core/exit-code.ts';
 import { evaluateProof } from '../packages/redproof/src/proof/core/evaluation.ts';
+import {
+  baselineBlocksProof,
+  baselineOutcome,
+  completedOutcome,
+  failedOutcome,
+  type ProofFailure,
+} from '../packages/redproof/src/proof/core/lifecycle.ts';
 import type { ProofOutcome } from '../packages/redproof/src/proof/core/outcome.ts';
 import { canReuseWorkspace, verifyProofRestoration } from '../packages/redproof/src/proof/core/restoration.ts';
 import { buildGateReportModel, summarizeGateReports } from '../packages/redproof/src/reporter/model.ts';
@@ -225,4 +233,63 @@ test('config resolution rejects an unknown option instead of ignoring it', () =>
     refusalExit: 2,
     execution: { mode: 'copies', maxAtOnce: 2 },
   }));
+});
+
+const r1Breached = fail(scan, [breach(R1.id, { code: 'r1', message: 'R1 breached', location: null })]);
+const r2Breached = fail(scan, [breach(R2.id, { code: 'r2', message: 'R2 breached', location: null })]);
+
+test('a RED proof is blocked when its target is already breached before mutation', () => {
+  const red = proof.red(R1, 'prove R1', noop);
+  assert.equal(baselineBlocksProof(red, r1Breached), true);
+  assert.equal(baselineBlocksProof(red, r2Breached), false);
+  assert.equal(baselineBlocksProof(red, pass(scan)), false);
+  assert.equal(baselineBlocksProof(proof.green('stays green'), r1Breached), false);
+});
+
+test('proof lifecycle outcomes are built from plain values', () => {
+  const gate = defineGate({ id: 'unit-gate', adapter: adapter() });
+  const red = proof.red(R1, 'prove R1', noop);
+
+  assert.deepEqual(baselineOutcome(gate, red, r1Breached, 7), {
+    status: 'completed',
+    gate: 'unit-gate',
+    proof: 'prove R1',
+    expected: 'red',
+    ok: false,
+    result: r1Breached,
+    workerPid: 7,
+  });
+
+  assert.equal(completedOutcome(gate, red, r1Breached, 7).ok, true);
+  assert.equal(completedOutcome(gate, red, r2Breached, 7).ok, false);
+  assert.equal(completedOutcome(gate, red, pass(scan), 7).ok, false);
+  assert.equal(completedOutcome(gate, proof.green('stays green'), pass(scan), 7).ok, true);
+  assert.equal(completedOutcome(gate, proof.green('stays green'), pass(scan), 7).workerPid, 7);
+});
+
+test('proof failures map each lifecycle step to one infrastructure error', () => {
+  const gate = defineGate({ id: 'unit-gate', adapter: adapter() });
+  const red = proof.red(R1, 'prove R1', noop);
+  const error = new Error('boom');
+  const errorOf = (failure: ProofFailure) => failedOutcome(gate, red, failure, 7).error;
+
+  assert.equal(errorOf({ step: 'baseline', error }).code, 'check-threw');
+  assert.equal(errorOf({ step: 'apply', error }).code, 'mutation-apply-failed');
+  assert.equal(errorOf({ step: 'check', error }).code, 'check-threw');
+  assert.equal(errorOf({ step: 'restore-after-check-threw', error }).code, 'mutation-restore-failed');
+  assert.equal(errorOf({ step: 'restore', error, result: pass(scan) }).code, 'mutation-restore-failed');
+
+  const messages = (['baseline', 'apply', 'check', 'restore-after-check-threw'] as const)
+    .map(step => errorOf({ step, error }).message)
+    .concat(errorOf({ step: 'restore', error, result: pass(scan) }).message);
+  assert.equal(new Set(messages).size, 5);
+
+  assert.ok(errorOf({ step: 'apply', error }).detail?.includes('boom'));
+  assert.equal(errorOf({ step: 'apply', error: 'plain text' }).detail, 'plain text');
+
+  const result = pass(scan);
+  const afterRestore = failedOutcome(gate, red, { step: 'restore', error, result }, 7);
+  assert.equal(afterRestore.ok, false);
+  assert.equal(afterRestore.result, result);
+  assert.equal(failedOutcome(gate, red, { step: 'check', error }, 7).result, undefined);
 });
