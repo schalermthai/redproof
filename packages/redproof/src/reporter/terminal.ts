@@ -3,7 +3,7 @@ import { relative, resolve } from 'node:path';
 import type { CheckResult } from '../domain/check.ts';
 import type { Diagnostic } from '../domain/diagnostic.ts';
 import type { Rule } from '../domain/rule.ts';
-import type { GateDescription } from '../project/shell/describe.ts';
+import type { GateDescription } from '../project/core/description.ts';
 import { buildGateReportModel, summarizeGateReports, type RunSummary } from './model.ts';
 import type { ProofOutcome } from '../proof/core/outcome.ts';
 import type { CheckProjectRun, GateRun } from '../run/shell/project-runner.ts';

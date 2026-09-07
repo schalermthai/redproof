@@ -3,7 +3,7 @@ import type { CheckResult } from '../../domain/check.ts';
 import { executionPolicy } from '../core/policy.ts';
 import { checkExitCode, proofExitCode } from '../core/exit-code.ts';
 import type { ProofOutcome } from '../../proof/core/outcome.ts';
-import type { LoadedGateModule, LoadedProject } from '../../project/shell/loader.ts';
+import type { LoadedGateModule, LoadedProject } from '../../project/core/discovery.ts';
 import { loadProject, selectGateModules } from '../../project/shell/loader.ts';
 import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../../workspace/shell/copy.ts';
 import { runGate, runProof } from '../../proof/shell/runner.ts';

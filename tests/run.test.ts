@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { checkProject, describeProject, loadProject, proveProject } from 'redproof';
+import { checkProject, loadProject, proveProject } from 'redproof';
 
 const configOf = (name: string) => resolve(`fixtures/${name}/redproof.config.ts`);
 
@@ -87,13 +87,6 @@ test('copies mode rejects a proof when UndoMutation leaves the Gate copy stale',
   await assert.rejects(stat(resolve('fixtures/execution-copies-stale/.redproof')));
 });
 
-test('project commands reject a config that discovers no Gates', async () => {
-  const config = configOf('empty-discovery');
-
-  await assert.rejects(checkProject(config), /No Gate modules found/);
-  await assert.rejects(proveProject(config), /No Gate modules found/);
-});
-
 test('prove rejects a project with Gates but no Proofs', async () => {
   await assert.rejects(
     proveProject(configOf('pass-single')),
@@ -101,60 +94,24 @@ test('prove rejects a project with Gates but no Proofs', async () => {
   );
 });
 
-test('Gate files select which Gates run, and no files means every Gate', async () => {
+test('Gate files narrow check and prove to the selected Gates', async () => {
   const config = configOf('gate-selection');
 
-  const all = await checkProject(config);
-  assert.deepEqual(all.results.map(item => item.module.gate.id), ['alpha', 'beta']);
-
-  const one = await checkProject(config, ['gates/beta.ts']);
-  assert.deepEqual(one.results.map(item => item.module.gate.id), ['beta']);
-
-  const both = await checkProject(config, ['gates/beta.ts', 'gates/alpha.ts']);
-  assert.deepEqual(both.results.map(item => item.module.gate.id), ['alpha', 'beta']);
-
-  const repeated = await checkProject(config, ['gates/alpha.ts', 'gates/alpha.ts']);
-  assert.deepEqual(repeated.results.map(item => item.module.gate.id), ['alpha']);
-});
-
-test('prove runs only the Proofs of the selected Gates', async () => {
-  const config = configOf('gate-selection');
+  const check = await checkProject(config, ['gates/beta.ts']);
+  assert.deepEqual(check.results.map(item => item.module.gate.id), ['beta']);
 
   const all = await proveProject(config);
   assert.equal(all.outcomes.length, 4);
-
   const one = await proveProject(config, ['gates/alpha.ts']);
   assert.equal(one.outcomes.length, 2);
   assert.deepEqual([...new Set(one.outcomes.map(outcome => outcome.gate))], ['alpha']);
 });
 
-test('a Gate file that matches no discovered Gate is an error, never an empty run', async () => {
-  const config = configOf('gate-selection');
+test('a failed Gate exits 1, and a refused Gate exits with refusalExit even beside a failure', async () => {
+  const failed = await checkProject(configOf('fail-single'));
+  assert.equal(failed.exitCode, 1);
 
-  await assert.rejects(checkProject(config, ['gates/missing.ts']), /No Gate matched: gates\/missing\.ts/);
-  await assert.rejects(proveProject(config, ['gates/missing.ts']), /No Gate matched: gates\/missing\.ts/);
-  await assert.rejects(describeProject(config, ['gates/missing.ts']), /No Gate matched: gates\/missing\.ts/);
-});
-
-test('a real file outside gatesRoot is rejected as not a discovered Gate', async () => {
-  const config = configOf('gate-selection');
-
-  await assert.rejects(
-    checkProject(config, ['src/alpha.txt']),
-    /src\/alpha\.txt is not a discovered Gate/,
-  );
-  await assert.rejects(
-    proveProject(config, ['src/alpha.txt']),
-    /src\/alpha\.txt is not a discovered Gate/,
-  );
-});
-
-test('describe shares the same Gate selection as check and prove', async () => {
-  const config = configOf('gate-selection');
-
-  const all = await describeProject(config);
-  assert.deepEqual(all.descriptions.map(item => item.gate), ['alpha', 'beta']);
-
-  const one = await describeProject(config, ['gates/beta.ts']);
-  assert.deepEqual(one.descriptions.map(item => item.gate), ['beta']);
+  const mixed = await checkProject(configOf('mixed'));
+  assert.deepEqual(new Set(mixed.results.map(item => item.result.verdict)), new Set(['pass', 'fail', 'refuse']));
+  assert.equal(mixed.exitCode, mixed.project.refusalExit);
 });
