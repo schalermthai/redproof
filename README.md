@@ -84,6 +84,7 @@ const gate = defineGate({
     counting: counting.supported,
 
     async run(ctx) {
+      const startedAt = new Date().toISOString();
 
       // scan all Typescript to find //TODO comment
       const found = await text.find(ctx, {
@@ -91,9 +92,17 @@ const gate = defineGate({
         find: /\bTODO\b/g,
       });
 
+      // describe what the Check inspected
+      const scan = {
+        source: 'text',
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        inspected: found.files.length,
+      };
+
       // should detect a breach
       return result.fromBreaches(
-        found.scan,
+        scan,
         found.matches.map(match =>
           breach(rules.noTodo, {
             code: 'todo-found',
