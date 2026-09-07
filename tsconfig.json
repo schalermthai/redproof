@@ -17,7 +17,7 @@
         "packages/redproof/src/index.ts"
       ],
       "redproof/command": [
-        "packages/redproof/src/command.ts"
+        "packages/redproof/src/command/index.ts"
       ],
       "@redproof/eslint": [
         "packages/eslint/src/index.ts"
