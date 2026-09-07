@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { breach, counting, defineAdapter, defineGate, fail, formatProof, pass, refuse, type CheckResult, type ProofOutcome, type Scan } from 'redproof';
+import { breach, counting, defineAdapter, defineGate, fail, formatProof, pass, refuse, type CheckResult, type CompletedProofOutcome, type ProofOutcome, type Scan } from 'redproof';
 import type { CheckProjectRun } from '../packages/redproof/src/run/core/run.ts';
 import { renderRun } from '../packages/redproof/src/reporter/core/terminal.ts';
 
@@ -56,8 +56,12 @@ test('a diagnostic without a line never asks for source', () => {
   assert.doesNotMatch(output, /ignored/);
 });
 
-function completed(expected: 'red' | 'green' | 'refuse', reason: Extract<ProofOutcome, { status: 'completed' }>['reason'], result: CheckResult): ProofOutcome {
-  return { status: 'completed', gate: 'lint', proof: 'a var is flagged', expected, reason, result, workerPid: 1 };
+function completed<E extends CompletedProofOutcome['expected']>(
+  expected: E,
+  reason: Extract<CompletedProofOutcome, { expected: E }>['reason'],
+  result: CheckResult,
+): ProofOutcome {
+  return { status: 'completed', gate: 'lint', proof: 'a var is flagged', expected, reason, result, workerPid: 1 } as CompletedProofOutcome;
 }
 
 test('a proof line says why it was judged as it was', () => {

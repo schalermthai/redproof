@@ -114,11 +114,14 @@ export { proofEstablished, runGate, runProof } from './proof/index.ts';
 export type {
   AbortedProofOutcome,
   CompletedProofOutcome,
+  GreenProofEvaluation,
   InfrastructureProofOutcome,
   ProofEvaluation,
   ProofInfrastructureError,
   ProofInfrastructureErrorCode,
   ProofOutcome,
+  RedProofEvaluation,
+  RefuseProofEvaluation,
   RestorationErrorCode,
   UnrestoredProofOutcome,
 } from './proof/index.ts';

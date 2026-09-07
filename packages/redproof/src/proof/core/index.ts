@@ -1,4 +1,9 @@
-export type { ProofEvaluation } from './evaluation.ts';
+export type {
+  GreenProofEvaluation,
+  ProofEvaluation,
+  RedProofEvaluation,
+  RefuseProofEvaluation,
+} from './evaluation.ts';
 export { proofEstablished } from './outcome.ts';
 export type {
   AbortedProofOutcome,

@@ -1,5 +1,10 @@
 import type { CheckResult, Proof } from '../../domain/index.ts';
-import { proofSucceeded, type ProofEvaluation } from './evaluation.ts';
+import {
+  proofSucceeded,
+  type GreenProofEvaluation,
+  type RedProofEvaluation,
+  type RefuseProofEvaluation,
+} from './evaluation.ts';
 
 export type RestorationErrorCode = 'mutation-restore-failed' | 'workspace-not-restored';
 
@@ -16,16 +21,21 @@ export type ProofInfrastructureError<
   readonly detail?: string;
 };
 
-export type CompletedProofOutcome = {
+type Completed<Expected extends Proof['expected'], Reason> = {
   readonly status: 'completed';
   readonly gate: string;
   readonly proof: string;
-  readonly expected: Proof['expected'];
+  readonly expected: Expected;
   /** How the proof was judged. */
-  readonly reason: ProofEvaluation;
+  readonly reason: Reason;
   readonly result: CheckResult;
   readonly workerPid: number;
 };
+
+export type CompletedProofOutcome =
+  | Completed<'red', RedProofEvaluation>
+  | Completed<'green', GreenProofEvaluation>
+  | Completed<'refuse', RefuseProofEvaluation>;
 
 /** Infrastructure failed before the Check returned a result. */
 export type AbortedProofOutcome = {

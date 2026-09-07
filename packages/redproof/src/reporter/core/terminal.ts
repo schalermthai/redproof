@@ -262,26 +262,32 @@ function checkOutcomeDetail(result: CheckResult, rule?: string): string {
 }
 
 /** One line that says why a completed proof was judged as it was. Empty when there is nothing to add. */
-export function proofReason(outcome: CompletedProofOutcome): string {
-  const reason = outcome.reason;
-  const result = outcome.result;
-
-  if (reason.kind === 'proved') {
-    if (outcome.expected === 'red') return `breached ${checkOutcomeDetail(result, reason.target)}`;
-    if (outcome.expected === 'refuse') return `refused ${checkOutcomeDetail(result)}`;
-    return '';
-  }
-  if (reason.kind === 'target-rule-not-breached') {
-    return `target ${reason.target} not breached; breached ${reason.breached.join(', ')}`;
-  }
-  if (reason.kind === 'target-already-breached') {
-    return `target ${reason.target} was already breached before the mutation; breached ${reason.breached.join(', ')}`;
-  }
-  const detail = checkOutcomeDetail(result);
-  if (result.verdict === 'pass' && reason.expected === 'fail') {
+function mismatchReason(reason: { readonly expected: string; readonly actual: string }, result: CheckResult): string {
+  if (reason.expected === 'fail' && reason.actual === 'pass') {
     return `expected ${reason.expected}, got ${reason.actual}; the mutation did not reach what the Rule guards`;
   }
+  const detail = checkOutcomeDetail(result);
   return `expected ${reason.expected}, got ${reason.actual}${detail ? `: ${detail}` : ''}`;
+}
+
+export function proofReason(outcome: CompletedProofOutcome): string {
+  const result = outcome.result;
+
+  if (outcome.expected === 'red') {
+    const reason = outcome.reason;
+    if (reason.kind === 'proved') return `breached ${checkOutcomeDetail(result, reason.target)}`;
+    if (reason.kind === 'target-rule-not-breached') {
+      return `target ${reason.target} not breached; breached ${reason.breached.join(', ')}`;
+    }
+    if (reason.kind === 'target-already-breached') {
+      return `target ${reason.target} was already breached before the mutation; breached ${reason.breached.join(', ')}`;
+    }
+    return mismatchReason(reason, result);
+  }
+
+  const reason = outcome.reason;
+  if (reason.kind === 'verdict-mismatch') return mismatchReason(reason, result);
+  return outcome.expected === 'refuse' ? `refused ${checkOutcomeDetail(result)}` : '';
 }
 
 export function formatProof(outcome: ProofOutcome): string {

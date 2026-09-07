@@ -1,5 +1,5 @@
 import type { CheckResult, Gate, Proof, RedProof } from '../../domain/index.ts';
-import { evaluateProof } from './evaluation.ts';
+import { evaluateGreenProof, evaluateRedProof, evaluateRefuseProof } from './evaluation.ts';
 import type {
   CompletedProofOutcome,
   InfrastructureProofOutcome,
@@ -62,15 +62,10 @@ export function completedOutcome(
   result: CheckResult,
   workerPid: number,
 ): CompletedProofOutcome {
-  return {
-    status: 'completed',
-    gate: gate.id,
-    proof: proof.name,
-    expected: proof.expected,
-    reason: evaluateProof(proof, result),
-    result,
-    workerPid,
-  };
+  const completed = { status: 'completed', gate: gate.id, proof: proof.name, result, workerPid } as const;
+  if (proof.expected === 'red') return { ...completed, expected: 'red', reason: evaluateRedProof(proof, result) };
+  if (proof.expected === 'green') return { ...completed, expected: 'green', reason: evaluateGreenProof(result) };
+  return { ...completed, expected: 'refuse', reason: evaluateRefuseProof(result) };
 }
 
 export function failedOutcome(
