@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   breach,
   buildGateReportModel,
+  countBreachedRules,
+  countBreaches,
   counting,
   defineAdapter,
   fail,
@@ -45,6 +47,18 @@ test('report model does not claim unknown Rules hold for non-countable failures'
     ['r1', 'breached'],
     ['r2', 'unknown'],
   ]);
+  assert.deepEqual(summarizeGateReports([model]).breaches, { kind: 'not-countable' });
+});
+
+test('a breached Rule carries its breaches inside the breached state', () => {
+  const first = breach(R1.id, { code: 'r1', message: 'first', location: null });
+  const second = breach(R1.id, { code: 'r1', message: 'second', location: null });
+  const model = buildGateReportModel(adapter(), fail(scan, [first, second]));
+
+  assert.deepEqual(model.rules[0]?.state, { kind: 'breached', breaches: [first, second] });
+  assert.deepEqual(model.rules[1]?.state, { kind: 'held' });
+  assert.equal(countBreachedRules(model), 1);
+  assert.equal(countBreaches(model), 2);
 });
 
 test('run summary is derived from Gate report models without I/O', () => {
@@ -65,7 +79,6 @@ test('run summary is derived from Gate report models without I/O', () => {
     undecidedRules: 2,
     unknownRules: 0,
     totalRules: 6,
-    breaches: 1,
-    exactBreachCount: true,
+    breaches: { kind: 'exact', count: 1 },
   });
 });

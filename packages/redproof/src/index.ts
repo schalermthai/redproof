@@ -140,6 +140,8 @@ export {
   buildJsonCheckReport,
   buildJsonProveReport,
   buildSarif,
+  countBreachedRules,
+  countBreaches,
   formatCheck,
   formatCompactRun,
   formatGateDescription,
@@ -156,6 +158,7 @@ export {
   summarizeGateReports,
 } from './reporter/index.ts';
 export type {
+  BreachTotal,
   CheckReporterName,
   GateReportModel,
   JsonBreachV1,

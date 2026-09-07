@@ -3,6 +3,7 @@ import type {
   Breach,
   CheckResult,
   CountingCapability,
+  NonEmptyList,
   Rule,
   RuleRef,
 } from '../../domain/index.ts';
@@ -11,21 +12,22 @@ export type RuleReportState =
   | { readonly kind: 'held' }
   | { readonly kind: 'undecided' }
   | { readonly kind: 'unknown' }
-  | { readonly kind: 'breached'; readonly count: number | null };
+  | { readonly kind: 'breached'; readonly breaches: NonEmptyList<Breach> };
 
 export type RuleReport = {
   readonly rule: Rule;
   readonly state: RuleReportState;
-  readonly breaches: readonly Breach[];
 };
 
 export type GateReportModel = {
   readonly verdict: CheckResult['verdict'];
   readonly counting: CountingCapability;
   readonly rules: readonly RuleReport[];
-  readonly breachedRules: number;
-  readonly breachCount: number;
 };
+
+export type BreachTotal =
+  | { readonly kind: 'exact'; readonly count: number }
+  | { readonly kind: 'not-countable' };
 
 export type RunSummary = {
   readonly passedGates: number;
@@ -36,8 +38,7 @@ export type RunSummary = {
   readonly undecidedRules: number;
   readonly unknownRules: number;
   readonly totalRules: number;
-  readonly breaches: number;
-  readonly exactBreachCount: boolean;
+  readonly breaches: BreachTotal;
 };
 
 function rulesOf(adapter: Adapter<any>): readonly Rule[] {
@@ -63,9 +64,7 @@ export function buildGateReportModel(adapter: Adapter<any>, result: CheckResult)
     return {
       verdict: 'pass',
       counting,
-      rules: rules.map(rule => ({ rule, state: { kind: 'held' }, breaches: [] })),
-      breachedRules: 0,
-      breachCount: 0,
+      rules: rules.map(rule => ({ rule, state: { kind: 'held' } })),
     };
   }
 
@@ -73,37 +72,34 @@ export function buildGateReportModel(adapter: Adapter<any>, result: CheckResult)
     return {
       verdict: 'refuse',
       counting,
-      rules: rules.map(rule => ({ rule, state: { kind: 'undecided' }, breaches: [] })),
-      breachedRules: 0,
-      breachCount: 0,
+      rules: rules.map(rule => ({ rule, state: { kind: 'undecided' } })),
     };
   }
 
   const groups = groupBreaches(result);
-  const ruleReports = rules.map(rule => {
-    const breaches = groups.get(rule.id) ?? [];
-    if (breaches.length > 0) {
-      return {
-        rule,
-        state: { kind: 'breached', count: counting.kind === 'supported' ? breaches.length : null } as const,
-        breaches,
-      };
-    }
-
-    return {
-      rule,
-      state: counting.kind === 'supported' ? { kind: 'held' as const } : { kind: 'unknown' as const },
-      breaches,
-    };
-  });
-
   return {
     verdict: 'fail',
     counting,
-    rules: ruleReports,
-    breachedRules: new Set(result.breaches.map(breach => breach.rule)).size,
-    breachCount: result.breaches.length,
+    rules: rules.map(rule => {
+      const breaches = groups.get(rule.id) ?? [];
+      if (breaches.length > 0) {
+        return { rule, state: { kind: 'breached', breaches: [breaches[0]!, ...breaches.slice(1)] } };
+      }
+      return { rule, state: { kind: counting.kind === 'supported' ? 'held' : 'unknown' } };
+    }),
   };
+}
+
+export function countBreachedRules(model: GateReportModel): number {
+  return model.rules.filter(item => item.state.kind === 'breached').length;
+}
+
+export function countBreaches(model: GateReportModel): number {
+  let total = 0;
+  for (const item of model.rules) {
+    if (item.state.kind === 'breached') total += item.state.breaches.length;
+  }
+  return total;
 }
 
 /** Pure aggregation used by terminal and future reporters. */
@@ -117,7 +113,7 @@ export function summarizeGateReports(gates: readonly GateReportModel[]): RunSumm
   let unknownRules = 0;
   let totalRules = 0;
   let breaches = 0;
-  let exactBreachCount = true;
+  let countable = true;
 
   for (const gate of gates) {
     if (gate.verdict === 'pass') passedGates++;
@@ -125,8 +121,8 @@ export function summarizeGateReports(gates: readonly GateReportModel[]): RunSumm
     else refusedGates++;
 
     totalRules += gate.rules.length;
-    breaches += gate.breachCount;
-    if (gate.verdict === 'fail' && gate.counting.kind === 'unsupported') exactBreachCount = false;
+    breaches += countBreaches(gate);
+    if (gate.verdict === 'fail' && gate.counting.kind === 'unsupported') countable = false;
 
     for (const rule of gate.rules) {
       if (rule.state.kind === 'held') heldRules++;
@@ -145,7 +141,6 @@ export function summarizeGateReports(gates: readonly GateReportModel[]): RunSumm
     undecidedRules,
     unknownRules,
     totalRules,
-    breaches,
-    exactBreachCount,
+    breaches: countable ? { kind: 'exact', count: breaches } : { kind: 'not-countable' },
   };
 }
