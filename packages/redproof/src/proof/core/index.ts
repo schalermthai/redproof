@@ -1,3 +1,4 @@
+export type { ProofEvaluation } from './evaluation.ts';
 export type {
   CompletedProofOutcome,
   InfrastructureProofOutcome,

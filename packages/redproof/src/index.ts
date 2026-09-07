@@ -114,6 +114,7 @@ export { runGate, runProof } from './proof/index.ts';
 export type {
   CompletedProofOutcome,
   InfrastructureProofOutcome,
+  ProofEvaluation,
   ProofInfrastructureError,
   ProofOutcome,
 } from './proof/index.ts';

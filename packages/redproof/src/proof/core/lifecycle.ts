@@ -46,12 +46,14 @@ export function baselineOutcome(
   baseline: CheckResult,
   workerPid: number,
 ): CompletedProofOutcome {
+  const breached = baseline.verdict === 'fail' ? baseline.breaches.map(item => item.rule) : [];
   return {
     status: 'completed',
     gate: gate.id,
     proof: proof.name,
     expected: proof.expected,
     ok: false,
+    reason: { kind: 'target-already-breached', target: proof.expected === 'red' ? proof.target : '', breached },
     result: baseline,
     workerPid,
   };
@@ -63,12 +65,14 @@ export function completedOutcome(
   result: CheckResult,
   workerPid: number,
 ): CompletedProofOutcome {
+  const reason = evaluateProof(proof, result);
   return {
     status: 'completed',
     gate: gate.id,
     proof: proof.name,
     expected: proof.expected,
-    ok: proofSucceeded(evaluateProof(proof, result)),
+    ok: proofSucceeded(reason),
+    reason,
     result,
     workerPid,
   };
