@@ -2,6 +2,12 @@ import type { TestCase, TestReportFormat, TestRun } from '../model.ts';
 
 function decodeXml(value: string): string {
   return value
+    .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (reference, hex, decimal) => {
+      const codePoint = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
+      return codePoint <= 0x10FFFF && !(codePoint >= 0xD800 && codePoint <= 0xDFFF)
+        ? String.fromCodePoint(codePoint)
+        : reference;
+    })
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&quot;', '"')
