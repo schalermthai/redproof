@@ -1,12 +1,14 @@
-import { readFile } from 'node:fs/promises';
-import { relative, resolve } from 'node:path';
-import type { CheckResult } from '../domain/check.ts';
-import type { Diagnostic } from '../domain/diagnostic.ts';
-import type { Rule } from '../domain/rule.ts';
-import type { GateDescription } from '../project/core/description.ts';
+import { relative } from 'node:path';
+import type { CheckResult } from '../../domain/check.ts';
+import type { Diagnostic } from '../../domain/diagnostic.ts';
+import type { Rule } from '../../domain/rule.ts';
+import type { GateDescription } from '../../project/core/description.ts';
+import type { ProofOutcome } from '../../proof/core/outcome.ts';
+import type { CheckProjectRun, GateRun } from '../../run/core/run.ts';
 import { buildGateReportModel, summarizeGateReports, type RunSummary } from './model.ts';
-import type { ProofOutcome } from '../proof/core/outcome.ts';
-import type { CheckProjectRun, GateRun } from '../run/shell/project-runner.ts';
+
+/** Source lines by the file named in a Diagnostic location. A file that is absent shows no excerpt. */
+export type SourceExcerpts = ReadonlyMap<string, readonly string[]>;
 
 const glyph = {
   pass: '✓',
@@ -98,7 +100,7 @@ function renderRuleTree(run: GateRun, color: boolean): string[] {
   }).filter(Boolean);
 }
 
-async function sourceExcerpt(root: string, diagnostic: Diagnostic, context: number, color: boolean, tone: 'fail' | 'refuse'): Promise<string[]> {
+function sourceExcerpt(sources: SourceExcerpts, diagnostic: Diagnostic, context: number, color: boolean, tone: 'fail' | 'refuse'): string[] {
   const location = diagnostic.location;
   if (!location) return [];
 
@@ -110,9 +112,8 @@ async function sourceExcerpt(root: string, diagnostic: Diagnostic, context: numb
 
   if (location.line == null) return lines;
 
-  try {
-    const text = await readFile(resolve(root, location.file), 'utf8');
-    const source = text.split(/\r?\n/);
+  const source = sources.get(location.file);
+  if (source) {
     const target = location.line - 1;
     const start = Math.max(0, target - context);
     const end = Math.min(source.length - 1, target + context);
@@ -127,16 +128,14 @@ async function sourceExcerpt(root: string, diagnostic: Diagnostic, context: numb
         lines.push(`     ${' '.repeat(width)}| ${caretPad}${red(color, '^')}`);
       }
     }
-  } catch {
-    // A reporter must not turn a valid CheckResult into a reporting failure.
   }
 
   return lines;
 }
 
-async function renderDiagnostic(root: string, diagnostic: Diagnostic, options: Required<ReportOptions>, tone: 'fail' | 'refuse' = 'fail'): Promise<string[]> {
+function renderDiagnostic(sources: SourceExcerpts, diagnostic: Diagnostic, options: Required<ReportOptions>, tone: 'fail' | 'refuse' = 'fail'): string[] {
   const lines: string[] = [];
-  lines.push(...await sourceExcerpt(root, diagnostic, options.sourceContext, options.color, tone));
+  lines.push(...sourceExcerpt(sources, diagnostic, options.sourceContext, options.color, tone));
   if (lines.length > 0) lines.push('');
   lines.push(`   ${diagnostic.message}`);
 
@@ -149,7 +148,7 @@ async function renderDiagnostic(root: string, diagnostic: Diagnostic, options: R
   return lines;
 }
 
-async function renderFailureDetails(run: GateRun, projectRoot: string, options: Required<ReportOptions>): Promise<string[]> {
+function renderFailureDetails(run: GateRun, projectRoot: string, sources: SourceExcerpts, options: Required<ReportOptions>): string[] {
   if (run.result.verdict !== 'fail') return [];
   const model = buildGateReportModel(run.module.gate.adapter, run.result);
   const file = fileOf(run, projectRoot);
@@ -163,14 +162,14 @@ async function renderFailureDetails(run: GateRun, projectRoot: string, options: 
 
     for (let index = 0; index < item.breaches.length; index++) {
       if (index > 0) sections.push('');
-      sections.push(...await renderDiagnostic(projectRoot, item.breaches[index]!, options));
+      sections.push(...renderDiagnostic(sources, item.breaches[index]!, options));
     }
   }
 
   return sections;
 }
 
-async function renderRefusalDetails(run: GateRun, projectRoot: string, options: Required<ReportOptions>): Promise<string[]> {
+function renderRefusalDetails(run: GateRun, projectRoot: string, sources: SourceExcerpts, options: Required<ReportOptions>): string[] {
   if (run.result.verdict !== 'refuse') return [];
   const file = fileOf(run, projectRoot);
   return [
@@ -178,7 +177,7 @@ async function renderRefusalDetails(run: GateRun, projectRoot: string, options: 
     '',
     ` ${yellow(options.color, 'REFUSE')}  ${file}`,
     '',
-    ...await renderDiagnostic(projectRoot, run.result.why, options, 'refuse'),
+    ...renderDiagnostic(sources, run.result.why, options, 'refuse'),
     '',
     `   ${dim(options.color, 'The Check could not make a trustworthy PASS or FAIL decision.')}`,
   ];
@@ -221,7 +220,8 @@ function summaryRows(run: CheckProjectRun, options: Required<ReportOptions>): st
   return rows;
 }
 
-export async function formatRun(run: CheckProjectRun, options: ReportOptions = {}): Promise<string> {
+/** Pure terminal rendering. `formatRun` in the shell loads the source excerpts first. */
+export function renderRun(run: CheckProjectRun, sources: SourceExcerpts, options: ReportOptions = {}): string {
   const resolved: Required<ReportOptions> = {
     color: options.color ?? false,
     verbose: options.verbose ?? false,
@@ -238,8 +238,8 @@ export async function formatRun(run: CheckProjectRun, options: ReportOptions = {
   }
 
   for (const item of run.results) {
-    lines.push(...await renderFailureDetails(item, run.project.root, resolved));
-    lines.push(...await renderRefusalDetails(item, run.project.root, resolved));
+    lines.push(...renderFailureDetails(item, run.project.root, sources, resolved));
+    lines.push(...renderRefusalDetails(item, run.project.root, sources, resolved));
   }
 
   lines.push('', '', ...summaryRows(run, resolved));
