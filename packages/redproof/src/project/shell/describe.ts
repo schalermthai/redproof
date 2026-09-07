@@ -1,4 +1,4 @@
-import type { LoadedGateModule, LoadedProject } from './loader.ts';
+import type { LoadedGateModule, LoadedProject } from '../core/discovery.ts';
 import { loadProject, selectGateModules } from './loader.ts';
 
 export type DescribedRule = {
