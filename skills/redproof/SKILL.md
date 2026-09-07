@@ -187,9 +187,12 @@ omission.
 A manual proof is true once, for the code you had that day. The check can go
 blind next month and the old proof will not notice.
 
-Redproof is the library in this repository. It stores the break next to the
-check and repeats the loop on every commit. Use it when the guard is permanent.
-Do not use it for a one-time proof.
+Redproof is a library. It stores the break next to the check and repeats the
+loop on every commit. Use it when the guard is permanent. Do not use it for a
+one-time proof.
 
-Read [`../../README.md`](../../README.md) and [`../../docs/`](../../docs/). Those
-files ship with the code, so they cannot go stale.
+Read the README and the docs on GitHub. Those files ship with the code, so
+they cannot go stale.
+
+- <https://github.com/schalermthai/redproof#readme>
+- <https://github.com/schalermthai/redproof/tree/main/docs>
