@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { describeProject } from './runtime/describe.ts';
 import { GateSelectionError } from './runtime/discovery.ts';
@@ -34,7 +34,9 @@ never change what a Gate inspects; a Gate owns its own scope.
   redproof check gates/*.ts
 
 Options:
-  --config <path>       Path to redproof.config.ts
+  --config <path>       Path to a Redproof config file. Without it, the CLI
+                        looks for redproof.config.ts, .mts, .mjs, .cts, .cjs,
+                        then .js, in that order.
   --reporter <reporter> Select an output reporter
   --outputFile <path>   Write reporter output to a file
   --no-color            Disable colored output
@@ -42,14 +44,31 @@ Options:
   -h, --help            Show this help
   -v, --version         Show the installed version`;
 
-function configArg(argv: readonly string[]): string | undefined {
+const DEFAULT_CONFIG_FILES = [
+  'redproof.config.ts',
+  'redproof.config.mts',
+  'redproof.config.mjs',
+  'redproof.config.cts',
+  'redproof.config.cjs',
+  'redproof.config.js',
+] as const;
+
+function configArg(argv: readonly string[]): string | null | undefined {
   const inline = argv.find(arg => arg.startsWith('--config='));
   if (inline !== undefined) return inline.slice('--config='.length) || undefined;
 
   const index = argv.indexOf('--config');
-  if (index < 0) return 'redproof.config.ts';
+  if (index < 0) return null;
   const value = argv[index + 1];
   return value && !value.startsWith('-') ? value : undefined;
+}
+
+async function defaultConfigPath(): Promise<string | null> {
+  for (const file of DEFAULT_CONFIG_FILES) {
+    const path = resolve(file);
+    if (await stat(path).then(entry => entry.isFile(), () => false)) return path;
+  }
+  return null;
 }
 
 async function packageVersion(): Promise<string> {
@@ -104,7 +123,16 @@ async function main(): Promise<number> {
     console.error('Option --config requires a path.');
     return 2;
   }
-  const configPath = resolve(configValue);
+  const discovered = configValue === null ? await defaultConfigPath() : resolve(configValue);
+  if (discovered === null) {
+    console.error(
+      `No Redproof config found in ${process.cwd()}.\n`
+      + `Looked for ${DEFAULT_CONFIG_FILES.join(', ')}.\n`
+      + 'Create one, or pass --config <path>.',
+    );
+    return 2;
+  }
+  const configPath = discovered;
 
   const gateFiles = positionalArgs(args);
 

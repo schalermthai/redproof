@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { parseReporterArgs } from 'redproof';
+import { withWorkspace } from '../helpers/workspace.ts';
 
 test('reporter CLI parser supports one stdout reporter plus file reporters', () => {
   assert.deepEqual(parseReporterArgs([
@@ -65,6 +66,60 @@ test('CLI reports a missing config value without an internal stack trace', () =>
   assert.equal(result.status, 2);
   assert.match(result.stderr, /^Option --config requires a path\.\n$/);
   assert.doesNotMatch(result.stderr, /node:path|at main|ERR_/);
+});
+
+test('CLI discovers an ESM config in a CommonJS project', () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    resolve('packages/redproof/src/cli.ts'),
+    'check',
+    '--reporter=json',
+  ], { cwd: resolve('fixtures/commonjs-config'), encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.status, 'passed');
+  assert.deepEqual(report.gates.map((gate: { id: string }) => gate.id), ['commonjs-config']);
+});
+
+test('CLI prefers redproof.config.ts when several config files exist', () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    resolve('packages/redproof/src/cli.ts'),
+    'check',
+    '--reporter=json',
+  ], { cwd: resolve('fixtures/config-precedence'), encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.gates.map((gate: { id: string }) => gate.id), ['from-ts']);
+});
+
+test('CLI names every config file it looked for when none exists', async () => {
+  await withWorkspace(async root => {
+    const result = spawnSync(process.execPath, [
+      '--disable-warning=ExperimentalWarning',
+      '--experimental-strip-types',
+      resolve('packages/redproof/src/cli.ts'),
+      'check',
+    ], { cwd: root, encoding: 'utf8' });
+
+    assert.equal(result.status, 2, result.stdout);
+    assert.match(result.stderr, /No Redproof config found/);
+    for (const file of [
+      'redproof.config.ts',
+      'redproof.config.mts',
+      'redproof.config.mjs',
+      'redproof.config.cts',
+      'redproof.config.cjs',
+      'redproof.config.js',
+    ]) {
+      assert.ok(result.stderr.includes(file), `stderr must name ${file}`);
+    }
+    assert.doesNotMatch(result.stderr, /ERR_MODULE_NOT_FOUND|at main|node:internal/);
+  });
 });
 
 test('CLI writes JSON output relative to the project root', async () => {

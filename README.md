@@ -310,6 +310,10 @@ export default defineConfig({
 });
 ```
 
+The CLI also discovers `redproof.config.mts`, `.mjs`, `.cts`, `.cjs`, and
+`.js`. CommonJS projects can use `redproof.config.mjs` to keep the config and
+Gate modules in ESM without adding `"type": "module"` to the whole package.
+
 A typical project:
 
 ```text

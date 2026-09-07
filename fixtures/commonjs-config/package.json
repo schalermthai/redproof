@@ -1,0 +1,8 @@
+{
+  "name": "commonjs-config",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "redproof": "file:../../packages/redproof"
+  }
+}
