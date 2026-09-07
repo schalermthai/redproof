@@ -1,5 +1,6 @@
 import { glob, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, matchesGlob, resolve, sep } from 'node:path';
+import type { Scan } from '../domain/check.ts';
 import type { Location } from '../domain/diagnostic.ts';
 
 export type RootContext = { readonly root: string };
@@ -109,9 +110,24 @@ export type FindTextOptions = {
   readonly find: string | RegExp;
 };
 
+export type ScanOptions = {
+  /** Defaults to the search kind, `'text'` or `'json'`. */
+  readonly source?: string;
+  /** Defaults to the moment the search started. Pass an earlier time to widen the window. */
+  readonly startedAt?: string;
+};
+
+/**
+ * Describe one search as a Scan. `inspected` counts the files that search read.
+ * A Check that runs several searches must build its own Scan, or its report
+ * will under-count.
+ */
+export type SearchScan = (options?: ScanOptions) => Scan;
+
 export type TextSearch = {
   readonly files: readonly string[];
   readonly matches: readonly TextMatch[];
+  readonly scan: SearchScan;
 };
 
 function regexFor(find: string | RegExp): RegExp {
@@ -134,7 +150,18 @@ function locationAt(file: string, content: string, offset: number): Location {
   };
 }
 
+function scanner(kind: string, startedAt: string, inspected: number): SearchScan {
+  const finishedAt = new Date().toISOString();
+  return (options = {}) => ({
+    source: options.source ?? kind,
+    startedAt: options.startedAt ?? startedAt,
+    finishedAt,
+    inspected,
+  });
+}
+
 async function findText(ctx: RootContext, options: FindTextOptions): Promise<TextSearch> {
+  const startedAt = new Date().toISOString();
   const paths = await findFiles(ctx, options.files);
   const matches: TextMatch[] = [];
 
@@ -156,7 +183,7 @@ async function findText(ctx: RootContext, options: FindTextOptions): Promise<Tex
     }
   }
 
-  return { files: paths, matches };
+  return { files: paths, matches, scan: scanner('text', startedAt, paths.length) };
 }
 
 async function findFirstText(ctx: RootContext, options: FindTextOptions): Promise<TextMatch | null> {
@@ -249,6 +276,7 @@ export type JsonMatch = {
 export type JsonSearch = {
   readonly files: readonly string[];
   readonly matches: readonly JsonMatch[];
+  readonly scan: SearchScan;
 };
 
 type JsonResolvedMatch = JsonMatch & {
@@ -395,6 +423,7 @@ function resolveJsonDocument(document: unknown, tokens: readonly JsonPathToken[]
 }
 
 async function queryJson(ctx: RootContext, options: FindJsonOptions): Promise<JsonSearch> {
+  const startedAt = new Date().toISOString();
   const paths = await findFiles(ctx, options.files);
   const tokens = parseJsonPath(options.path);
   const matches: JsonMatch[] = [];
@@ -413,7 +442,7 @@ async function queryJson(ctx: RootContext, options: FindJsonOptions): Promise<Js
     }
   }
 
-  return { files: paths, matches };
+  return { files: paths, matches, scan: scanner('json', startedAt, paths.length) };
 }
 
 export const json = {

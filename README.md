@@ -93,7 +93,7 @@ const gate = defineGate({
 
       // should detect a breach
       return result.fromBreaches(
-        found.scan,
+        found.scan(),
         found.matches.map(match =>
           breach(rules.noTodo, {
             code: 'todo-found',

@@ -179,6 +179,49 @@ const first = await text.findFirst(ctx, {
 });
 ```
 
+## Describing a search
+
+`text.find` and `json.query` both return a `scan()` function. It describes that one search:
+
+```ts
+const found = await text.find(ctx, { files: 'src/**/*.ts', find: /\bTODO\b/g });
+
+return result.fromBreaches(found.scan(), breaches);
+```
+
+`scan()` records the window of the search itself. `inspected` counts the files that search read. `source` is `'text'` or `'json'`.
+
+Override either default when it helps:
+
+```ts
+found.scan({ source: 'todo-scan' })
+```
+
+Pass `startedAt` when the Check began working before the search:
+
+```ts
+async run(ctx) {
+  const startedAt = new Date().toISOString();
+  const policy = JSON.parse(await files.read(ctx, 'policy.json'));
+  const found = await text.find(ctx, { files: 'src/**/*.ts', find: policy.marker });
+
+  return result.fromBreaches(found.scan({ startedAt }), breaches);
+}
+```
+
+**One `scan()` describes one search.** A Check that runs several searches must build its own `Scan`, or `inspected` will under-count:
+
+```ts
+const scan = {
+  source: 'markers',
+  startedAt,
+  finishedAt: new Date().toISOString(),
+  inspected: new Set([...todos.files, ...fixmes.files]).size,
+};
+```
+
+That matters because a Check declaring `counting.supported` promises a reliable count.
+
 ## Proofs
 
 A RED proof targets one specific Rule:

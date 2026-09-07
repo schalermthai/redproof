@@ -26,17 +26,10 @@ const gate = defineGate({
     counting: counting.supported,
 
     async run(ctx) {
-      const startedAt = new Date().toISOString();
       const found = await text.find(ctx, { files: 'src/beta.txt', find: /MARKER/g });
-      const scan = {
-        source: 'beta',
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        inspected: found.files.length,
-      } as const;
 
       return result.fromBreaches(
-        scan,
+        found.scan({ source: 'beta' }),
         found.matches.map(match =>
           breach(rules.noMarker, {
             code: 'marker-found',
