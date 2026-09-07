@@ -39,7 +39,7 @@ test('effect analysis does not confuse a property named process with the global 
 
 test('pure-test analysis rejects temporary workspace helpers', () => {
   const findings = analyzePureTestEffects([{
-    file: 'tests/core.test.ts',
+    file: 'tests/proof.core.test.ts',
     content: "import './helpers/workspace.ts';\n",
   }]);
   assert.deepEqual(findings.map(item => item.effect), ['temporary workspace helper']);

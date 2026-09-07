@@ -5,8 +5,10 @@ import test from 'node:test';
 
 import {
   copyGateWorkspace,
+  pathInsideCopy,
   releaseGateWorkspace,
-} from '../packages/redproof/src/workspace/shell/copy.ts';
+  verifyTree,
+} from 'redproof';
 import { withWorkspace } from './helpers/workspace.ts';
 
 test('copies tracked nested node_modules fixtures while linking root dependencies', async () => {
@@ -105,6 +107,26 @@ test('a nested copy links to the real dependencies, not to the copy above it', a
       );
     } finally {
       await releaseGateWorkspace(inner);
+    }
+  });
+});
+
+test('a fresh copy matches its baseline, and a changed file is reported as stale by name', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'src'));
+    await writeFile(join(root, 'src/state.txt'), 'original\n', 'utf8');
+
+    const workspace = await copyGateWorkspace(root, 'freshness');
+    try {
+      assert.deepEqual(await verifyTree(workspace.root, workspace.baseline), { kind: 'fresh' });
+
+      await writeFile(pathInsideCopy(root, workspace.root, join(root, 'src/state.txt')), 'changed\n', 'utf8');
+      const stale = await verifyTree(workspace.root, workspace.baseline);
+      assert.equal(stale.kind, 'stale');
+      if (stale.kind !== 'stale') throw new Error('expected stale');
+      assert.match(stale.why, /changed paths: modified src\/state\.txt$/);
+    } finally {
+      await releaseGateWorkspace(workspace);
     }
   });
 });
