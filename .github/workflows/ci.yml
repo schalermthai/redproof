@@ -1,0 +1,50 @@
+name: CI
+
+# Every push to main and every pull request runs the same gate the release runs.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Show tool versions
+        run: |
+          echo "node: $(node --version)"
+          echo "npm:  $(npm --version)"
+
+      # `npm ci` also proves package.json and package-lock.json still agree.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the full project check
+        run: npm run check
+
+      # Rebuilt on purpose. Package verification must never read a stale dist.
+      - name: Build the production artifact
+        run: npm run build
+
+      - name: Verify the packages a consumer would install
+        run: npm run verify:package
