@@ -57,7 +57,7 @@ export const proofs = defineProofs(gate, [
     rules.versionAlignment,
     'detects divergent package versions',
     mutate.replaceText(
-      locate.text({ files: 'packages/testing/package.json', find: '"version": "0.6.0"' }),
+      locate.text({ files: 'packages/testing/package.json', find: '"version": "0.7.0"' }),
       '"version": "0.6.1"',
     ),
   ),

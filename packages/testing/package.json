@@ -1,6 +1,6 @@
 {
   "name": "@redproof/testing",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Redproof adapter for test suites and JUnit XML reports.",
   "type": "module",
   "exports": {
@@ -17,7 +17,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "redproof": "0.6.0"
+    "redproof": "0.7.0"
   },
   "repository": {
     "type": "git",
