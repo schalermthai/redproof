@@ -1,25 +1,8 @@
-import { glob, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
-import {
-  breach,
-  counting,
-  defineGate,
-  defineProofs,
-  defineRule,
-  mutate,
-  proof,
-  result,
-  type Breach,
-} from 'redproof';
-import {
-  analyzeEffects,
-  analyzePureTestEffects,
-  type EffectFinding,
-  type SourceInput,
-} from './support/effects-model.ts';
+import { defineGate, defineProofs, defineRule, mutate, proof } from 'redproof';
+import { effectBoundaries } from './checks/effect-boundaries.ts';
 
-const dependencyAdapter = dependencyCruiser({
+const dependencies = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
   files: [
     'packages/redproof/src',
@@ -40,7 +23,8 @@ const dependencyAdapter = dependencyCruiser({
 });
 
 const rules = {
-  ...dependencyAdapter.rules,
+  ...dependencies.rules,
+
   coreNoAmbientInputs: defineRule({
     id: 'architecture/core-no-ambient-inputs',
     description: 'Functional-core modules receive ambient values from the shell.',
@@ -55,98 +39,15 @@ const rules = {
   }),
 } as const;
 
-type ArchitectureRuleRef = typeof rules[keyof typeof rules]['id'];
-
-function effectBreach(
-  rule: typeof rules.coreNoAmbientInputs | typeof rules.effectsAllowlistedBoundaries,
-  finding: EffectFinding,
-): Breach<ArchitectureRuleRef> {
-  return breach(rule, {
-    code: finding.category === 'import' ? 'effect-import' : 'ambient-input',
-    message: `${finding.effect} is used outside its approved imperative boundary.`,
-    location: {
-      file: finding.file,
-      line: finding.line,
-      column: finding.column,
-    },
-  });
-}
-
-function coreTestBreach(finding: EffectFinding): Breach<ArchitectureRuleRef> {
-  return breach(rules.coreTestsNoIoHelpers, {
-    code: 'core-test-effect',
-    message: `${finding.effect} is not available to functional-core tests.`,
-    location: {
-      file: finding.file,
-      line: finding.line,
-      column: finding.column,
-    },
-  });
-}
-
-async function sourceInputs(root: string, pattern: string): Promise<SourceInput[]> {
-  const files: string[] = [];
-  for await (const file of glob(pattern, { cwd: root })) files.push(file);
-  files.sort();
-  return Promise.all(files.map(async file => ({
-    file,
-    content: await readFile(join(root, file), 'utf8'),
-  })));
-}
-
 const gate = defineGate({
   id: 'architecture',
   rules,
-  check: {
-    description: 'enforce source dependencies and functional-core effect boundaries',
-    counting: counting.supported,
-
-    async run(ctx) {
-      const startedAt = new Date().toISOString();
-      const dependencyResult = await dependencyAdapter.check.run({
-        root: ctx.root,
-        rules: Object.values(dependencyAdapter.rules).map(rule => rule.id),
-      });
-      if (dependencyResult.verdict === 'refuse') return dependencyResult;
-
-      try {
-        const sources = await sourceInputs(ctx.root, 'packages/*/src/**/*.ts');
-        const coreTests = await sourceInputs(ctx.root, 'tests/{core,self-hosted-policy}.test.ts');
-        const effects = analyzeEffects(sources);
-        const testEffects = analyzePureTestEffects(coreTests);
-        const breaches: Breach<ArchitectureRuleRef>[] = dependencyResult.verdict === 'fail'
-          ? [...dependencyResult.breaches]
-          : [];
-
-        for (const finding of effects.coreAmbientInputs) {
-          breaches.push(effectBreach(rules.coreNoAmbientInputs, finding));
-        }
-        for (const finding of effects.unapprovedBoundaries) {
-          breaches.push(effectBreach(rules.effectsAllowlistedBoundaries, finding));
-        }
-        for (const finding of testEffects) breaches.push(coreTestBreach(finding));
-
-        return result.fromBreaches({
-          source: 'dependency-cruiser + TypeScript effect scan',
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          inspected: sources.length + coreTests.length,
-        }, breaches);
-      } catch (error) {
-        return result.refuse({
-          source: 'dependency-cruiser + TypeScript effect scan',
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          inspected: null,
-        }, {
-          code: 'effect-scan-unavailable',
-          message: 'The source effect scan could not complete.',
-          location: null,
-          detail: error instanceof Error ? error.message : String(error),
-        });
-      }
-    },
-  },
+  check: effectBoundaries({
+    dependencies,
+    rules,
+    sources: 'packages/*/src/**/*.ts',
+    coreTests: 'tests/{core,self-hosted-policy}.test.ts',
+  }),
 });
 
 export const proofs = defineProofs(gate, [
@@ -213,10 +114,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.coreTestsNoIoHelpers,
     'keeps filesystem fixtures out of functional-core tests',
-    mutate.appendText(
-      'tests/self-hosted-policy.test.ts',
-      "\nimport './helpers/workspace.ts';\n",
-    ),
+    mutate.appendText('tests/self-hosted-policy.test.ts', "\nimport './helpers/workspace.ts';\n"),
   ),
   proof.green('accepts the current functional-core and package boundaries'),
 ]);

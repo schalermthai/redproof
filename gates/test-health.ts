@@ -1,20 +1,9 @@
-import { globSync } from 'node:fs';
-import { report, runner, testing } from '@redproof/testing';
+import { report, testing } from '@redproof/testing';
 import { defineGate, defineProofs, mutate, proof } from 'redproof';
+import { nodeTestSuite } from './checks/node-test-suite.ts';
 
 const adapter = testing({
-  runner: runner.command({
-    command: process.execPath,
-    description: 'run the complete Node test suite with a structured JUnit report',
-    args: ({ root, reportFile }) => [
-      '--disable-warning=ExperimentalWarning',
-      '--experimental-strip-types',
-      '--test',
-      '--test-reporter=junit',
-      `--test-reporter-destination=${reportFile}`,
-      ...globSync('tests/**/*.test.ts', { cwd: root }).sort(),
-    ],
-  }),
+  runner: nodeTestSuite({ files: 'tests/**/*.test.ts' }),
   report: report.junitXml(),
   rules: {
     testsPass: true,

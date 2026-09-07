@@ -1,5 +1,6 @@
 import { defineGate, defineProofs, defineRules, mutate, proof } from 'redproof';
 import { commands } from 'redproof/command';
+import { node, stripTypes, tsc } from './support/node.ts';
 
 const rules = defineRules({
   workspaceCompiles: {
@@ -23,29 +24,21 @@ const check = commands({
   entries: [
     {
       rule: rules.workspaceCompiles,
-      command: process.execPath,
-      args: ['node_modules/typescript/bin/tsc', '--noEmit'],
       label: 'workspace TypeScript',
+      command: node,
+      args: tsc('--noEmit'),
     },
     {
       rule: rules.docsExamplesCompile,
-      command: process.execPath,
-      args: [
-        '--disable-warning=ExperimentalWarning',
-        '--experimental-strip-types',
-        'scripts/typecheck-docs.ts',
-      ],
       label: 'documentation examples',
+      command: node,
+      args: stripTypes('scripts/typecheck-docs.ts'),
     },
     {
       rule: rules.docsFragmentDebt,
-      command: process.execPath,
-      args: [
-        '--disable-warning=ExperimentalWarning',
-        '--experimental-strip-types',
-        'gates/support/check-doc-fragment-budget.ts',
-      ],
       label: 'documentation fragment budget',
+      command: node,
+      args: stripTypes('gates/support/check-doc-fragment-budget.ts'),
     },
   ],
 });

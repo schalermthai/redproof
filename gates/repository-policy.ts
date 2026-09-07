@@ -1,22 +1,5 @@
-import { glob, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import {
-  breach,
-  counting,
-  defineGate,
-  defineProofs,
-  defineRules,
-  locate,
-  mutate,
-  proof,
-  result,
-} from 'redproof';
-import {
-  evaluateRepositoryPolicy,
-  type ManifestSnapshot,
-  type RepositoryPolicyRule,
-  type RepositorySnapshot,
-} from './support/repository-policy-model.ts';
+import { defineGate, defineProofs, defineRules, locate, mutate, proof } from 'redproof';
+import { repositoryPolicy } from './checks/repository-policy.ts';
 
 const rules = defineRules({
   packageInventory: {
@@ -41,101 +24,24 @@ const rules = defineRules({
   },
 });
 
-const ruleByFinding: Record<RepositoryPolicyRule, typeof rules[keyof typeof rules]> = rules;
-
-async function read(root: string, file: string): Promise<string> {
-  return readFile(join(root, file), 'utf8');
-}
-
-async function snapshot(root: string): Promise<RepositorySnapshot> {
-  const rootManifest = JSON.parse(await read(root, 'package.json')) as {
-    scripts?: Record<string, string>;
-  };
-  const manifestFiles: string[] = [];
-  for await (const file of glob('packages/*/package.json', { cwd: root })) manifestFiles.push(file);
-  manifestFiles.sort();
-
-  const manifests: ManifestSnapshot[] = await Promise.all(manifestFiles.map(async file => {
-    const manifest = JSON.parse(await read(root, file)) as ManifestSnapshot['manifest'] & {
-      name?: string;
-      version?: string;
-    };
-    if (!manifest.name || !manifest.version) throw new Error(`${file} is missing name or version.`);
-    return {
-      file,
-      dir: file.slice(0, -'/package.json'.length),
-      name: manifest.name,
-      version: manifest.version,
-      manifest,
-    };
-  }));
-
-  const existingPaths = new Set<string>();
-  for (const pattern of ['README.md', 'LICENSE', '.github/**/*', 'docs/**/*', 'fixtures/**/*', 'gates/**/*', 'packages/**/*', 'scripts/**/*', 'skills/**/*']) {
-    for await (const file of glob(pattern, { cwd: root })) {
-      if (!file.includes('/node_modules/')) existingPaths.add(file);
-    }
-  }
-
-  const markdownFiles: string[] = [];
-  for (const pattern of ['README.md', 'docs/**/*.md', 'skills/redproof/**/*.md']) {
-    for await (const file of glob(pattern, { cwd: root })) markdownFiles.push(file);
-  }
-  const markdown = await Promise.all([...new Set(markdownFiles)].sort().map(async file => ({
-    file,
-    content: await read(root, file),
-  })));
-
-  return {
-    rootScripts: rootManifest.scripts ?? {},
-    rootBuildScript: rootManifest.scripts?.build ?? '',
-    manifests,
-    setVersionSource: await read(root, 'scripts/set-version.ts'),
-    verifyPackageSource: await read(root, 'scripts/verify-package.ts'),
-    ciWorkflow: await read(root, '.github/workflows/ci.yml'),
-    publishWorkflow: await read(root, '.github/workflows/publish.yml'),
-    existingPaths,
-    markdown,
-  };
-}
-
 const gate = defineGate({
   id: 'repository-policy',
   rules,
-  check: {
-    description: 'evaluate package, release, public-surface, automation, and documentation contracts',
-    counting: counting.supported,
-    async run(ctx) {
-      const startedAt = new Date().toISOString();
-      try {
-        const state = await snapshot(ctx.root);
-        const findings = evaluateRepositoryPolicy(state);
-        return result.fromBreaches({
-          source: 'repository policy',
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          inspected: state.manifests.length + state.markdown.length,
-        }, findings.map(finding => breach(ruleByFinding[finding.rule], {
-          code: finding.code,
-          message: finding.message,
-          location: { file: finding.file, line: null, column: null },
-          ...(finding.detail ? { detail: finding.detail } : {}),
-        })));
-      } catch (error) {
-        return result.refuse({
-          source: 'repository policy',
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          inspected: null,
-        }, {
-          code: 'repository-policy-unavailable',
-          message: 'Repository policy inputs could not be read.',
-          location: null,
-          detail: error instanceof Error ? error.message : String(error),
-        });
-      }
-    },
-  },
+  check: repositoryPolicy({
+    rules,
+    documents: ['README.md', 'docs/**/*.md', 'skills/redproof/**/*.md'],
+    linkTargets: [
+      'README.md',
+      'LICENSE',
+      '.github/**/*',
+      'docs/**/*',
+      'fixtures/**/*',
+      'gates/**/*',
+      'packages/**/*',
+      'scripts/**/*',
+      'skills/**/*',
+    ],
+  }),
 });
 
 export const proofs = defineProofs(gate, [
@@ -178,6 +84,10 @@ export const proofs = defineProofs(gate, [
       'docs/redproof-broken-link-proof.md',
       '# Proof probe\n\n[missing document](./definitely-missing.md)\n',
     ),
+  ),
+  proof.refuse(
+    'refuses when a policy input cannot be read',
+    mutate.rename('.github/workflows/ci.yml', '.github/workflows/ci.off.yml'),
   ),
   proof.green('accepts the current repository contracts'),
 ]);
