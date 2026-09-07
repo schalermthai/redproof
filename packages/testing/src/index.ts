@@ -8,6 +8,8 @@ import {
   result,
   type Adapter,
   type Location,
+  rejectUnknownKeys,
+  type NoUnknownKeys,
   type Rule,
   type RuleRefOfCatalog,
 } from 'redproof';
@@ -61,9 +63,13 @@ function normalizeRun(root: string, run: TestRun): TestRun {
   };
 }
 
+const TEST_RULE_NAMES = ['testsPass', 'noSkippedTests', 'noTodoTests'] as const;
+
 export function testing<const O extends TestRuleOptions>(
-  options: TestingAdapterOptions<O>,
+  options: TestingAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, TestRuleOptions> },
 ): Adapter<TestRuleCatalog<O>> {
+  rejectUnknownKeys(options.rules, TEST_RULE_NAMES, 'testing rule');
+
   if (!options.rules.testsPass && !options.rules.noSkippedTests && !options.rules.noTodoTests) {
     throw new Error('Testing adapter requires at least one Redproof rule.');
   }
@@ -216,7 +222,7 @@ export type VitestAdapterOptions<O extends TestRuleOptions> = {
 };
 
 export function vitest<const O extends TestRuleOptions>(
-  options: VitestAdapterOptions<O>,
+  options: VitestAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, TestRuleOptions> },
 ): Adapter<TestRuleCatalog<O>> {
   return testing({
     runner: command({

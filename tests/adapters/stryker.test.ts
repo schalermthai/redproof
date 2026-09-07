@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRule } from 'redproof';
+import { stryker } from '@redproof/stryker';
 import {
   mutationMetrics,
   mutationScoreBreach,
@@ -108,4 +109,11 @@ test('mutation score is unavailable when there are no valid mutants', () => {
     mutant('2', 'RuntimeError'),
   ]);
   assert.equal(metrics.score, null);
+});
+
+test('the Stryker adapter rejects a rule name it does not know', () => {
+  assert.throws(
+    () => stryker({ rules: { mutantsDetected: true, mutantsKilled: true } as never }),
+    /Unknown Stryker rule option: "mutantsKilled"\. Known options: mutantsDetected, mutationScore\./,
+  );
 });

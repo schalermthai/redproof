@@ -1,3 +1,4 @@
+import { rejectUnknownKeys, type NoUnknownKeys } from './options.ts';
 export type InPlaceExecutionConfig = {
   readonly mode: 'in-place';
 };
@@ -27,11 +28,19 @@ export type ResolvedRedproofConfig = {
   readonly execution: ResolvedExecutionConfig;
 };
 
-export function defineConfig<const C extends RedproofConfig>(config: C): C {
-  return config;
+export function defineConfig<const C extends RedproofConfig>(
+  config: C & NoUnknownKeys<C, RedproofConfig>,
+): C {
+  return config as C;
 }
 
+const CONFIG_KEYS = ['root', 'gatesRoot', 'refusalExit', 'execution'] as const;
+const EXECUTION_KEYS = ['mode', 'maxAtOnce'] as const;
+
 export function resolveConfig(config: RedproofConfig): ResolvedRedproofConfig {
+  rejectUnknownKeys(config, CONFIG_KEYS, 'config');
+  if (config.execution) rejectUnknownKeys(config.execution, EXECUTION_KEYS, 'execution');
+
   const gatesRoot = config.gatesRoot ?? 'gates/**/*.ts';
 
   const execution = config.execution ?? { mode: 'copies' as const };

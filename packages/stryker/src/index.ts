@@ -6,6 +6,8 @@ import {
   result,
   type Adapter,
   type Breach,
+  rejectUnknownKeys,
+  type NoUnknownKeys,
   type Rule,
   type RuleCatalog,
   type RuleRefOfCatalog,
@@ -65,9 +67,13 @@ function withoutTestRunnerEnv<T>(action: () => Promise<T>): Promise<T> {
   });
 }
 
+const STRYKER_RULE_NAMES = ['mutantsDetected', 'mutationScore'] as const;
+
 export function stryker<const O extends StrykerRuleOptions>(
-  options: StrykerAdapterOptions<O>,
+  options: StrykerAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, StrykerRuleOptions> },
 ): Adapter<StrykerRuleCatalog<O>> {
+  rejectUnknownKeys(options.rules, STRYKER_RULE_NAMES, 'Stryker rule');
+
   if (!options.rules.mutantsDetected && !options.rules.mutationScore) {
     throw new Error('Stryker adapter requires at least one Redproof rule.');
   }

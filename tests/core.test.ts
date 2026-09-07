@@ -202,3 +202,27 @@ test('exit-code policy is pure and REFUSE takes precedence over FAIL', () => {
   assert.equal(proofExitCode([{ ok: true }, { ok: true }]), 0);
   assert.equal(proofExitCode([{ ok: true }, { ok: false }]), 1);
 });
+
+test('config resolution rejects an unknown option instead of ignoring it', () => {
+  assert.throws(
+    () => resolveConfig({ root: '.', refuseExit: 2 } as never),
+    /Unknown config option: "refuseExit"\. Known options: root, gatesRoot, refusalExit, execution\./,
+  );
+
+  assert.throws(
+    () => resolveConfig({ execution: { mode: 'copies', maxAtOne: 4 } } as never),
+    /Unknown execution option: "maxAtOne"\. Known options: mode, maxAtOnce\./,
+  );
+
+  assert.throws(
+    () => resolveConfig({ refuseExit: 2, gateRoot: 'g' } as never),
+    /Unknown config options: "refuseExit", "gateRoot"/,
+  );
+
+  assert.doesNotThrow(() => resolveConfig({
+    root: '.',
+    gatesRoot: 'gates/**/*.ts',
+    refusalExit: 2,
+    execution: { mode: 'copies', maxAtOnce: 2 },
+  }));
+});
