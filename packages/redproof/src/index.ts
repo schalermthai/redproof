@@ -144,6 +144,7 @@ export {
   formatRun,
   formatSarifRun,
   parseReporterArgs,
+  ReporterArgumentError,
   renderCheckReporter,
   renderProveReporter,
   renderRun,

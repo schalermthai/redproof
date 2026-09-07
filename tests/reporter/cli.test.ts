@@ -68,6 +68,31 @@ test('CLI reports a missing config value without an internal stack trace', () =>
   assert.doesNotMatch(result.stderr, /node:path|at main|ERR_/);
 });
 
+test('CLI rejects a bad reporter option without an internal stack trace', () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    'packages/redproof/src/cli.ts',
+    'check',
+    '--reporter=bogus',
+  ], { cwd: resolve('.'), encoding: 'utf8' });
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /^Unknown reporter: bogus\n$/);
+  assert.doesNotMatch(result.stderr, /at |ERR_/);
+
+  const prove = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    'packages/redproof/src/cli.ts',
+    'prove',
+    '--reporter=sarif',
+  ], { cwd: resolve('.'), encoding: 'utf8' });
+
+  assert.equal(prove.status, 2);
+  assert.match(prove.stderr, /^Reporter sarif does not support the prove command\.\n$/);
+});
+
 test('CLI discovers an ESM config in a CommonJS project', () => {
   const result = spawnSync(process.execPath, [
     '--disable-warning=ExperimentalWarning',
