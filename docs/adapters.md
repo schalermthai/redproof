@@ -153,6 +153,7 @@ import { defineGate, defineProofs, mutate, proof } from 'redproof';
 
 const adapter = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
+  knownViolationsFile: '.dependency-cruiser-known-violations.json',
   files: ['src'],
   rules: {
     domainNoInfrastructure: 'domain-no-infrastructure',
@@ -181,6 +182,14 @@ export default gate;
 ```
 
 One dependency-cruiser run can report breaches across several selected Rules.
+When `knownViolationsFile` is set, the adapter ignores matching committed baseline
+violations while still reporting new violations. The adapter disables dependency-
+cruiser caching so RED mutations cannot reuse a stale pre-mutation result.
+
+A baseline makes the Gate quieter on purpose. That is a weakening, so keep it
+honest. A baseline that grows every time somebody adds debt guards nothing, and
+it still reports PASS. Keep a RED proof that plants a new violation, and confirm
+the Gate still fails. A malformed baseline file is refused, not ignored.
 
 ## Stryker
 
