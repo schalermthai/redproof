@@ -1,6 +1,6 @@
 {
   "name": "@redproof/dependency-cruiser",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Redproof adapter for dependency-cruiser architecture rules.",
   "type": "module",
   "exports": {
@@ -17,7 +17,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "redproof": "0.7.0"
+    "redproof": "0.8.0"
   },
   "peerDependencies": {
     "dependency-cruiser": ">=18"
