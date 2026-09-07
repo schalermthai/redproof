@@ -377,7 +377,7 @@ import { defineGate, defineProofs, mutate, proof } from 'redproof';
 
 const adapter = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
-  files: ['src'],
+  files: ['src', 'legacy'],
   rules: {
     domainNoLegacyDb: 'domain-no-legacy-db',
     noReverseDependency: 'no-reverse-dependency',
