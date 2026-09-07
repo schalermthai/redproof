@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -42,6 +42,69 @@ test('copies tracked nested node_modules fixtures while linking root dependencie
       await assert.rejects(lstat(join(workspace.root, '.redproof')));
     } finally {
       await releaseGateWorkspace(workspace);
+    }
+  });
+});
+
+test('nested proof copies inherit dependencies from an outer copied workspace', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'node_modules/root-package'), { recursive: true });
+    await writeFile(
+      join(root, 'node_modules/root-package/package.json'),
+      '{"name":"root-package","version":"1.0.0"}\n',
+      'utf8',
+    );
+    await mkdir(join(root, 'fixtures/project'), { recursive: true });
+    await writeFile(join(root, 'fixtures/project/package.json'), '{"private":true}\n', 'utf8');
+
+    const outer = await copyGateWorkspace(root, 'outer');
+    try {
+      const inner = await copyGateWorkspace(join(outer.root, 'fixtures/project'), 'inner');
+      try {
+        assert.equal((await lstat(join(inner.root, 'node_modules'))).isSymbolicLink(), true);
+        assert.equal(
+          await readFile(join(inner.root, 'node_modules/root-package/package.json'), 'utf8'),
+          '{"name":"root-package","version":"1.0.0"}\n',
+        );
+      } finally {
+        await releaseGateWorkspace(inner);
+      }
+    } finally {
+      await releaseGateWorkspace(outer);
+    }
+  });
+});
+
+test('a nested copy links to the real dependencies, not to the copy above it', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'node_modules/root-package'), { recursive: true });
+    await writeFile(
+      join(root, 'node_modules/root-package/package.json'),
+      '{"name":"root-package","version":"1.0.0"}\n',
+      'utf8',
+    );
+    await mkdir(join(root, 'fixtures/project'), { recursive: true });
+    await writeFile(join(root, 'fixtures/project/package.json'), '{"private":true}\n', 'utf8');
+
+    const outer = await copyGateWorkspace(root, 'outer');
+    const inner = await copyGateWorkspace(join(outer.root, 'fixtures/project'), 'inner');
+    try {
+      // The inner link must not point at the outer copy, or releasing the outer
+      // copy first would take the inner copy's dependencies with it.
+      const target = await readlink(join(inner.root, 'node_modules'));
+      assert.ok(
+        !target.startsWith(outer.root),
+        `inner node_modules must not link through the outer copy, got ${target}`,
+      );
+
+      await releaseGateWorkspace(outer);
+
+      assert.equal(
+        await readFile(join(inner.root, 'node_modules/root-package/package.json'), 'utf8'),
+        '{"name":"root-package","version":"1.0.0"}\n',
+      );
+    } finally {
+      await releaseGateWorkspace(inner);
     }
   });
 });
