@@ -1,7 +1,4 @@
-import type { Adapter } from '../domain/adapter.ts';
-import type { Check } from '../domain/check.ts';
-import type { Gate } from '../domain/gate.ts';
-import type { RuleCatalog, RuleRefOfCatalog } from '../domain/rule.ts';
+import type { Adapter, Check, Gate, RuleCatalog, RuleRefOfCatalog } from '../../domain/index.ts';
 
 export type NativeGateDefinition<C extends RuleCatalog> = {
   readonly id: string;

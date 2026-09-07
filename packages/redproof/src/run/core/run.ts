@@ -1,6 +1,6 @@
-import type { CheckResult } from '../../domain/check.ts';
-import type { LoadedGateModule, LoadedProject } from '../../project/core/discovery.ts';
-import type { ProofOutcome } from '../../proof/core/outcome.ts';
+import type { CheckResult } from '../../domain/index.ts';
+import type { LoadedGateModule, LoadedProject } from '../../project/core/index.ts';
+import type { ProofOutcome } from '../../proof/core/index.ts';
 
 export type GateRun = {
   readonly module: LoadedGateModule;

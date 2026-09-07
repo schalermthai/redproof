@@ -19,6 +19,8 @@ const dependencies = dependencyCruiser({
     compositionNoRuntimeOrReporters: 'composition-no-runtime-or-reporters',
     adaptersPublicCoreApiOnly: 'adapters-public-core-api-only',
     productionNoTestFixtureDependencies: 'production-no-test-fixture-dependencies',
+    contextsImportThroughIndex: 'contexts-import-through-index',
+    entrypointsImportThroughIndex: 'entrypoints-import-through-index',
   },
 });
 
@@ -88,7 +90,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.compositionNoRuntimeOrReporters,
     'keeps declarative composition independent of runtime orchestration',
-    mutate.appendText('packages/redproof/src/composition/options.ts', "\nimport '../run/core/exit-code.ts';\n"),
+    mutate.appendText('packages/redproof/src/composition/core/options.ts', "\nimport '../../run/core/index.ts';\n"),
   ),
   proof.red(
     rules.adaptersPublicCoreApiOnly,
@@ -102,6 +104,16 @@ export const proofs = defineProofs(gate, [
       'packages/redproof/src/domain/rule.ts',
       "\nimport '../../../../fixtures/pass-single/src/parser.ts';\n",
     ),
+  ),
+  proof.red(
+    rules.contextsImportThroughIndex,
+    'keeps a context on the surface another context exposes',
+    mutate.appendText('packages/redproof/src/run/core/exit-code.ts', "\nimport '../../proof/core/outcome.ts';\n"),
+  ),
+  proof.red(
+    rules.entrypointsImportThroughIndex,
+    'keeps the package entrypoint on context surfaces',
+    mutate.appendText('packages/redproof/src/index.ts', "\nexport { runProof as proofRunner } from './proof/shell/runner.ts';\n"),
   ),
   proof.red(
     rules.effectsAllowlistedBoundaries,

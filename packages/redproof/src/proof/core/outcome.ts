@@ -1,5 +1,4 @@
-import type { CheckResult } from '../../domain/check.ts';
-import type { Proof } from '../../domain/proof.ts';
+import type { CheckResult, Proof } from '../../domain/index.ts';
 
 export type ProofInfrastructureError = {
   readonly code:

@@ -1,4 +1,4 @@
-import type { CheckProjectRun, ProveProjectRun } from '../../run/core/run.ts';
+import type { CheckProjectRun, ProveProjectRun } from '../../run/core/index.ts';
 import { buildJsonCheckReport } from './check-report.ts';
 
 export type JsonReporterOptions = {

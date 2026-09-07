@@ -1,23 +1,174 @@
-export * from './domain/rule.ts';
-export * from './domain/diagnostic.ts';
-export * from './domain/check.ts';
-export * from './domain/adapter.ts';
-export * from './domain/gate.ts';
-export * from './domain/mutation.ts';
-export * from './domain/proof.ts';
+export type {
+  Adapter,
+  Breach,
+  Check,
+  CheckContext,
+  CheckResult,
+  Comparison,
+  CountingCapability,
+  Diagnostic,
+  FailResult,
+  Gate,
+  GreenProof,
+  Location,
+  Mutation,
+  MutationPlan,
+  NonEmptyList,
+  PassResult,
+  Proof,
+  ProofSuite,
+  RedProof,
+  RefuseProof,
+  RefuseResult,
+  Rule,
+  RuleCatalog,
+  RuleRef,
+  RuleRefOfAdapter,
+  RuleRefOfCatalog,
+  RuleRefOfGate,
+  Scan,
+  UndoMutation,
+} from './domain/index.ts';
 
-export * from './composition/rule.ts';
-export * from './composition/check.ts';
-export * from './composition/adapter.ts';
-export * from './composition/gate.ts';
-export * from './composition/proof.ts';
-export * from './composition/config.ts';
-export * from './composition/options.ts';
-export * from './composition/inspect.ts';
-export * from './composition/mutation.ts';
+export {
+  breach,
+  counting,
+  defineAdapter,
+  defineCheck,
+  defineConfig,
+  defineGate,
+  defineMutation,
+  defineProofs,
+  defineRule,
+  defineRules,
+  fail,
+  fromBreaches,
+  mutate,
+  pass,
+  proof,
+  refuse,
+  rejectUnknownKeys,
+  resolveConfig,
+  result,
+} from './composition/index.ts';
+export type {
+  CapturedMutationDefinition,
+  CopiesExecutionConfig,
+  ExecutionConfig,
+  InPlaceExecutionConfig,
+  JsonValue,
+  ManualMutationDefinition,
+  MutationContext,
+  NativeGateDefinition,
+  NoUnknownKeys,
+  RedproofConfig,
+  ResolvedExecutionConfig,
+  ResolvedRedproofConfig,
+} from './composition/index.ts';
 
-export * from './project/index.ts';
-export * from './proof/index.ts';
-export * from './workspace/index.ts';
-export * from './run/index.ts';
-export * from './reporter/index.ts';
+export {
+  files,
+  json,
+  locate,
+  parseJsonPath,
+  resolveJsonLocator,
+  resolveTextLocator,
+  text,
+} from './inspect/index.ts';
+export type {
+  FileSelection,
+  FindFilesOptions,
+  FindJsonOptions,
+  FindTextOptions,
+  JsonLocator,
+  JsonMatch,
+  JsonOccurrence,
+  JsonPathToken,
+  JsonSearch,
+  RootContext,
+  ScanOptions,
+  SearchScan,
+  TextLocator,
+  TextMatch,
+  TextOccurrence,
+  TextSearch,
+} from './inspect/index.ts';
+
+export {
+  describeLoadedProject,
+  describeProject,
+  GateSelectionError,
+  loadGateModule,
+  loadProject,
+  selectGateModules,
+} from './project/index.ts';
+export type {
+  DescribedProof,
+  DescribedRule,
+  GateDescription,
+  LoadedGateModule,
+  LoadedProject,
+} from './project/index.ts';
+
+export { runGate, runProof } from './proof/index.ts';
+export type {
+  CompletedProofOutcome,
+  InfrastructureProofOutcome,
+  ProofInfrastructureError,
+  ProofOutcome,
+} from './proof/index.ts';
+
+export {
+  copyGateWorkspace,
+  pathInsideCopy,
+  releaseGateWorkspace,
+  stampTree,
+  verifyTree,
+} from './workspace/index.ts';
+export type { Freshness, GateWorkspace, TreeStamp } from './workspace/index.ts';
+
+export { checkProject, proveProject } from './run/index.ts';
+export type { CheckProjectRun, GateRun, ProveProjectRun } from './run/index.ts';
+
+export {
+  buildGateReportModel,
+  buildJsonCheckReport,
+  buildJsonProveReport,
+  buildSarif,
+  formatCheck,
+  formatCompactRun,
+  formatGateDescription,
+  formatJsonProofs,
+  formatJsonRun,
+  formatProof,
+  formatRun,
+  formatSarifRun,
+  parseReporterArgs,
+  renderCheckReporter,
+  renderProveReporter,
+  renderRun,
+  summarizeGateReports,
+} from './reporter/index.ts';
+export type {
+  CheckReporterName,
+  GateReportModel,
+  JsonBreachV1,
+  JsonCheckReportV1,
+  JsonDiagnosticV1,
+  JsonGateV1,
+  JsonProofOutcomeV1,
+  JsonProveReportV1,
+  JsonReporterOptions,
+  JsonRuleV1,
+  JsonRunSummaryV1,
+  ProveReporterName,
+  ReporterName,
+  ReporterSpec,
+  ReportOptions,
+  ReportVersion,
+  RuleReport,
+  RuleReportState,
+  RunSummary,
+  SarifReporterOptions,
+  SourceExcerpts,
+} from './reporter/index.ts';

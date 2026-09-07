@@ -15,13 +15,11 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
-
 import { copiesEntry, copyName, stampsEntry } from '../core/copy-policy.ts';
 import { assessFreshness, type Freshness, type TreeStamp } from '../core/freshness.ts';
 import { fingerprint, stampRecord, type StampEntry } from '../core/stamp.ts';
 
-export type { Freshness, TreeStamp } from '../core/freshness.ts';
-export { pathInsideCopy } from '../core/copy-policy.ts';
+
 
 export type GateWorkspace = {
   readonly root: string;

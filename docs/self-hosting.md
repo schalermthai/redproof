@@ -13,7 +13,7 @@ runs four Gates concurrently in isolated copies.
 | `test-health` | Complete test success and zero skipped tests | `@redproof/testing` with Node's JUnit reporter |
 | `repository-policy` | Package inventories, versions, exports, schemas, CI/release verification, and documentation links | A native Check over a pure policy model |
 
-The current suite has 20 Rules. Its 25 proofs add one focused defect at a time.
+The current suite has 22 Rules. Its 27 proofs add one focused defect at a time.
 Every Gate has a GREEN proof, and `repository-policy` also has a REFUSE proof.
 
 ## How a Gate file is organised

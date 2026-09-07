@@ -1,7 +1,6 @@
 import { isAbsolute, relative, sep } from 'node:path';
-import { breach, result } from '../../composition/check.ts';
-import type { CheckResult, Scan } from '../../domain/check.ts';
-import type { Rule, RuleRef } from '../../domain/rule.ts';
+import { breach, result } from '../../composition/core/index.ts';
+import type { CheckResult, Scan, Rule, RuleRef } from '../../domain/index.ts';
 import { classifyExit, type ExitPolicy } from './exit-codes.ts';
 
 export type CompletedCommand = {

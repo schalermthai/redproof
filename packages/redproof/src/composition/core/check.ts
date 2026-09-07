@@ -7,9 +7,12 @@ import type {
   PassResult,
   RefuseResult,
   Scan,
-} from '../domain/check.ts';
-import type { Diagnostic } from '../domain/diagnostic.ts';
-import type { Rule, RuleCatalog, RuleRef, RuleRefOfCatalog } from '../domain/rule.ts';
+  Diagnostic,
+  Rule,
+  RuleCatalog,
+  RuleRef,
+  RuleRefOfCatalog,
+} from '../../domain/index.ts';
 
 export const counting = {
   supported: { kind: 'supported' } as const,

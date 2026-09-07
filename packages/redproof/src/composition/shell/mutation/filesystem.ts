@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { Mutation } from '../../domain/mutation.ts';
+import type { Mutation } from '../../../domain/index.ts';
 import { defineMutation } from './define.ts';
 
 export const filesystemMutations = {

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import type { RuleRef } from '../../domain/rule.ts';
+import type { RuleRef } from '../../domain/index.ts';
 import type { CommandCheckOptions } from '../core/options.ts';
 import { outputDetail, type CommandExecution } from '../core/outcome.ts';
 

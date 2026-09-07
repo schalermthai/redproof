@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runCli } from './cli/shell/main.ts';
+import { runCli } from './cli/index.ts';
 import { GateSelectionError } from './project/index.ts';
 
 try {

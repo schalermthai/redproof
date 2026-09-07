@@ -1,14 +1,14 @@
 import { performance } from 'node:perf_hooks';
-import type { CheckResult } from '../../domain/check.ts';
+import type { CheckResult } from '../../domain/index.ts';
 import { executionPolicy } from '../core/policy.ts';
 import { checkExitCode, proofExitCode } from '../core/exit-code.ts';
-import type { ProofOutcome } from '../../proof/core/outcome.ts';
-import type { LoadedGateModule, LoadedProject } from '../../project/core/discovery.ts';
+import type { ProofOutcome } from '../../proof/index.ts';
+import type { LoadedGateModule, LoadedProject } from '../../project/index.ts';
 import type { CheckProjectRun, GateRun, ProveProjectRun } from '../core/run.ts';
-import { loadProject, selectGateModules } from '../../project/shell/loader.ts';
-import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../../workspace/shell/copy.ts';
-import { runGate, runProof } from '../../proof/shell/runner.ts';
-import { mapLimit } from '../../support/map-limit.ts';
+import { loadProject, selectGateModules } from '../../project/index.ts';
+import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../../workspace/index.ts';
+import { runGate, runProof } from '../../proof/index.ts';
+import { mapLimit } from '../../support/index.ts';
 import { runGateWorker, unwrapWorker } from './worker-process.ts';
 
 async function checkInPlace(

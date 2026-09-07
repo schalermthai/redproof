@@ -1,5 +1,5 @@
 import type { InfrastructureProofOutcome, ProofOutcome } from './outcome.ts';
-import type { Freshness } from '../../workspace/core/freshness.ts';
+import type { Freshness } from '../../workspace/core/index.ts';
 
 /** Pure interpretation of workspace verification after a proof has run and its UndoMutation completed. */
 export function verifyProofRestoration(

@@ -1,6 +1,6 @@
-import type { CheckResult } from '../../domain/check.ts';
-import type { ProofOutcome } from '../../proof/core/outcome.ts';
-import type { TreeStamp } from '../../workspace/core/freshness.ts';
+import type { CheckResult } from '../../domain/index.ts';
+import type { ProofOutcome } from '../../proof/core/index.ts';
+import type { TreeStamp } from '../../workspace/core/index.ts';
 
 export type CheckGateJob = {
   readonly kind: 'check';
