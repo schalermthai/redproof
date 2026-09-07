@@ -353,6 +353,7 @@ npm run redproof:describe -- gates/no-todo.ts
 - **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)**
 - **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**
 - **[Legacy modernization](https://github.com/schalermthai/redproof/blob/main/docs/legacy-modernization.md)**
+- **[Self-hosting Redproof](https://github.com/schalermthai/redproof/blob/main/docs/self-hosting.md)**
 
 ## License
 
