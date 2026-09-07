@@ -45,3 +45,32 @@ test('copies tracked nested node_modules fixtures while linking root dependencie
     }
   });
 });
+
+test('nested proof copies inherit dependencies from an outer copied workspace', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'node_modules/root-package'), { recursive: true });
+    await writeFile(
+      join(root, 'node_modules/root-package/package.json'),
+      '{"name":"root-package","version":"1.0.0"}\n',
+      'utf8',
+    );
+    await mkdir(join(root, 'fixtures/project'), { recursive: true });
+    await writeFile(join(root, 'fixtures/project/package.json'), '{"private":true}\n', 'utf8');
+
+    const outer = await copyGateWorkspace(root, 'outer');
+    try {
+      const inner = await copyGateWorkspace(join(outer.root, 'fixtures/project'), 'inner');
+      try {
+        assert.equal((await lstat(join(inner.root, 'node_modules'))).isSymbolicLink(), true);
+        assert.equal(
+          await readFile(join(inner.root, 'node_modules/root-package/package.json'), 'utf8'),
+          '{"name":"root-package","version":"1.0.0"}\n',
+        );
+      } finally {
+        await releaseGateWorkspace(inner);
+      }
+    } finally {
+      await releaseGateWorkspace(outer);
+    }
+  });
+});

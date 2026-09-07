@@ -9,6 +9,7 @@ import {
   readdir,
   readlink,
   rm,
+  stat,
   symlink,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -138,7 +139,10 @@ async function findDependencies(projectRoot: string): Promise<string | null> {
     const candidate = join(current, 'node_modules');
 
     try {
-      if ((await lstat(candidate)).isDirectory()) return candidate;
+      // Follow a dependency-directory symlink. A Redproof run can itself execute
+      // Redproof in a copied workspace, so the nearest node_modules may already
+      // be the link created by an outer copy.
+      if ((await stat(candidate)).isDirectory()) return candidate;
     } catch {
       // keep walking up
     }
