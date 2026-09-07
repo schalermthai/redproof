@@ -1,5 +1,5 @@
-import type { Diagnostic } from '../../domain/diagnostic.ts';
-import type { CheckProjectRun } from '../../run/core/run.ts';
+import type { Diagnostic } from '../../domain/index.ts';
+import type { CheckProjectRun } from '../../run/core/index.ts';
 import { buildJsonCheckReport } from './check-report.ts';
 
 export type SarifReporterOptions = {

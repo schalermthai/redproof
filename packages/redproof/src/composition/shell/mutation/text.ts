@@ -1,9 +1,9 @@
-import type { Mutation } from '../../domain/mutation.ts';
+import type { Mutation } from '../../../domain/index.ts';
 import {
   resolveTextLocator,
   type FindTextOptions,
   type TextLocator,
-} from '../../inspect/index.ts';
+} from '../../../inspect/index.ts';
 import { defineMutation } from './define.ts';
 
 function locatorDescription(locator: TextLocator): string {

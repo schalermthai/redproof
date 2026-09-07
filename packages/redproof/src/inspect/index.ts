@@ -1,10 +1,4 @@
-export type { FileSelection, FindFilesOptions } from './core/selection.ts';
-export type { ScanOptions, SearchScan } from './core/scan.ts';
-export type { FindTextOptions, TextMatch } from './core/text.ts';
-export type { FindJsonOptions, JsonMatch, JsonPathToken } from './core/json.ts';
-export { parseJsonPath } from './core/json.ts';
-export type { JsonLocator, JsonOccurrence, TextLocator, TextOccurrence } from './core/locate.ts';
-export { locate } from './core/locate.ts';
+export * from './core/index.ts';
 export type { RootContext } from './shell/files.ts';
 export { files } from './shell/files.ts';
 export type { JsonSearch, TextSearch } from './shell/search.ts';

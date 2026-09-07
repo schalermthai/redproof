@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { CheckProjectRun } from '../../run/core/run.ts';
+import type { CheckProjectRun } from '../../run/index.ts';
 import type { SourceExcerpts } from '../core/terminal.ts';
 
 function locatedFiles(run: CheckProjectRun): Set<string> {

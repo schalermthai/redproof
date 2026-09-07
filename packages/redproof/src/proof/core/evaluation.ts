@@ -1,6 +1,4 @@
-import type { CheckResult } from '../../domain/check.ts';
-import type { Proof } from '../../domain/proof.ts';
-import type { RuleRef } from '../../domain/rule.ts';
+import type { CheckResult, Proof, RuleRef } from '../../domain/index.ts';
 
 export type ProofEvaluation =
   | { readonly kind: 'proved' }

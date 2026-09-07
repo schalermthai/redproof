@@ -1,4 +1,4 @@
-import type { Rule, RuleCatalog, RuleRef } from '../domain/rule.ts';
+import type { Rule, RuleCatalog, RuleRef } from '../../domain/index.ts';
 
 export function defineRule<const R extends RuleRef>(rule: Rule<R>): Rule<R> {
   return rule;

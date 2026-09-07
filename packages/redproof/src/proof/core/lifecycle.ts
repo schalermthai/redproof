@@ -1,6 +1,4 @@
-import type { CheckResult } from '../../domain/check.ts';
-import type { Gate } from '../../domain/gate.ts';
-import type { Proof } from '../../domain/proof.ts';
+import type { CheckResult, Gate, Proof } from '../../domain/index.ts';
 import { evaluateProof, proofSucceeded } from './evaluation.ts';
 import type {
   CompletedProofOutcome,

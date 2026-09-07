@@ -1,6 +1,5 @@
-import type { ResolvedExecutionConfig } from '../../composition/config.ts';
-import type { Gate } from '../../domain/gate.ts';
-import type { ProofSuite } from '../../domain/proof.ts';
+import type { ResolvedExecutionConfig } from '../../composition/core/index.ts';
+import type { Gate, ProofSuite } from '../../domain/index.ts';
 
 export type LoadedProject = {
   readonly root: string;

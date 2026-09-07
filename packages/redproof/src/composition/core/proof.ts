@@ -1,7 +1,15 @@
-import type { Gate, RuleRefOfGate } from '../domain/gate.ts';
-import type { MutationPlan } from '../domain/mutation.ts';
-import type { GreenProof, Proof, ProofSuite, RedProof, RefuseProof } from '../domain/proof.ts';
-import type { Rule, RuleRef } from '../domain/rule.ts';
+import type {
+  Gate,
+  RuleRefOfGate,
+  MutationPlan,
+  GreenProof,
+  Proof,
+  ProofSuite,
+  RedProof,
+  RefuseProof,
+  Rule,
+  RuleRef,
+} from '../../domain/index.ts';
 
 export const proof = {
   red<const R extends RuleRef>(target: Rule<R>, name: string, mutate: MutationPlan): RedProof<R> {

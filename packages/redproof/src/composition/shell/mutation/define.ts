@@ -1,4 +1,4 @@
-import type { Mutation, UndoMutation } from '../../domain/mutation.ts';
+import type { Mutation, UndoMutation } from '../../../domain/index.ts';
 import { mutationContext, type MutationContext } from './context.ts';
 
 export type ManualMutationDefinition = {

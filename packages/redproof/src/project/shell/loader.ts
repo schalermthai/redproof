@@ -1,8 +1,8 @@
 import { glob, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { RedproofConfig } from '../../composition/config.ts';
-import { resolveConfig } from '../../composition/config.ts';
+import type { RedproofConfig } from '../../composition/index.ts';
+import { resolveConfig } from '../../composition/index.ts';
 import type { LoadedGateModule, LoadedProject } from '../core/discovery.ts';
 import { gateFilesFrom, gateModuleFrom } from '../core/discovery.ts';
 import { GateSelectionError, selectModules, unmatchedMessage } from '../core/selection.ts';

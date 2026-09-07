@@ -1,4 +1,4 @@
-import type { CheckResult } from '../../domain/check.ts';
+import type { CheckResult } from '../../domain/index.ts';
 
 /** Pure process-status policy for a project Check run. REFUSE takes precedence over FAIL. */
 export function checkExitCode(results: readonly CheckResult[], refusalExit: number): number {

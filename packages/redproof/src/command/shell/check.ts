@@ -1,8 +1,7 @@
 import { resolve } from 'node:path';
-import { counting } from '../../composition/check.ts';
-import type { Check, CheckResult } from '../../domain/check.ts';
-import type { RuleRef } from '../../domain/rule.ts';
-import { mapLimit } from '../../support/map-limit.ts';
+import { counting } from '../../composition/index.ts';
+import type { Check, CheckResult, RuleRef } from '../../domain/index.ts';
+import { mapLimit } from '../../support/index.ts';
 import { exitPolicy } from '../core/exit-codes.ts';
 import {
   commandDescription,
@@ -16,7 +15,13 @@ import {
   type CommandCheckOptions,
   type CommandGroupOptions,
 } from '../core/options.ts';
-import { aggregateResults, commandResult, commandScan, cwdOutsideRoot, isInsideRoot } from '../core/outcome.ts';
+import {
+  aggregateResults,
+  commandResult,
+  commandScan,
+  cwdOutsideRoot,
+  isInsideRoot,
+} from '../core/outcome.ts';
 import { executeCommand } from './spawn.ts';
 
 const now = (): string => new Date().toISOString();

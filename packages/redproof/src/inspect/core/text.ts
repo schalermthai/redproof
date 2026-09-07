@@ -1,4 +1,4 @@
-import type { Location } from '../../domain/diagnostic.ts';
+import type { Location } from '../../domain/index.ts';
 import type { FileSelection } from './selection.ts';
 
 export type TextMatch = {

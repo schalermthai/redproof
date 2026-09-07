@@ -1,4 +1,4 @@
-import { parseReporterArgs, type ReporterSpec } from '../../reporter/core/arguments.ts';
+import { parseReporterArgs, type ReporterSpec } from '../../reporter/core/index.ts';
 
 export const HELP = `Usage: redproof [command] [gate files...] [options]
 

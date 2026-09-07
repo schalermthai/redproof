@@ -1,3 +1,2 @@
-export type { CommandExitCodes } from './core/exit-codes.ts';
-export type { CommandCheckOptions, CommandGroupExecution, CommandGroupOptions } from './core/options.ts';
+export type { CommandCheckOptions, CommandExitCodes, CommandGroupExecution, CommandGroupOptions } from './core/index.ts';
 export { command, commands } from './shell/check.ts';
