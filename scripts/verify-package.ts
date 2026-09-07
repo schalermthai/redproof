@@ -116,8 +116,8 @@ try {
     );
     if (pkg.name === 'redproof') {
       report(
-        manifest.exports?.['./command']?.types === './dist/command.d.ts'
-          && manifest.exports?.['./command']?.default === './dist/command.js',
+        manifest.exports?.['./command']?.types === './dist/command/index.d.ts'
+          && manifest.exports?.['./command']?.default === './dist/command/index.js',
         'redproof: exports the command subpath with runtime and types',
       );
     }

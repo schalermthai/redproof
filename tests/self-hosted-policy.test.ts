@@ -17,7 +17,7 @@ test('effect analysis separates core imports, ambient inputs, and new boundaries
       content: "import 'node:child_process';\n",
     },
     {
-      file: 'packages/redproof/src/command.ts',
+      file: 'packages/redproof/src/command/shell/spawn.ts',
       content: "import 'node:child_process';\nvoid process.env;\n",
     },
   ]);

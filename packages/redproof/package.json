@@ -16,8 +16,8 @@
       "default": "./dist/index.js"
     },
     "./command": {
-      "types": "./dist/command.d.ts",
-      "default": "./dist/command.js"
+      "types": "./dist/command/index.d.ts",
+      "default": "./dist/command/index.js"
     }
   },
   "types": "./dist/index.d.ts",
