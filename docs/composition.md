@@ -506,3 +506,4 @@ Do not infer Redproof semantics from a process exit code when structured evidenc
 - **[Built-in integrations](adapters.md)**
 - **[Execution isolation](tutorials/execution-isolation.md)**
 - **[Reporters](tutorials/reporters.md)**
+- **[Legacy modernization](legacy-modernization.md)**
