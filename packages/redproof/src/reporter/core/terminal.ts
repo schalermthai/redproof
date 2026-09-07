@@ -1,7 +1,7 @@
 import { relative } from 'node:path';
 import type { CheckResult, Diagnostic, Rule } from '../../domain/index.ts';
 import type { GateDescription } from '../../project/core/index.ts';
-import type { ProofOutcome } from '../../proof/core/index.ts';
+import type { CompletedProofOutcome, ProofOutcome } from '../../proof/core/index.ts';
 import type { CheckProjectRun, GateRun } from '../../run/core/index.ts';
 import { buildGateReportModel, summarizeGateReports, type RunSummary } from './model.ts';
 
@@ -251,13 +251,45 @@ export function formatCheck(gate: string, result: CheckResult): string {
   return `FAIL ${gate}\n${result.breaches.map(item => `  ${item.rule}: ${item.message}`).join('\n')}`;
 }
 
+function checkOutcomeDetail(result: CheckResult, rule?: string): string {
+  if (result.verdict === 'refuse') return `${result.why.code}: ${result.why.message}`;
+  if (result.verdict === 'pass') return '';
+  const first = result.breaches.find(item => rule === undefined || item.rule === rule) ?? result.breaches[0];
+  return `${first.rule}: ${first.message}`;
+}
+
+/** One line that says why a completed proof was judged as it was. Empty when there is nothing to add. */
+export function proofReason(outcome: CompletedProofOutcome): string {
+  const reason = outcome.reason;
+  const result = outcome.result;
+
+  if (reason.kind === 'proved') {
+    if (outcome.expected === 'red') return `breached ${checkOutcomeDetail(result, reason.target)}`;
+    if (outcome.expected === 'refuse') return `refused ${checkOutcomeDetail(result)}`;
+    return '';
+  }
+  if (reason.kind === 'target-rule-not-breached') {
+    return `target ${reason.target} not breached; breached ${reason.breached.join(', ')}`;
+  }
+  if (reason.kind === 'target-already-breached') {
+    return `target ${reason.target} was already breached before the mutation; breached ${reason.breached.join(', ')}`;
+  }
+  const detail = checkOutcomeDetail(result);
+  if (result.verdict === 'pass' && reason.expected === 'fail') {
+    return `expected ${reason.expected}, got ${reason.actual}; the mutation did not reach what the Rule guards`;
+  }
+  return `expected ${reason.expected}, got ${reason.actual}${detail ? `: ${detail}` : ''}`;
+}
+
 export function formatProof(outcome: ProofOutcome): string {
   const mark = outcome.ok ? '✓' : '✗';
   if (outcome.status === 'error') {
     const actual = outcome.result ? ` actual=${outcome.result.verdict}` : '';
     return `${mark} ${outcome.gate} / ${outcome.proof} expected=${outcome.expected}${actual} error=${outcome.error.code}\n  ${outcome.error.message}${outcome.error.detail ? `\n  ${outcome.error.detail}` : ''}`;
   }
-  return `${mark} ${outcome.gate} / ${outcome.proof} expected=${outcome.expected} actual=${outcome.result.verdict}`;
+  const line = `${mark} ${outcome.gate} / ${outcome.proof} expected=${outcome.expected} actual=${outcome.result.verdict}`;
+  const reason = proofReason(outcome);
+  return reason ? `${line}\n    ${reason}` : line;
 }
 
 function indentDescription(text: string): string[] {

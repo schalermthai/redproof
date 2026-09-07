@@ -111,6 +111,7 @@ test('RED proof proves when its mutation breaches the target, then restores the 
 
   assert.equal(outcome.status, 'completed');
   assert.equal(outcome.ok, true);
+  assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'proved', target: 'r1' });
   assert.equal(outcome.result?.verdict, 'fail');
   assert.deepEqual(state.log, ['apply r1', 'undo r1']);
   assert.deepEqual(state.breached, []);
@@ -122,6 +123,7 @@ test('RED proof does not pass when the Gate fails for another Rule', async () =>
 
   assert.equal(outcome.status, 'completed');
   assert.equal(outcome.ok, false);
+  assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'target-rule-not-breached', target: 'r1', breached: ['r2'] });
   assert.equal(outcome.result?.verdict, 'fail');
   assert.deepEqual(state.log, ['apply r2', 'undo r2']);
 });
@@ -132,6 +134,7 @@ test('RED proof does not pass when its target was already breached before mutati
 
   assert.equal(outcome.status, 'completed');
   assert.equal(outcome.ok, false);
+  assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'target-already-breached', target: 'r1', breached: ['r1'] });
   assert.equal(outcome.result?.verdict, 'fail');
   assert.deepEqual(state.log, [], 'the mutation must never be applied');
   assert.equal(state.contexts.length, 1, 'only the baseline Check runs');

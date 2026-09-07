@@ -201,10 +201,11 @@ redproof prove
 
 ```text
 ✓ no-todo / detects a TODO comment expected=red actual=fail
+    breached source/no-todo: src/checkout.ts:12: TODO left in source
 ✓ no-todo / accepts clean source expected=green actual=pass
 ```
 
-The RED proof temporarily adds a TODO, runs the real Check, confirms `source/no-todo` was breached, then restores the workspace.
+The RED proof temporarily adds a TODO, runs the real Check, confirms `source/no-todo` was breached, then restores the workspace. The second line names the Rule that breached and what the Check said. A proof that did not prove says why on that line: the wrong Rule breached, the Check passed, or the target was already breached before the mutation.
 
 The GREEN proof confirms that clean source passes.
 

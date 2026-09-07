@@ -3,24 +3,106 @@
   "$id": "redproof-prove-report-v1",
   "title": "Redproof prove report v1",
   "type": "object",
-  "required": ["version", "command", "status", "proofs"],
+  "required": [
+    "version",
+    "command",
+    "status",
+    "proofs"
+  ],
   "properties": {
-    "version": { "const": 1 },
-    "command": { "const": "prove" },
-    "status": { "enum": ["passed", "failed"] },
+    "version": {
+      "const": 1
+    },
+    "command": {
+      "const": "prove"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
     "proofs": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["gate", "proof", "expected", "status", "workerPid"],
+        "required": [
+          "gate",
+          "proof",
+          "expected",
+          "status",
+          "workerPid"
+        ],
         "properties": {
-          "gate": { "type": "string" },
-          "proof": { "type": "string" },
-          "expected": { "enum": ["red", "green", "refuse"] },
-          "status": { "enum": ["proved", "not-proved", "infrastructure-error"] },
-          "workerPid": { "type": "integer" },
-          "check": { "type": "object" },
-          "error": { "type": "object" }
+          "gate": {
+            "type": "string"
+          },
+          "proof": {
+            "type": "string"
+          },
+          "expected": {
+            "enum": [
+              "red",
+              "green",
+              "refuse"
+            ]
+          },
+          "status": {
+            "enum": [
+              "proved",
+              "not-proved",
+              "infrastructure-error"
+            ]
+          },
+          "workerPid": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "proved",
+                  "verdict-mismatch",
+                  "target-rule-not-breached",
+                  "target-already-breached"
+                ]
+              },
+              "target": {
+                "type": "string"
+              },
+              "breached": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expected": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "refuse"
+                ]
+              },
+              "actual": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "refuse"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "check": {
+            "type": "object"
+          },
+          "error": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       }

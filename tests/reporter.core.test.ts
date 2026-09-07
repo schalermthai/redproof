@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { breach, counting, defineAdapter, defineGate, fail, pass, type CheckResult, type Scan } from 'redproof';
+import { breach, counting, defineAdapter, defineGate, fail, formatProof, pass, refuse, type CheckResult, type ProofOutcome, type Scan } from 'redproof';
 import type { CheckProjectRun } from '../packages/redproof/src/run/core/run.ts';
 import { renderRun } from '../packages/redproof/src/reporter/core/terminal.ts';
 
@@ -54,4 +54,43 @@ test('a diagnostic without a line never asks for source', () => {
 
   assert.match(output, / ❯ src\/a\.ts\n\n   R1 breached/);
   assert.doesNotMatch(output, /ignored/);
+});
+
+function completed(expected: 'red' | 'green' | 'refuse', reason: Extract<ProofOutcome, { status: 'completed' }>['reason'], result: CheckResult): ProofOutcome {
+  return { status: 'completed', gate: 'lint', proof: 'a var is flagged', expected, ok: reason.kind === 'proved', reason, result, workerPid: 1 };
+}
+
+test('a proof line says why it was judged as it was', () => {
+  const noVar = breach('lint/no-var', { code: 'no-var', message: 'src/a.mjs:3: use let or const', location: null });
+  const noLet = breach('lint/no-let', { code: 'no-let', message: 'src/a.mjs:4: use const', location: null });
+
+  assert.equal(
+    formatProof(completed('red', { kind: 'proved', target: 'lint/no-var' }, fail(scan, [noLet, noVar]))),
+    '✓ lint / a var is flagged expected=red actual=fail\n    breached lint/no-var: src/a.mjs:3: use let or const',
+  );
+  assert.equal(
+    formatProof(completed('red', { kind: 'target-rule-not-breached', target: 'lint/no-var', breached: ['lint/no-let'] }, fail(scan, [noLet]))),
+    '✗ lint / a var is flagged expected=red actual=fail\n    target lint/no-var not breached; breached lint/no-let',
+  );
+  assert.equal(
+    formatProof(completed('red', { kind: 'verdict-mismatch', expected: 'fail', actual: 'pass' }, pass(scan))),
+    '✗ lint / a var is flagged expected=red actual=pass\n    expected fail, got pass; the mutation did not reach what the Rule guards',
+  );
+  assert.equal(
+    formatProof(completed('red', { kind: 'target-already-breached', target: 'lint/no-var', breached: ['lint/no-var'] }, fail(scan, [noVar]))),
+    '✗ lint / a var is flagged expected=red actual=fail\n    target lint/no-var was already breached before the mutation; breached lint/no-var',
+  );
+  const refused = refuse(scan, { code: 'unavailable', message: 'No input', location: null });
+  assert.equal(
+    formatProof(completed('refuse', { kind: 'proved' }, refused)),
+    '✓ lint / a var is flagged expected=refuse actual=refuse\n    refused unavailable: No input',
+  );
+  assert.equal(
+    formatProof(completed('green', { kind: 'verdict-mismatch', expected: 'pass', actual: 'refuse' }, refused)),
+    '✗ lint / a var is flagged expected=green actual=refuse\n    expected pass, got refuse: unavailable: No input',
+  );
+  assert.equal(
+    formatProof(completed('green', { kind: 'proved' }, pass(scan))),
+    '✓ lint / a var is flagged expected=green actual=pass',
+  );
 });

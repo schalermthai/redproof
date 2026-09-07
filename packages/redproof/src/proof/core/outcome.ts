@@ -1,4 +1,5 @@
 import type { CheckResult, Proof } from '../../domain/index.ts';
+import type { ProofEvaluation } from './evaluation.ts';
 
 export type ProofInfrastructureError = {
   readonly code:
@@ -16,6 +17,8 @@ export type CompletedProofOutcome = {
   readonly proof: string;
   readonly expected: Proof['expected'];
   readonly ok: boolean;
+  /** How the proof was judged. `ok` is `reason.kind === 'proved'`. */
+  readonly reason: ProofEvaluation;
   readonly result: CheckResult;
   readonly workerPid: number;
 };

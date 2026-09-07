@@ -1,7 +1,7 @@
 import type { CheckResult, Proof, RuleRef } from '../../domain/index.ts';
 
 export type ProofEvaluation =
-  | { readonly kind: 'proved' }
+  | { readonly kind: 'proved'; readonly target?: RuleRef }
   | {
       readonly kind: 'verdict-mismatch';
       readonly expected: 'fail' | 'pass' | 'refuse';
@@ -9,6 +9,11 @@ export type ProofEvaluation =
     }
   | {
       readonly kind: 'target-rule-not-breached';
+      readonly target: RuleRef;
+      readonly breached: readonly RuleRef[];
+    }
+  | {
+      readonly kind: 'target-already-breached';
       readonly target: RuleRef;
       readonly breached: readonly RuleRef[];
     };
@@ -46,6 +51,7 @@ export function evaluateProof(proof: Proof, result: CheckResult): ProofEvaluatio
         breached,
       };
     }
+    return { kind: 'proved', target: proof.target };
   }
 
   return { kind: 'proved' };

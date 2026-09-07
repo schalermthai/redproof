@@ -47,6 +47,7 @@ test('restoration failure replaces proof success and prevents copy reuse', () =>
     proof: 'p',
     expected: 'green',
     ok: true,
+    reason: { kind: 'proved' },
     result,
     workerPid: 10,
   };
