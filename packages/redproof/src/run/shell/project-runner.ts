@@ -7,7 +7,8 @@ import type { LoadedGateModule, LoadedProject } from '../../project/core/discove
 import { loadProject, selectGateModules } from '../../project/shell/loader.ts';
 import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../../workspace/shell/copy.ts';
 import { runGate, runProof } from '../../proof/shell/runner.ts';
-import { mapLimit, runGateWorker, unwrapWorker } from './worker-process.ts';
+import { mapLimit } from '../../support/map-limit.ts';
+import { runGateWorker, unwrapWorker } from './worker-process.ts';
 
 export type GateRun = {
   readonly module: LoadedGateModule;
