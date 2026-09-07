@@ -13,8 +13,8 @@ export * from './composition/gate.ts';
 export * from './composition/proof.ts';
 export * from './composition/config.ts';
 export * from './composition/options.ts';
-export * from './composition/inspect.ts';
 export * from './composition/mutation.ts';
+export * from './inspect/index.ts';
 
 export * from './project/index.ts';
 export * from './proof/index.ts';
