@@ -117,6 +117,9 @@ The default description uses the command's base name. A description therefore
 reads the same on every machine, even when `command` is an absolute path. Set
 `description` yourself when a sentence explains more than the command line does.
 
+A Check built from `redproof/command` reports itself the same way. See
+**[Command Checks](commands.md#what-a-check-says-about-itself)**.
+
 ## ESLint
 
 Package:
@@ -258,5 +261,8 @@ A useful rule of thumb:
 > Create a new Adapter when the external system introduces a new policy model.
 
 > Create a runner or parser when it only introduces a new invocation method or data format.
+
+When the tool is simply an executable, a Check is enough. See **[Command
+Checks](commands.md)**.
 
 For writing your own integration, continue with **[Composing Redproof](composition.md#creating-an-adapter)**.
