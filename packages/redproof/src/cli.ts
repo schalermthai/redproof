@@ -34,7 +34,9 @@ never change what a Gate inspects; a Gate owns its own scope.
   redproof check gates/*.ts
 
 Options:
-  --config <path>       Path to a Redproof config file
+  --config <path>       Path to a Redproof config file. Without it, the CLI
+                        looks for redproof.config.ts, .mts, .mjs, .cts, .cjs,
+                        then .js, in that order.
   --reporter <reporter> Select an output reporter
   --outputFile <path>   Write reporter output to a file
   --no-color            Disable colored output
@@ -61,12 +63,12 @@ function configArg(argv: readonly string[]): string | null | undefined {
   return value && !value.startsWith('-') ? value : undefined;
 }
 
-async function defaultConfigPath(): Promise<string> {
+async function defaultConfigPath(): Promise<string | null> {
   for (const file of DEFAULT_CONFIG_FILES) {
     const path = resolve(file);
     if (await stat(path).then(entry => entry.isFile(), () => false)) return path;
   }
-  return resolve(DEFAULT_CONFIG_FILES[0]);
+  return null;
 }
 
 async function packageVersion(): Promise<string> {
@@ -121,7 +123,16 @@ async function main(): Promise<number> {
     console.error('Option --config requires a path.');
     return 2;
   }
-  const configPath = configValue === null ? await defaultConfigPath() : resolve(configValue);
+  const discovered = configValue === null ? await defaultConfigPath() : resolve(configValue);
+  if (discovered === null) {
+    console.error(
+      `No Redproof config found in ${process.cwd()}.\n`
+      + `Looked for ${DEFAULT_CONFIG_FILES.join(', ')}.\n`
+      + 'Create one, or pass --config <path>.',
+    );
+    return 2;
+  }
+  const configPath = discovered;
 
   const gateFiles = positionalArgs(args);
 

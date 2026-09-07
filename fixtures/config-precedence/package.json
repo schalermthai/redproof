@@ -1,0 +1,8 @@
+{
+  "name": "config-precedence",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "redproof": "file:../../packages/redproof"
+  }
+}
