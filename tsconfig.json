@@ -36,6 +36,8 @@
   "include": [
     "packages/**/*.ts",
     "fixtures/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "gates/**/*.ts",
+    "redproof.config.ts"
   ]
 }
