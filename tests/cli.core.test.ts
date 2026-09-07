@@ -60,10 +60,23 @@ test('an unknown command is a usage error, and describe takes no reporter', () =
 
 test('prove accepts only the default and json reporters', () => {
   assert.equal(parseArguments(['prove', '--reporter=json'], false).kind, 'run');
-  assert.throws(
-    () => parseArguments(['prove', '--reporter=sarif'], false),
-    /Reporter sarif does not support the prove command\./,
-  );
+  assert.deepEqual(parseArguments(['prove', '--reporter=sarif'], false), {
+    kind: 'usage-error',
+    message: 'Reporter sarif does not support the prove command.',
+  });
+});
+
+test('a bad reporter option is a usage error, never a crash', () => {
+  assert.deepEqual(parseArguments(['check', '--reporter=bogus'], false), {
+    kind: 'usage-error',
+    message: 'Unknown reporter: bogus',
+  });
+  assert.deepEqual(parseArguments(['check', '--reporter'], false), {
+    kind: 'usage-error',
+    message: '--reporter requires a value.',
+  });
+  assert.equal(parseArguments(['check', '--reporter=json', '--reporter=sarif'], false).kind, 'usage-error');
+  assert.equal(parseArguments(['check', '--reporter=json:'], false).kind, 'usage-error');
 });
 
 test('the missing-config message names every file it looked for', () => {

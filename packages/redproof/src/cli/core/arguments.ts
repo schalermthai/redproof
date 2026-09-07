@@ -1,4 +1,4 @@
-import { parseReporterArgs, type ReporterSpec } from '../../reporter/core/index.ts';
+import { parseReporterArgs, ReporterArgumentError, type ReporterSpec } from '../../reporter/core/index.ts';
 
 export const HELP = `Usage: redproof [command] [gate files...] [options]
 
@@ -95,12 +95,17 @@ export function parseArguments(argv: readonly string[], stdoutIsTty: boolean): C
   const command = argv[0] ?? 'check';
   if (!isCommand(command)) return { kind: 'usage-error', message: `Unknown command: ${command}` };
 
-  const reporters = command === 'describe' ? [] : parseReporterArgs(argv);
+  let reporters: readonly ReporterSpec[];
+  try {
+    reporters = command === 'describe' ? [] : parseReporterArgs(argv);
+  } catch (error) {
+    if (!(error instanceof ReporterArgumentError)) throw error;
+    return { kind: 'usage-error', message: error.message };
+  }
   if (command === 'prove') {
-    for (const spec of reporters) {
-      if (spec.name !== 'default' && spec.name !== 'json') {
-        throw new Error(`Reporter ${spec.name} does not support the prove command.`);
-      }
+    const unsupported = reporters.find(spec => spec.name !== 'default' && spec.name !== 'json');
+    if (unsupported) {
+      return { kind: 'usage-error', message: `Reporter ${unsupported.name} does not support the prove command.` };
     }
   }
 
