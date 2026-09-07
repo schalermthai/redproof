@@ -272,7 +272,7 @@ One point about the Check above. It uses `exitCodes` with an explicit policy. Ex
 
 For a Gate whose Rules map to separate suites, one `command()` per Rule is clearer. Use `commands()` to run them as one Check:
 
-```ts
+```ts fragment
 import { commands } from 'redproof/command';
 
 const check = commands({

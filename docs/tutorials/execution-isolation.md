@@ -34,7 +34,7 @@ Use in-place mode when the workspace is disposable or when fast local feedback m
 
 ## Copies mode
 
-```ts
+```ts fragment
 export default defineConfig({
   execution: {
     mode: 'copies',

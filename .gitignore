@@ -36,5 +36,8 @@ Thumbs.db
 tmp/
 *.tmp
 
+# Extracted documentation examples (npm run docs:typecheck)
+docs-typecheck-tmp/
+
 # Generated at build time from the root README
 packages/redproof/README.md
