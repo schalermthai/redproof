@@ -88,7 +88,11 @@ try {
 
     const manifest = JSON.parse(
       run('tar', ['-xzOf', join(packDir, file), 'package/package.json'], workdir),
-    ) as { types?: string; engines?: { node?: string } };
+    ) as {
+      types?: string;
+      engines?: { node?: string };
+      exports?: Record<string, { types?: string; default?: string }>;
+    };
 
     report(hasDist, `${pkg.name}: ships dist/`);
     report(leaked.length === 0, `${pkg.name}: ships no source`, leaked.join(', '));
@@ -110,6 +114,13 @@ try {
       `${pkg.name}: requires node ${REQUIRED_NODE}`,
       manifest.engines?.node ?? '(missing)',
     );
+    if (pkg.name === 'redproof') {
+      report(
+        manifest.exports?.['./command']?.types === './dist/command.d.ts'
+          && manifest.exports?.['./command']?.default === './dist/command.js',
+        'redproof: exports the command subpath with runtime and types',
+      );
+    }
   }
 
   console.log('\n3. Install the tarballs into a clean project');
@@ -138,6 +149,14 @@ try {
     const result = tryRun('node', ['probe.mjs'], consumer);
     report(result.ok, `${pkg.name}: imports and exports ${pkg.probe}()`, result.ok ? '' : result.output.slice(0, 300));
   }
+
+  await writeFile(
+    join(consumer, 'probe-command.mjs'),
+    "import { command } from 'redproof/command';\n"
+    + "if (typeof command !== 'function') throw new Error('missing command export');\n",
+  );
+  const commandImport = tryRun('node', ['probe-command.mjs'], consumer);
+  report(commandImport.ok, 'redproof/command imports at run time', commandImport.ok ? '' : commandImport.output.slice(0, 300));
 
   console.log('\n5. Run the redproof command line tool on a real project');
   run('mkdir', ['-p', join(consumer, 'gates'), join(consumer, 'src')], consumer);
@@ -213,7 +232,11 @@ try {
 
   const tsc = join(REPO, 'node_modules', '.bin', 'tsc');
 
-  const green = "import { defineGate } from 'redproof';\nexport const gate = defineGate;\n";
+  const green = "import { defineGate, defineRule } from 'redproof';\n"
+    + "import { command } from 'redproof/command';\n"
+    + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
+    + "export const check = command({ rule, command: 'node' });\n"
+    + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
   report(typesOk.ok, 'valid consumer code type-checks', typesOk.ok ? '' : typesOk.output.slice(0, 400));

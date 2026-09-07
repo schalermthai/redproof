@@ -352,6 +352,45 @@ const check = defineCheck(rules, {
 
 This keeps the set of Rules the Check may breach type-safe.
 
+### Command Checks
+
+Use `redproof/command` when an existing guardrail is exposed as an executable and its process status is the trustworthy policy result:
+
+```ts
+import { command } from 'redproof/command';
+
+const check = command({
+  rule: rules.docs,
+  command: 'npm',
+  args: ['run', 'lint:docs'],
+  timeoutMs: 60_000,
+});
+```
+
+By default, exit code `0` produces PASS and any other ordinary exit code breaches `rule`. Process infrastructure failures produce REFUSE:
+
+- the executable cannot start
+- the process exceeds `timeoutMs`
+- the process is terminated by a signal
+- combined stdout and stderr exceed `maxOutputBytes` (10 MiB by default)
+- the process returns an exit code not covered by an explicit policy
+
+Use an explicit policy when the tool distinguishes findings from configuration or invocation errors:
+
+```ts
+const check = command({
+  rule: rules.lint,
+  command: 'eslint',
+  args: ['src'],
+  exitCodes: {
+    pass: [0],
+    breach: [1],
+  },
+});
+```
+
+Here, exit code `2` produces REFUSE because it is neither a passing nor a breach exit. Child stdout and stderr are captured for diagnostics and never inherited by reporter stdout. Relative `cwd` values resolve inside the Gate workspace and cannot escape it.
+
 ## Creating an Adapter
 
 Use an Adapter when an external system introduces its own policy model.

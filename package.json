@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/*.test.ts tests/composition/*.test.ts tests/composition/mutation/*.test.ts tests/adapters/*.test.ts tests/reporter/*.test.ts",
     "test:core": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/core.test.ts",
+    "test:command": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/command.test.ts",
     "test:runtime": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/proof.test.ts tests/execution.test.ts tests/reporter/*.test.ts",
     "fixture:check": "node --disable-warning=ExperimentalWarning --experimental-strip-types packages/redproof/src/cli.ts check --config fixtures/eslint-project/redproof.config.ts",
     "fixture:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types packages/redproof/src/cli.ts prove --config fixtures/eslint-project/redproof.config.ts",

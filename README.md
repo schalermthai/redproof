@@ -231,6 +231,24 @@ See **[Built-in integrations](https://github.com/schalermthai/redproof/blob/main
 
 Redproof is designed to be composed when an existing integration does not fit your guardrail.
 
+For a guardrail exposed as an executable, use the official `redproof/command` Check:
+
+```ts
+import { command } from 'redproof/command';
+
+const gate = defineGate({
+  id: 'docs',
+  rules,
+  check: command({
+    rule: rules.docs,
+    command: 'npm',
+    args: ['run', 'lint:docs'],
+  }),
+});
+```
+
+Completed failure exits breach the selected Rule. Missing executables, timeouts, signals, output overflow, and explicitly unclassified exits produce **REFUSE**.
+
 See **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, Mutations, and Adapters.
 
 For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**.
