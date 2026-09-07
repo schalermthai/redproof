@@ -11,7 +11,7 @@ module.exports = {
       name: 'core-no-effect-imports',
       severity: 'error',
       comment: 'The functional core cannot import effectful Node modules.',
-      from: { path: '^packages/redproof/src/(?:domain|runtime/core)/' },
+      from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
       to: {
         dependencyTypes: ['core'],
         path: '^(node:)?(fs|fs/promises|child_process|os|stream|net|http|https|worker_threads|timers|timers/promises)$',
@@ -21,9 +21,9 @@ module.exports = {
       name: 'core-no-shell',
       severity: 'error',
       comment: 'The functional core cannot depend on orchestration or presentation.',
-      from: { path: '^packages/redproof/src/(?:domain|runtime/core)/' },
+      from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
       to: {
-        path: '^packages/redproof/src/(?:runtime/(?:shell|workspace|gate-worker|discovery|run|report|describe|worker-protocol)|reporter|cli[.]ts$|command[.]ts$)',
+        path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|reporter/|cli[.]ts$|command[.]ts$)',
       },
     },
     {
@@ -41,7 +41,7 @@ module.exports = {
       severity: 'error',
       comment: 'Composition cannot depend on runtime orchestration or presentation.',
       from: { path: '^packages/redproof/src/composition/' },
-      to: { path: '^packages/redproof/src/(?:runtime|reporter|cli[.]ts$|command[.]ts$)' },
+      to: { path: '^packages/redproof/src/(?:(?:project|proof|workspace|run|reporter)/|cli[.]ts$|command[.]ts$)' },
     },
     {
       name: 'adapters-public-core-api-only',

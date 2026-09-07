@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { describeProject } from './runtime/describe.ts';
-import { GateSelectionError } from './runtime/discovery.ts';
+import { describeProject, GateSelectionError } from './project/index.ts';
 import {
   formatGateDescription,
   parseReporterArgs,
@@ -11,7 +10,7 @@ import {
   type ProveReporterName,
   type ReporterSpec,
 } from './reporter/index.ts';
-import { checkProject, proveProject } from './runtime/run.ts';
+import { checkProject, proveProject } from './run/index.ts';
 
 const args = process.argv.slice(2);
 const command = args[0] ?? 'check';

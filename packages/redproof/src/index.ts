@@ -16,8 +16,8 @@ export * from './composition/options.ts';
 export * from './composition/inspect.ts';
 export * from './composition/mutation.ts';
 
-export * from './runtime/discovery.ts';
-export * from './runtime/run.ts';
+export * from './project/index.ts';
+export * from './proof/index.ts';
+export * from './workspace/index.ts';
+export * from './run/index.ts';
 export * from './reporter/index.ts';
-export * from './runtime/describe.ts';
-export * from './runtime/workspace.ts';

@@ -1,12 +1,12 @@
 import { performance } from 'node:perf_hooks';
 import type { CheckResult } from '../../domain/check.ts';
-import { executionPolicy } from '../core/execution-policy.ts';
+import { executionPolicy } from '../core/policy.ts';
 import { checkExitCode, proofExitCode } from '../core/exit-code.ts';
-import type { ProofOutcome } from '../core/proof-outcome.ts';
-import type { LoadedGateModule, LoadedProject } from '../discovery.ts';
-import { loadProject, selectGateModules } from '../discovery.ts';
-import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../workspace.ts';
-import { runGate, runProof } from './gate-runner.ts';
+import type { ProofOutcome } from '../../proof/core/outcome.ts';
+import type { LoadedGateModule, LoadedProject } from '../../project/shell/loader.ts';
+import { loadProject, selectGateModules } from '../../project/shell/loader.ts';
+import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../../workspace/shell/copy.ts';
+import { runGate, runProof } from '../../proof/shell/runner.ts';
 import { mapLimit, runGateWorker, unwrapWorker } from './worker-process.ts';
 
 export type GateRun = {

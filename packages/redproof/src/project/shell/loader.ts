@@ -1,10 +1,10 @@
 import { glob, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { RedproofConfig, ResolvedExecutionConfig } from '../composition/config.ts';
-import { resolveConfig } from '../composition/config.ts';
-import type { Gate } from '../domain/gate.ts';
-import type { ProofSuite } from '../domain/proof.ts';
+import type { RedproofConfig, ResolvedExecutionConfig } from '../../composition/config.ts';
+import { resolveConfig } from '../../composition/config.ts';
+import type { Gate } from '../../domain/gate.ts';
+import type { ProofSuite } from '../../domain/proof.ts';
 
 export type LoadedProject = {
   readonly root: string;

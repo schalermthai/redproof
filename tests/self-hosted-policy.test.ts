@@ -9,7 +9,7 @@ import {
 test('effect analysis separates core imports, ambient inputs, and new boundaries', () => {
   const analysis = analyzeEffects([
     {
-      file: 'packages/redproof/src/runtime/core/example.ts',
+      file: 'packages/redproof/src/proof/core/example.ts',
       content: "import 'node:fs/promises';\nvoid process.cwd();\n",
     },
     {
@@ -31,7 +31,7 @@ test('effect analysis separates core imports, ambient inputs, and new boundaries
 
 test('effect analysis does not confuse a property named process with the global object', () => {
   const analysis = analyzeEffects([{
-    file: 'packages/redproof/src/runtime/core/policy.ts',
+    file: 'packages/redproof/src/run/core/policy.ts',
     content: "export type Policy = { readonly process: 'child' };\n",
   }]);
   assert.equal(analysis.coreAmbientInputs.length, 0);

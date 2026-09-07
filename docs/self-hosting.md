@@ -60,7 +60,7 @@ scan.
 
 ## Functional core and imperative shell
 
-`packages/redproof/src/domain/**` and `packages/redproof/src/runtime/core/**`
+`packages/redproof/src/domain/**` and every `packages/redproof/src/*/core/**`
 form the protected functional core. They may consume values and return policy
 decisions, but they cannot read files, spawn processes, observe clocks or
 environment state, call reporters, or import runtime shell modules.
