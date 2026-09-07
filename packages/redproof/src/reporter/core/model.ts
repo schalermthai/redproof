@@ -1,6 +1,6 @@
-import type { Adapter } from '../domain/adapter.ts';
-import type { Breach, CheckResult, CountingCapability } from '../domain/check.ts';
-import type { Rule, RuleRef } from '../domain/rule.ts';
+import type { Adapter } from '../../domain/adapter.ts';
+import type { Breach, CheckResult, CountingCapability } from '../../domain/check.ts';
+import type { Rule, RuleRef } from '../../domain/rule.ts';
 
 export type RuleReportState =
   | { readonly kind: 'held' }

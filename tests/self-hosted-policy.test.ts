@@ -37,6 +37,14 @@ test('effect analysis does not confuse a property named process with the global 
   assert.equal(analysis.coreAmbientInputs.length, 0);
 });
 
+test('effect analysis reads the clock only from an argument-less new Date', () => {
+  const analysis = analyzeEffects([{
+    file: 'packages/redproof/src/reporter/core/example.ts',
+    content: 'export const epoch = new Date(0);\nexport const now = new Date();\n',
+  }]);
+  assert.deepEqual(analysis.coreAmbientInputs.map(item => [item.effect, item.line]), [['new Date', 2]]);
+});
+
 test('pure-test analysis rejects temporary workspace helpers', () => {
   const findings = analyzePureTestEffects([{
     file: 'tests/proof.core.test.ts',

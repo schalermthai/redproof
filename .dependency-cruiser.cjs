@@ -23,7 +23,7 @@ module.exports = {
       comment: 'The functional core cannot depend on orchestration or presentation.',
       from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
       to: {
-        path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|reporter/|cli[.]ts$)',
+        path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|cli[.]ts$)',
       },
     },
     {
@@ -41,7 +41,7 @@ module.exports = {
       severity: 'error',
       comment: 'Composition cannot depend on runtime orchestration or presentation.',
       from: { path: '^packages/redproof/src/composition/' },
-      to: { path: '^packages/redproof/src/(?:(?:command|project|proof|workspace|run|reporter)/|cli[.]ts$)' },
+      to: { path: '^packages/redproof/src/(?:(?:cli|command|project|proof|workspace|run|reporter)/|cli[.]ts$)' },
     },
     {
       name: 'adapters-public-core-api-only',
