@@ -1,6 +1,5 @@
-import { cruise } from 'dependency-cruiser';
-import extractDepcruiseConfig from 'dependency-cruiser/config-utl/extract-depcruise-config';
-import extractDepcruiseOptions from 'dependency-cruiser/config-utl/extract-depcruise-options';
+import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import {
   counting,
@@ -24,7 +23,29 @@ type DependencyCruiserRuleCatalog<M extends DependencyCruiserRuleInput> = {
 export type DependencyCruiserAdapterOptions<M extends DependencyCruiserRuleInput> = {
   readonly files?: readonly string[];
   readonly configFile?: string;
+  readonly knownViolationsFile?: string;
   readonly rules: M;
+};
+
+type DependencyCruiserModules = {
+  readonly cruise: typeof import('dependency-cruiser').cruise;
+  readonly extractConfig: typeof import('dependency-cruiser/config-utl/extract-depcruise-config').default;
+  readonly extractOptions: typeof import('dependency-cruiser/config-utl/extract-depcruise-options').default;
+};
+
+type DependencyCruiserOptions = NonNullable<
+  Parameters<DependencyCruiserModules['cruise']>[1]
+>;
+type KnownViolations = NonNullable<DependencyCruiserOptions['knownViolations']>;
+
+type PackageExport = string | {
+  readonly import?: string;
+  readonly default?: string;
+};
+
+type PackageManifest = {
+  readonly name?: string;
+  readonly exports?: Readonly<Record<string, PackageExport>>;
 };
 
 type DependencyCruiserConfig = {
@@ -73,6 +94,50 @@ function withCwd<T>(root: string, action: () => Promise<T>): Promise<T> {
   return action().finally(() => process.chdir(before));
 }
 
+function selfExport(manifest: PackageManifest, subpath: string): string {
+  const exported = manifest.exports?.[subpath];
+  const target = typeof exported === 'string'
+    ? exported
+    : exported?.import ?? exported?.default;
+  if (!target) {
+    throw new Error(`dependency-cruiser does not export ${subpath}.`);
+  }
+  return target;
+}
+
+async function loadDependencyCruiser(root: string): Promise<DependencyCruiserModules> {
+  const manifest = JSON.parse(
+    await readFile(resolve(root, 'package.json'), 'utf8'),
+  ) as PackageManifest;
+
+  if (manifest.name === 'dependency-cruiser') {
+    const loadSelf = (subpath: string) => import(pathToFileURL(
+      resolve(root, selfExport(manifest, subpath)),
+    ).href);
+    const [main, config, options] = await Promise.all([
+      loadSelf('.'),
+      loadSelf('./config-utl/extract-depcruise-config'),
+      loadSelf('./config-utl/extract-depcruise-options'),
+    ]);
+    return {
+      cruise: main.cruise as DependencyCruiserModules['cruise'],
+      extractConfig: config.default as DependencyCruiserModules['extractConfig'],
+      extractOptions: options.default as DependencyCruiserModules['extractOptions'],
+    };
+  }
+
+  const [main, config, options] = await Promise.all([
+    import('dependency-cruiser'),
+    import('dependency-cruiser/config-utl/extract-depcruise-config'),
+    import('dependency-cruiser/config-utl/extract-depcruise-options'),
+  ]);
+  return {
+    cruise: main.cruise,
+    extractConfig: config.default,
+    extractOptions: options.default,
+  };
+}
+
 export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
   options: DependencyCruiserAdapterOptions<M>,
 ): Adapter<DependencyCruiserRuleCatalog<M>> {
@@ -109,8 +174,9 @@ export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
 
         try {
           return await withCwd(ctx.root, async () => {
+            const dependencyCruiser = await loadDependencyCruiser(ctx.root);
             const configPath = resolve(ctx.root, configFile);
-            const config = await extractDepcruiseConfig(configPath) as DependencyCruiserConfig;
+            const config = await dependencyCruiser.extractConfig(configPath) as DependencyCruiserConfig;
             const available = configuredRuleNames(config);
             const missing = Object.values(options.rules).filter(name => !available.has(name));
 
@@ -131,11 +197,18 @@ export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
               );
             }
 
-            const cruiseOptions = await extractDepcruiseOptions(configPath);
-            const cruiseResult = await cruise(
+            const cruiseOptions = await dependencyCruiser.extractOptions(configPath);
+            const knownViolations = options.knownViolationsFile
+              ? JSON.parse(
+                await readFile(resolve(ctx.root, options.knownViolationsFile), 'utf8'),
+              ) as KnownViolations
+              : undefined;
+            const cruiseResult = await dependencyCruiser.cruise(
               files,
               {
                 ...cruiseOptions,
+                cache: false,
+                ...(knownViolations ? { ignoreKnown: true, knownViolations } : {}),
                 outputType: 'json',
               },
             );

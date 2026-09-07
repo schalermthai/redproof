@@ -20,6 +20,7 @@ import { defineGate, defineProofs, mutate, proof } from 'redproof';
 
 const adapter = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
+  knownViolationsFile: '.dependency-cruiser-known-violations.json',
   files: ['src'],
   rules: {
     domainNoInfrastructure: 'domain-no-infrastructure',
@@ -39,6 +40,11 @@ export const proofs = defineProofs(gate, [
 
 export default gate;
 ```
+
+Set `knownViolationsFile` when the project maintains a dependency-cruiser
+baseline. Matching known violations are ignored; new violations still breach
+their selected Redproof Rules. Checks run without dependency-cruiser caching so
+proof mutations cannot reuse stale architecture results.
 
 Then run:
 

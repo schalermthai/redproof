@@ -153,6 +153,7 @@ import { defineGate, defineProofs, mutate, proof } from 'redproof';
 
 const adapter = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
+  knownViolationsFile: '.dependency-cruiser-known-violations.json',
   files: ['src'],
   rules: {
     domainNoInfrastructure: 'domain-no-infrastructure',
@@ -181,6 +182,9 @@ export default gate;
 ```
 
 One dependency-cruiser run can report breaches across several selected Rules.
+When `knownViolationsFile` is set, the adapter ignores matching committed baseline
+violations while still reporting new violations. The adapter disables dependency-
+cruiser caching so RED mutations cannot reuse a stale pre-mutation result.
 
 ## Stryker
 
