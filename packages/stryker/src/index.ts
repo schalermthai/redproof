@@ -1,4 +1,5 @@
 import { Stryker } from '@stryker-mutator/core';
+import { realpath } from 'node:fs/promises';
 import {
   counting,
   defineAdapter,
@@ -18,6 +19,7 @@ import {
   undetectedMutantBreaches,
   type StrykerMutantResult,
 } from './model.ts';
+import { confineCanonicalStrykerCwd, resolveStrykerCwd } from './cwd.ts';
 
 export type StrykerRuleOptions = {
   readonly mutantsDetected?: true;
@@ -36,6 +38,8 @@ export type StrykerRuleCatalog<O extends StrykerRuleOptions> = {
 };
 
 export type StrykerAdapterOptions<O extends StrykerRuleOptions> = {
+  /** Relative to the Gate root and confined inside it. Defaults to the root. */
+  readonly cwd?: string;
   readonly configFile?: string;
   readonly rules: O;
 };
@@ -102,6 +106,7 @@ export function stryker<const O extends StrykerRuleOptions>(
   const rules = defineRules(catalog as StrykerRuleCatalog<O>);
   type Ref = RuleRefOfCatalog<StrykerRuleCatalog<O>>;
   const rulesByAlias = rules as unknown as Readonly<Record<string, Rule<Ref>>>;
+  const cwd = options.cwd ?? '.';
   const configFile = options.configFile;
 
   return defineAdapter({
@@ -115,7 +120,31 @@ export function stryker<const O extends StrykerRuleOptions>(
         const startedAt = now();
 
         try {
-          return await withCwd(ctx.root, async () => withoutTestRunnerEnv(async () => {
+          const lexicalWorkingDirectory = resolveStrykerCwd(ctx.root, cwd);
+          const workingDirectory = lexicalWorkingDirectory.kind === 'inside'
+            ? confineCanonicalStrykerCwd(
+              await realpath(ctx.root),
+              await realpath(lexicalWorkingDirectory.path),
+            )
+            : lexicalWorkingDirectory;
+          if (workingDirectory.kind === 'outside') {
+            return result.refuse(
+              {
+                source: 'stryker',
+                startedAt,
+                finishedAt: now(),
+                inspected: null,
+              },
+              {
+                code: 'stryker-cwd-outside-root',
+                message: 'The Stryker working directory resolves outside the Gate root.',
+                location: null,
+                detail: workingDirectory.path,
+              },
+            );
+          }
+
+          return await withCwd(workingDirectory.path, async () => withoutTestRunnerEnv(async () => {
             const engine = new Stryker({
               ...(configFile ? { configFile } : {}),
               reporters: [],

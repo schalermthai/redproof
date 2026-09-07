@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --test project/test/*.test.js",
     "redproof:check": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts check --config redproof.config.ts",
     "redproof:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts prove --config redproof.config.ts",
     "redproof:describe": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts describe --config redproof.config.ts"
