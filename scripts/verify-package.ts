@@ -152,8 +152,9 @@ try {
 
   await writeFile(
     join(consumer, 'probe-command.mjs'),
-    "import { command } from 'redproof/command';\n"
-    + "if (typeof command !== 'function') throw new Error('missing command export');\n",
+    "import { command, commands } from 'redproof/command';\n"
+    + "if (typeof command !== 'function') throw new Error('missing command export');\n"
+    + "if (typeof commands !== 'function') throw new Error('missing commands export');\n",
   );
   const commandImport = tryRun('node', ['probe-command.mjs'], consumer);
   report(commandImport.ok, 'redproof/command imports at run time', commandImport.ok ? '' : commandImport.output.slice(0, 300));
@@ -233,9 +234,10 @@ try {
   const tsc = join(REPO, 'node_modules', '.bin', 'tsc');
 
   const green = "import { defineGate, defineRule } from 'redproof';\n"
-    + "import { command } from 'redproof/command';\n"
+    + "import { command, commands } from 'redproof/command';\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
     + "export const check = command({ rule, command: 'node' });\n"
+    + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);

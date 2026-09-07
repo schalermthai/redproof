@@ -391,6 +391,34 @@ const check = command({
 
 Here, exit code `2` produces REFUSE because it is neither a passing nor a breach exit. Child stdout and stderr are captured for diagnostics and never inherited by reporter stdout. Relative `cwd` values resolve inside the Gate workspace and cannot escape it.
 
+Use `commands()` when one Gate depends on several executables. Sequential execution is the safe default:
+
+```ts
+import { commands } from 'redproof/command';
+
+const check = commands({
+  entries: [
+    { rule: rules.metadata, command: 'npm', args: ['run', 'lint:package-json'] },
+    { rule: rules.ordering, command: 'npm', args: ['run', 'lint:package-json-sorting'] },
+  ],
+});
+```
+
+Parallel execution is explicit and bounded:
+
+```ts
+const check = commands({
+  mode: 'parallel',
+  maxAtOnce: 2,
+  entries: [
+    { rule: rules.docs, command: 'npm', args: ['run', 'lint:docs'] },
+    { rule: rules.types, command: 'npm', args: ['run', 'lint:types'] },
+  ],
+});
+```
+
+Results remain in declaration order even when commands finish in a different order. Sequential execution stops at the first REFUSE. Parallel execution waits for the started group, and REFUSE takes precedence over collected Breaches because the Gate could not make a complete decision.
+
 ## Creating an Adapter
 
 Use an Adapter when an external system introduces its own policy model.
