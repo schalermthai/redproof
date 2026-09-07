@@ -4,7 +4,7 @@ import { executionPolicy } from '../core/execution-policy.ts';
 import { checkExitCode, proofExitCode } from '../core/exit-code.ts';
 import type { ProofOutcome } from '../core/proof-outcome.ts';
 import type { LoadedGateModule, LoadedProject } from '../discovery.ts';
-import { loadProject } from '../discovery.ts';
+import { loadProject, selectGateModules } from '../discovery.ts';
 import { copyGateWorkspace, pathInsideCopy, releaseGateWorkspace } from '../workspace.ts';
 import { runGate, runProof } from './gate-runner.ts';
 import { mapLimit, runGateWorker, unwrapWorker } from './worker-process.ts';
@@ -24,9 +24,12 @@ export type CheckProjectRun = {
   readonly durationMs: number;
 };
 
-async function checkInPlace(project: LoadedProject): Promise<GateRun[]> {
+async function checkInPlace(
+  project: LoadedProject,
+  modules: readonly LoadedGateModule[],
+): Promise<GateRun[]> {
   const results: GateRun[] = [];
-  for (const module of project.modules) {
+  for (const module of modules) {
     const gateStarted = performance.now();
     const result = await runGate(module.gate, project.root);
     results.push({
@@ -39,8 +42,12 @@ async function checkInPlace(project: LoadedProject): Promise<GateRun[]> {
   return results;
 }
 
-async function checkInCopies(project: LoadedProject, maxAtOnce: number): Promise<GateRun[]> {
-  return mapLimit(project.modules, maxAtOnce, async module => {
+async function checkInCopies(
+  project: LoadedProject,
+  modules: readonly LoadedGateModule[],
+  maxAtOnce: number,
+): Promise<GateRun[]> {
+  return mapLimit(modules, maxAtOnce, async module => {
     const workspace = await copyGateWorkspace(project.root, module.gate.id);
     try {
       const copiedGateFile = pathInsideCopy(project.root, workspace.root, module.file);
@@ -63,15 +70,19 @@ async function checkInCopies(project: LoadedProject, maxAtOnce: number): Promise
   });
 }
 
-export async function checkProject(configPath: string): Promise<CheckProjectRun> {
+export async function checkProject(
+  configPath: string,
+  gateFiles: readonly string[] = [],
+): Promise<CheckProjectRun> {
   const startedAt = new Date();
   const started = performance.now();
   const project = await loadProject(configPath);
+  const modules = await selectGateModules(project, gateFiles);
   const policy = executionPolicy(project.execution);
 
   const results = policy.mode === 'copies'
-    ? await checkInCopies(project, policy.maxAtOnce)
-    : await checkInPlace(project);
+    ? await checkInCopies(project, modules, policy.maxAtOnce)
+    : await checkInPlace(project, modules);
 
   return {
     project,
@@ -82,18 +93,24 @@ export async function checkProject(configPath: string): Promise<CheckProjectRun>
   };
 }
 
-async function proveInPlace(project: LoadedProject): Promise<ProofOutcome[]> {
+async function proveInPlace(
+  project: LoadedProject,
+  modules: readonly LoadedGateModule[],
+): Promise<ProofOutcome[]> {
   const outcomes: ProofOutcome[] = [];
-  for (const module of project.modules) {
+  for (const module of modules) {
     if (!module.proofs) continue;
     for (const proof of module.proofs.proofs) outcomes.push(await runProof(module.gate, proof, project.root));
   }
   return outcomes;
 }
 
-async function proveInCopies(project: LoadedProject, maxAtOnce: number): Promise<ProofOutcome[]> {
-  const modules = project.modules.filter(module => module.proofs);
-  const perGate = await mapLimit(modules, maxAtOnce, async module => {
+async function proveInCopies(
+  project: LoadedProject,
+  modules: readonly LoadedGateModule[],
+  maxAtOnce: number,
+): Promise<ProofOutcome[]> {
+  const perGate = await mapLimit(modules.filter(module => module.proofs), maxAtOnce, async module => {
     const workspace = await copyGateWorkspace(project.root, module.gate.id);
     try {
       const copiedGateFile = pathInsideCopy(project.root, workspace.root, module.file);
@@ -119,9 +136,13 @@ export type ProveProjectRun = {
   readonly exitCode: number;
 };
 
-export async function proveProject(configPath: string): Promise<ProveProjectRun> {
+export async function proveProject(
+  configPath: string,
+  gateFiles: readonly string[] = [],
+): Promise<ProveProjectRun> {
   const project = await loadProject(configPath);
-  const proofCount = project.modules.reduce(
+  const modules = await selectGateModules(project, gateFiles);
+  const proofCount = modules.reduce(
     (count, module) => count + (module.proofs?.proofs.length ?? 0),
     0,
   );
@@ -131,8 +152,8 @@ export async function proveProject(configPath: string): Promise<ProveProjectRun>
 
   const policy = executionPolicy(project.execution);
   const outcomes = policy.mode === 'copies'
-    ? await proveInCopies(project, policy.maxAtOnce)
-    : await proveInPlace(project);
+    ? await proveInCopies(project, modules, policy.maxAtOnce)
+    : await proveInPlace(project, modules);
 
   return {
     project,

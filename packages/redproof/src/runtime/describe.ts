@@ -1,6 +1,5 @@
-import { isAbsolute, resolve } from 'node:path';
 import type { LoadedGateModule, LoadedProject } from './discovery.ts';
-import { loadProject } from './discovery.ts';
+import { loadProject, selectGateModules } from './discovery.ts';
 
 export type DescribedRule = {
   readonly label: string;
@@ -69,25 +68,18 @@ export function describeLoadedProject(project: LoadedProject): readonly GateDesc
   return project.modules.map(describeModule);
 }
 
-export async function describeProject(configPath: string, gateFile?: string): Promise<{
+export async function describeProject(
+  configPath: string,
+  gateFiles: readonly string[] = [],
+): Promise<{
   readonly project: LoadedProject;
   readonly descriptions: readonly GateDescription[];
 }> {
   const project = await loadProject(configPath);
-
-  if (!gateFile) {
-    return { project, descriptions: describeLoadedProject(project) };
-  }
-
-  const target = isAbsolute(gateFile) ? resolve(gateFile) : resolve(project.root, gateFile);
-  const matched = project.modules.filter(module => resolve(module.file) === target);
-
-  if (matched.length === 0) {
-    throw new Error(`Gate file ${gateFile} was not discovered by gatesRoot.`);
-  }
+  const modules = await selectGateModules(project, gateFiles);
 
   return {
     project,
-    descriptions: matched.map(describeModule),
+    descriptions: modules.map(describeModule),
   };
 }
