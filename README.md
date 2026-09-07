@@ -208,6 +208,34 @@ The RED proof temporarily adds a TODO, runs the real Check, confirms `source/no-
 
 The GREEN proof confirms that clean source passes.
 
+## Selecting Gates
+
+Every command takes optional Gate files. With none, every discovered Gate runs.
+
+```bash
+redproof check    gates/no-todo.ts
+redproof prove    gates/no-todo.ts gates/architecture.ts
+redproof describe gates/*.ts
+```
+
+`check`, `prove`, and `describe` share one selection rule. A path that is not a discovered Gate is an error, never an empty run.
+
+```bash
+redproof check gates/missing.ts
+```
+
+```text
+No Gate matched: gates/missing.ts
+```
+
+Gate files choose **which Gates run**. They never change **what a Gate inspects**. A Gate owns its own scope:
+
+```ts
+text.find(ctx, { files: 'src/**/*.ts' })
+```
+
+If the command line could narrow that scope, a PASS would no longer mean the Gate passed. That matters most for `prove`, because each proof was written against the real scope of its Gate.
+
 Redproof also supports **REFUSE** when a Check cannot make a trustworthy PASS or FAIL decision.
 
 ```text

@@ -2,6 +2,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { describeProject } from './runtime/describe.ts';
+import { GateSelectionError } from './runtime/discovery.ts';
 import {
   formatGateDescription,
   parseReporterArgs,
@@ -17,12 +18,20 @@ const command = args[0] ?? 'check';
 const color = process.stdout.isTTY && !args.includes('--no-color');
 const verbose = args.includes('--verbose');
 
-const HELP = `Usage: redproof [command] [options]
+const HELP = `Usage: redproof [command] [gate files...] [options]
 
 Commands:
-  check       Run all discovered Gates (default)
-  prove       Run all discovered Proofs
+  check       Run discovered Gates (default)
+  prove       Run the Proofs of discovered Gates
   describe    Describe discovered Gates
+
+Gate files select which Gates to operate on. With none, every discovered
+Gate runs. A path that is not a discovered Gate is an error. Gate files
+never change what a Gate inspects; a Gate owns its own scope.
+
+  redproof check gates/no-todo.ts
+  redproof prove gates/no-todo.ts gates/architecture.ts
+  redproof check gates/*.ts
 
 Options:
   --config <path>       Path to redproof.config.ts
@@ -50,16 +59,18 @@ async function packageVersion(): Promise<string> {
   return manifest.version;
 }
 
+const FLAGS_TAKING_A_VALUE = new Set(['--config', '--outputFile', '--reporter']);
+
 function positionalArgs(argv: readonly string[]): readonly string[] {
   const positionals: string[] = [];
 
   for (let i = 1; i < argv.length; i += 1) {
     const arg = argv[i]!;
-    if (arg === '--config' || arg === '--outputFile') {
+    if (FLAGS_TAKING_A_VALUE.has(arg)) {
       i += 1;
       continue;
     }
-    if (arg.startsWith('--')) continue;
+    if (arg.startsWith('-')) continue;
     positionals.push(arg);
   }
 
@@ -95,9 +106,10 @@ async function main(): Promise<number> {
   }
   const configPath = resolve(configValue);
 
+  const gateFiles = positionalArgs(args);
+
   if (command === 'describe') {
-    const [gateFile] = positionalArgs(args);
-    const run = await describeProject(configPath, gateFile);
+    const run = await describeProject(configPath, gateFiles);
     console.log(run.descriptions.map(formatGateDescription).join('\n\n'));
     return 0;
   }
@@ -110,7 +122,7 @@ async function main(): Promise<number> {
       }
     }
 
-    const run = await proveProject(configPath);
+    const run = await proveProject(configPath, gateFiles);
     for (const spec of specs) {
       await emit(spec, renderProveReporter(spec.name as ProveReporterName, run), run.project.root);
     }
@@ -119,7 +131,7 @@ async function main(): Promise<number> {
 
   if (command === 'check') {
     const specs = parseReporterArgs(args);
-    const run = await checkProject(configPath);
+    const run = await checkProject(configPath, gateFiles);
     for (const spec of specs) {
       const output = await renderCheckReporter(spec.name, run, { color, verbose });
       await emit(spec, output, run.project.root);
@@ -131,4 +143,10 @@ async function main(): Promise<number> {
   return 2;
 }
 
-process.exitCode = await main();
+try {
+  process.exitCode = await main();
+} catch (error) {
+  if (!(error instanceof GateSelectionError)) throw error;
+  console.error(error.message);
+  process.exitCode = 2;
+}

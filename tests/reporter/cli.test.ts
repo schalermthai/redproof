@@ -122,3 +122,57 @@ test('CLI describe can target one discovered Gate file', () => {
   assert.match(result.stdout, /^Gate: no-todo/m);
   assert.equal((result.stdout.match(/^Gate:/gm) ?? []).length, 1);
 });
+
+const cli = (...args: string[]) => spawnSync(process.execPath, [
+  '--disable-warning=ExperimentalWarning',
+  '--experimental-strip-types',
+  'packages/redproof/src/cli.ts',
+  ...args,
+], { cwd: resolve('.'), encoding: 'utf8' });
+
+const gateSelection = ['--config', 'fixtures/gate-selection/redproof.config.ts'];
+
+test('CLI check and prove accept Gate files and narrow the run', () => {
+  const all = cli('check', ...gateSelection, '--reporter=json');
+  assert.equal(all.status, 0, all.stderr);
+  assert.deepEqual(JSON.parse(all.stdout).gates.map((gate: { id: string }) => gate.id), ['alpha', 'beta']);
+
+  const one = cli('check', ...gateSelection, 'gates/beta.ts', '--reporter=json');
+  assert.equal(one.status, 0, one.stderr);
+  assert.deepEqual(JSON.parse(one.stdout).gates.map((gate: { id: string }) => gate.id), ['beta']);
+
+  const proveAll = cli('prove', ...gateSelection);
+  assert.equal(proveAll.status, 0, proveAll.stderr);
+  assert.equal((proveAll.stdout.match(/^✓/gm) ?? []).length, 4);
+
+  const proveOne = cli('prove', ...gateSelection, 'gates/alpha.ts');
+  assert.equal(proveOne.status, 0, proveOne.stderr);
+  assert.equal((proveOne.stdout.match(/^✓/gm) ?? []).length, 2);
+});
+
+test('CLI rejects an unmatched Gate file without an internal stack trace', () => {
+  for (const command of ['check', 'prove', 'describe']) {
+    const result = cli(command, ...gateSelection, 'gates/missing.ts');
+    assert.equal(result.status, 2, `${command}: ${result.stderr}`);
+    assert.equal(result.stderr, 'No Gate matched: gates/missing.ts\n');
+    assert.equal(result.stdout, '');
+  }
+});
+
+test('CLI rejects a real file that gatesRoot does not match', () => {
+  const result = cli('check', ...gateSelection, 'src/alpha.txt');
+
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /^src\/alpha\.txt is not a discovered Gate\./);
+  assert.doesNotMatch(result.stderr, /at |node:internal/);
+});
+
+test('CLI does not read a reporter or output-file value as a Gate file', () => {
+  const spaced = cli('check', ...gateSelection, '--reporter', 'json');
+  assert.equal(spaced.status, 0, spaced.stderr);
+  assert.deepEqual(JSON.parse(spaced.stdout).gates.map((gate: { id: string }) => gate.id), ['alpha', 'beta']);
+
+  const described = cli('describe', ...gateSelection, '--reporter', 'json');
+  assert.equal(described.status, 0, described.stderr);
+  assert.equal((described.stdout.match(/^Gate:/gm) ?? []).length, 2);
+});
