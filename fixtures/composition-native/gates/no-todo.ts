@@ -26,20 +26,13 @@ const gate = defineGate({
     counting: counting.supported,
 
     async run(ctx) {
-      const startedAt = new Date().toISOString();
       const found = await text.find(ctx, {
         files: 'src/**/*.ts',
         find: /\bTODO\b/g,
       });
-      const scan = {
-        source: 'text',
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        inspected: found.files.length,
-      } as const;
 
       return result.fromBreaches(
-        scan,
+        found.scan(),
         found.matches.map(match => breach(rules.noTodo, {
           code: 'todo-found',
           message: 'TODO comment found.',

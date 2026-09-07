@@ -26,17 +26,10 @@ const gate = defineGate({
     counting: counting.supported,
 
     async run(ctx) {
-      const startedAt = new Date().toISOString();
       const found = await json.query(ctx, {
         files: 'config/policy.json',
         path: '$.scripts.test',
       });
-      const scan = {
-        source: 'json',
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        inspected: found.files.length,
-      } as const;
 
       const breaches = found.matches
         .filter(match => match.value !== 'node --test')
@@ -50,7 +43,7 @@ const gate = defineGate({
           },
         }));
 
-      return result.fromBreaches(scan, breaches);
+      return result.fromBreaches(found.scan(), breaches);
     },
   },
 });

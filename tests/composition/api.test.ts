@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
+import { setTimeout } from 'node:timers/promises';
 import {
   breach,
   counting,
@@ -9,6 +10,7 @@ import {
   defineGate,
   defineRules,
   files,
+  json,
   result,
   text,
   type Scan,
@@ -87,5 +89,78 @@ test('files.find and text.find return relative paths plus exact source locations
     assert.equal(found.matches.length, 1);
     assert.deepEqual(found.matches[0]?.location, { file: 'src/a.ts', line: 2, column: 4 });
     assert.deepEqual(found.matches[0]?.range, { start: 16, end: 20 });
+  });
+});
+
+test('a search describes itself as a Scan covering its own window', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src/a.ts'), '// TODO: a\n', 'utf8');
+    await writeFile(join(root, 'src/b.ts'), 'const b = 2;\n', 'utf8');
+
+    const before = new Date().toISOString();
+    const found = await text.find({ root }, { files: 'src/**/*.ts', find: 'TODO' });
+    const after = new Date().toISOString();
+
+    // The window must describe the search, not the moment scan() is called.
+    await setTimeout(20);
+    const searchScan = found.scan();
+
+    assert.equal(searchScan.source, 'text');
+    assert.equal(searchScan.inspected, 2, 'inspected counts the files read, not the matches');
+    assert.ok(searchScan.startedAt >= before, 'the window cannot start before the search did');
+    assert.ok(searchScan.startedAt <= after, 'the window cannot start after the search ended');
+    assert.ok(searchScan.finishedAt <= after, 'the window cannot end after the search did');
+    assert.ok(searchScan.startedAt <= searchScan.finishedAt);
+  });
+});
+
+test('a search Scan accepts an earlier start and a different source', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src/a.ts'), '// TODO: a\n', 'utf8');
+
+    const startedAt = '2020-01-01T00:00:00.000Z';
+    const found = await text.find({ root }, { files: 'src/**/*.ts', find: 'TODO' });
+
+    assert.equal(found.scan({ startedAt }).startedAt, startedAt);
+    assert.equal(found.scan({ source: 'todo-scan' }).source, 'todo-scan');
+    assert.notEqual(found.scan().startedAt, startedAt, 'the override must not leak into the default');
+  });
+});
+
+test('json.query describes itself the same way as text.find', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'config'), { recursive: true });
+    await writeFile(join(root, 'config/a.json'), '{"scripts":{"test":"node --test"}}', 'utf8');
+    await writeFile(join(root, 'config/b.json'), '{"scripts":{"test":"vitest"}}', 'utf8');
+
+    const found = await json.query({ root }, { files: 'config/*.json', path: '$.scripts.test' });
+    const searchScan = found.scan();
+
+    assert.equal(searchScan.source, 'json');
+    assert.equal(searchScan.inspected, 2);
+    assert.equal(found.scan({ source: 'policy' }).source, 'policy');
+  });
+});
+
+test('a search Scan is a value, so a Check can pass it straight to a result', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src/a.ts'), '// TODO: a\n', 'utf8');
+
+    const rules = defineRules({ noTodo: { id: 'source/no-todo', description: 'No TODO.' } });
+    const found = await text.find({ root }, { files: 'src/**/*.ts', find: 'TODO' });
+    const checkResult = result.fromBreaches(
+      found.scan(),
+      found.matches.map(match => breach(rules.noTodo, {
+        code: 'todo-found',
+        message: 'TODO comment found.',
+        location: match.location,
+      })),
+    );
+
+    assert.equal(checkResult.verdict, 'fail');
+    assert.equal(checkResult.scan.inspected, 1);
   });
 });
