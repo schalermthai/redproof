@@ -8,7 +8,7 @@ import {
   text as textOps,
   type FileSelection,
   type RootContext,
-} from '../inspect.ts';
+} from '../../inspect/index.ts';
 
 async function existsAbsolute(path: string): Promise<boolean> {
   try {

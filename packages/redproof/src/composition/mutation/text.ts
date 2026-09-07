@@ -3,7 +3,7 @@ import {
   resolveTextLocator,
   type FindTextOptions,
   type TextLocator,
-} from '../inspect.ts';
+} from '../../inspect/index.ts';
 import { defineMutation } from './define.ts';
 
 function locatorDescription(locator: TextLocator): string {
