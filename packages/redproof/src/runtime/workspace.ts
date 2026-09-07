@@ -8,6 +8,7 @@ import {
   readFile,
   readdir,
   readlink,
+  realpath,
   rm,
   stat,
   symlink,
@@ -141,8 +142,9 @@ async function findDependencies(projectRoot: string): Promise<string | null> {
     try {
       // Follow a dependency-directory symlink. A Redproof run can itself execute
       // Redproof in a copied workspace, so the nearest node_modules may already
-      // be the link created by an outer copy.
-      if ((await stat(candidate)).isDirectory()) return candidate;
+      // be the link created by an outer copy. Resolve to the real directory, so
+      // a nested copy never links through the copy above it.
+      if ((await stat(candidate)).isDirectory()) return realpath(candidate);
     } catch {
       // keep walking up
     }
