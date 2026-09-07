@@ -89,6 +89,22 @@ test('JUnit XML decodes named, decimal, and hexadecimal character references', (
   assert.equal(run.tests[0]?.failure?.detail, 'at <anonymous>');
 });
 
+test('JUnit XML leaves out-of-range and surrogate references undecoded', () => {
+  const run = parseJunitXml(`<testsuite name="entities">
+    <testcase classname="suite" name="over &#x110000; and lone &#xD800;"/>
+  </testsuite>`);
+
+  assert.equal(run.tests[0]?.name, 'over &#x110000; and lone &#xD800;');
+});
+
+test('JUnit XML does not decode an escaped character reference twice', () => {
+  const run = parseJunitXml(`<testsuite name="entities">
+    <testcase classname="suite" name="literal &amp;#60;tag&amp;#62;"/>
+  </testsuite>`);
+
+  assert.equal(run.tests[0]?.name, 'literal &#60;tag&#62;');
+});
+
 test('generic test semantics map statuses to distinct Redproof rules', () => {
   const testsPass = defineRule({ id: 'testing/tests-pass', description: 'tests pass' });
   const noSkippedTests = defineRule({ id: 'testing/no-skipped-tests', description: 'no skip' });
