@@ -210,3 +210,14 @@ test('testing adapter refuses an unexplained non-zero exit even when an empty re
     assert.match(result.why.detail ?? '', /exit code: 5/);
   });
 });
+
+test('the testing adapter rejects a rule name it does not know', () => {
+  assert.throws(
+    () => testing({
+      runner: { kind: 'test', async run() { return { exitCode: 0, reportFile: 'x' }; } } as never,
+      report: report.junitXml(),
+      rules: { testsPass: true, noPurpleTests: true } as never,
+    }),
+    /Unknown testing rule option: "noPurpleTests"\. Known options: testsPass, noSkippedTests, noTodoTests\./,
+  );
+});

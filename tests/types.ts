@@ -1,4 +1,4 @@
-import { vitest } from '@redproof/testing';
+import { testing, vitest, report, runner } from '@redproof/testing';
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
 import { stryker } from '@redproof/stryker';
 import { command, commands } from 'redproof/command';
@@ -219,3 +219,28 @@ const passOnlyVitest = vitest({ rules: { testsPass: true } });
 passOnlyVitest.rules.testsPass;
 // @ts-expect-error noSkippedTests is not exposed when the rule was not selected.
 passOnlyVitest.rules.noSkippedTests;
+
+// An unknown option name must be rejected, not accepted and then ignored.
+
+defineConfig({ root: '.', gatesRoot: 'gates/**/*.ts', refusalExit: 2 });
+// @ts-expect-error refuseExit is not a config option.
+defineConfig({ root: '.', refuseExit: 2 });
+// Known limit: the guard reaches the top level only. A recursive version
+// breaks the ExecutionConfig union, so a nested unknown key is still accepted.
+defineConfig({ execution: { mode: 'copies', maxAtOne: 4 } });
+
+// @ts-expect-error noPurpleTests is not a testing Rule.
+vitest({ rules: { testsPass: true, noPurpleTests: true } });
+// @ts-expect-error noPurpleTests is not a testing Rule.
+vitest({ rules: { noPurpleTests: true } });
+
+testing({
+  runner: runner.command({ command: 'npm', args: () => ['test'] }),
+  report: report.junitXml(),
+  // @ts-expect-error noPurpleTests is not a testing Rule.
+  rules: { testsPass: true, noPurpleTests: true },
+});
+
+stryker({ rules: { mutantsDetected: true } });
+// @ts-expect-error mutantsKilled is not a Stryker Rule.
+stryker({ rules: { mutantsDetected: true, mutantsKilled: true } });
