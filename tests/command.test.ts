@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { command, type CommandCheckOptions } from 'redproof/command';
+import { command, commands, type CommandCheckOptions } from 'redproof/command';
 import { defineRule } from 'redproof';
 import { withWorkspace } from './helpers/workspace.ts';
 
 const rule = defineRule({
   id: 'command/succeeds',
   description: 'The command must succeed.',
+});
+const secondRule = defineRule({
+  id: 'command/second-succeeds',
+  description: 'The second command must succeed.',
 });
 
 async function runNode(
@@ -131,5 +135,154 @@ test('command validates ambiguous and unsafe options at composition time', () =>
   assert.throws(
     () => command({ rule, command: ' ' }),
     /command must not be empty/,
+  );
+});
+
+test('commands runs sequential entries in declaration order', async () => {
+  await withWorkspace(async root => {
+    const append = (value: string): CommandCheckOptions<typeof rule.id> => ({
+      rule,
+      command: process.execPath,
+      args: ['-e', `require('node:fs').appendFileSync('order.txt', '${value}')`],
+    });
+    const checkResult = await commands({
+      entries: [append('A'), append('B')],
+    }).run({ root, rules: [rule.id] });
+
+    assert.equal(checkResult.verdict, 'pass');
+    assert.equal(await readFile(join(root, 'order.txt'), 'utf8'), 'AB');
+    assert.equal(checkResult.scan.inspected, 2);
+  });
+});
+
+test('commands stops sequential execution when an entry refuses', async () => {
+  await withWorkspace(async root => {
+    const checkResult = await commands({
+      entries: [
+        { rule, command: 'redproof-command-that-does-not-exist', label: 'missing' },
+        {
+          rule,
+          command: process.execPath,
+          args: ['-e', "require('node:fs').writeFileSync('should-not-exist.txt', '')"],
+        },
+      ],
+    }).run({ root, rules: [rule.id] });
+
+    assert.equal(checkResult.verdict, 'refuse');
+    assert.equal(checkResult.scan.inspected, 1);
+    await assert.rejects(readFile(join(root, 'should-not-exist.txt')));
+  });
+});
+
+test('commands starts entries concurrently in parallel mode', async () => {
+  await withWorkspace(async root => {
+    const rendezvous = `
+      const { existsSync, writeFileSync } = require('node:fs');
+      const [own, other] = process.argv.slice(1);
+      writeFileSync(own, '');
+      const deadline = Date.now() + 2_000;
+      const timer = setInterval(() => {
+        if (existsSync(other)) process.exit(0);
+        if (Date.now() > deadline) process.exit(1);
+      }, 10);
+    `;
+    const checkResult = await commands({
+      mode: 'parallel',
+      maxAtOnce: 2,
+      entries: [
+        { rule, command: process.execPath, args: ['-e', rendezvous, 'a.started', 'b.started'] },
+        { rule, command: process.execPath, args: ['-e', rendezvous, 'b.started', 'a.started'] },
+      ],
+    }).run({ root, rules: [rule.id] });
+
+    assert.equal(checkResult.verdict, 'pass');
+    assert.equal(checkResult.scan.inspected, 2);
+  });
+});
+
+test('commands respects the parallel maxAtOnce bound', async () => {
+  await withWorkspace(async root => {
+    const checkResult = await commands({
+      mode: 'parallel',
+      maxAtOnce: 1,
+      entries: [
+        {
+          rule,
+          command: process.execPath,
+          args: [
+            '-e',
+            "setTimeout(() => require('node:fs').appendFileSync('bounded.txt', 'A'), 80)",
+          ],
+        },
+        {
+          rule,
+          command: process.execPath,
+          args: ['-e', "require('node:fs').appendFileSync('bounded.txt', 'B')"],
+        },
+      ],
+    }).run({ root, rules: [rule.id] });
+
+    assert.equal(checkResult.verdict, 'pass');
+    assert.equal(await readFile(join(root, 'bounded.txt'), 'utf8'), 'AB');
+  });
+});
+
+test('commands keeps parallel Breaches in declaration order', async () => {
+  await withWorkspace(async root => {
+    const checkResult = await commands({
+      mode: 'parallel',
+      maxAtOnce: 2,
+      entries: [
+        {
+          rule,
+          label: 'slow first',
+          command: process.execPath,
+          args: ['-e', 'setTimeout(() => process.exit(1), 60)'],
+        },
+        {
+          rule: secondRule,
+          label: 'fast second',
+          command: process.execPath,
+          args: ['-e', 'process.exit(1)'],
+        },
+      ],
+    }).run({ root, rules: [rule.id, secondRule.id] });
+
+    assert.equal(checkResult.verdict, 'fail');
+    if (checkResult.verdict !== 'fail') return;
+    assert.deepEqual(
+      checkResult.breaches.map(item => [item.rule, item.message]),
+      [
+        [rule.id, 'slow first exited with code 1.'],
+        [secondRule.id, 'fast second exited with code 1.'],
+      ],
+    );
+  });
+});
+
+test('commands makes REFUSE dominate parallel Breaches', async () => {
+  await withWorkspace(async root => {
+    const checkResult = await commands({
+      mode: 'parallel',
+      entries: [
+        { rule, command: process.execPath, args: ['-e', 'process.exit(1)'] },
+        { rule: secondRule, command: 'redproof-command-that-does-not-exist' },
+      ],
+    }).run({ root, rules: [rule.id, secondRule.id] });
+
+    assert.equal(checkResult.verdict, 'refuse');
+    if (checkResult.verdict !== 'refuse') return;
+    assert.equal(checkResult.why.code, 'command-unavailable');
+  });
+});
+
+test('commands validates its execution policy at composition time', () => {
+  assert.throws(
+    () => commands({ entries: [] as never }),
+    /requires at least one entry/,
+  );
+  assert.throws(
+    () => commands({ mode: 'parallel', maxAtOnce: 0, entries: [{ rule, command: 'node' }] }),
+    /maxAtOnce must be a positive integer/,
   );
 });
