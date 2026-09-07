@@ -77,6 +77,18 @@ test('JUnit XML normalizes passed, failed and skipped tests', () => {
   assert.deepEqual(run.tests[1]?.suite, ['test_parser']);
 });
 
+test('JUnit XML decodes named, decimal, and hexadecimal character references', () => {
+  const run = parseJunitXml(`<testsuite name="entities">
+    <testcase classname="suite" name="it&#x27;s safe">
+      <failure message="&#60;bad&#62; &amp; &#128640;">at &#x3C;anonymous&#x3E;</failure>
+    </testcase>
+  </testsuite>`);
+
+  assert.equal(run.tests[0]?.name, "it's safe");
+  assert.equal(run.tests[0]?.failure?.message, '<bad> & 🚀');
+  assert.equal(run.tests[0]?.failure?.detail, 'at <anonymous>');
+});
+
 test('generic test semantics map statuses to distinct Redproof rules', () => {
   const testsPass = defineRule({ id: 'testing/tests-pass', description: 'tests pass' });
   const noSkippedTests = defineRule({ id: 'testing/no-skipped-tests', description: 'no skip' });
