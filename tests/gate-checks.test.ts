@@ -8,7 +8,7 @@ import { readSources, listPaths } from '../gates/support/sources.ts';
 import { node, stripTypes, tsc } from '../gates/support/node.ts';
 import { effectBoundaries } from '../gates/checks/effect-boundaries.ts';
 import { repositoryPolicy } from '../gates/checks/repository-policy.ts';
-import { nodeTestArgs, nodeTestSuite } from '../gates/checks/node-test-suite.ts';
+import { nodeTestSuite } from '../gates/checks/node-test-suite.ts';
 import { withWorkspace } from './helpers/workspace.ts';
 
 const ruleA = defineRule({ id: 'probe/a', description: 'Rule A.' });
@@ -168,14 +168,15 @@ test('node helpers build the runtime arguments a Gate needs', () => {
   assert.deepEqual(tsc('--noEmit'), ['node_modules/typescript/bin/tsc', '--noEmit']);
 });
 
-test('nodeTestArgs runs the matching files with a JUnit report destination', async () => {
+test('nodeTestSuite runs the matching files with a JUnit report destination', async () => {
   await withWorkspace(async root => {
     await mkdir(join(root, 'tests'), { recursive: true });
     await writeFile(join(root, 'tests/one.test.ts'), '\n', 'utf8');
     await writeFile(join(root, 'tests/two.test.ts'), '\n', 'utf8');
     await writeFile(join(root, 'tests/helper.ts'), '\n', 'utf8');
 
-    const args = nodeTestArgs('tests/**/*.test.ts', { root, reportFile: '/tmp/report.xml' });
+    const built = nodeTestSuite({ files: 'tests/**/*.test.ts' });
+    const args = built.argsFor?.({ root, reportFile: '/tmp/report.xml' }) ?? [];
 
     assert.ok(args.includes('--test'));
     assert.ok(args.includes('--test-reporter=junit'));
@@ -187,9 +188,14 @@ test('nodeTestArgs runs the matching files with a JUnit report destination', asy
   });
 });
 
-test('nodeTestSuite describes itself for redproof describe', () => {
-  const built = nodeTestSuite({ files: 'tests/**/*.test.ts' });
-  assert.match(built.description, /Node test suite/);
+test('nodeTestSuite names the pattern it runs, so the description cannot drift', () => {
+  const built = nodeTestSuite({ files: 'tests/unit/**/*.spec.ts' });
+
+  assert.equal(
+    built.description,
+    'run tests/unit/**/*.spec.ts under node --test with a JUnit report',
+  );
+  assert.deepEqual(built.plan, { command: process.execPath });
 });
 
 // ---------- effectBoundaries ----------

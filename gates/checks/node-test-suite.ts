@@ -1,22 +1,23 @@
 import { globSync } from 'node:fs';
-import { runner, type TestRunner, type TestRunnerContext } from '@redproof/testing';
+import { runner, type TestRunner } from '@redproof/testing';
 import { node, stripTypes } from '../support/node.ts';
 
-/** The Node arguments that run `files` under the test runner, reporting JUnit XML. */
-export function nodeTestArgs(files: string, ctx: TestRunnerContext): string[] {
-  return stripTypes(
-    '--test',
-    '--test-reporter=junit',
-    `--test-reporter-destination=${ctx.reportFile}`,
-    ...globSync(files, { cwd: ctx.root }).sort(),
-  );
-}
-
-/** Run every matching test file under `node --test`, reporting JUnit XML. */
+/**
+ * Run every matching test file under `node --test`, reporting JUnit XML.
+ *
+ * The file list depends on the workspace, so the arguments are built per run.
+ * `runner.command` exposes that builder as `argsFor`, and the description names
+ * the pattern, so neither can drift from what actually runs.
+ */
 export function nodeTestSuite(options: { readonly files: string }): TestRunner {
   return runner.command({
     command: node,
-    description: 'run the complete Node test suite with a structured JUnit report',
-    args: ctx => nodeTestArgs(options.files, ctx),
+    description: `run ${options.files} under node --test with a JUnit report`,
+    args: ctx => stripTypes(
+      '--test',
+      '--test-reporter=junit',
+      `--test-reporter-destination=${ctx.reportFile}`,
+      ...globSync(options.files, { cwd: ctx.root }).sort(),
+    ),
   });
 }
