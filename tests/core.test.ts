@@ -15,6 +15,8 @@ import {
 import { resolveConfig } from '../packages/redproof/src/composition/config.ts';
 import { executionPolicy } from '../packages/redproof/src/run/core/policy.ts';
 import { checkExitCode, proofExitCode } from '../packages/redproof/src/run/core/exit-code.ts';
+import { gateFilesFrom, gateModuleFrom } from '../packages/redproof/src/project/core/discovery.ts';
+import { selectModules, unmatchedMessage } from '../packages/redproof/src/project/core/selection.ts';
 import { evaluateProof } from '../packages/redproof/src/proof/core/evaluation.ts';
 import {
   baselineBlocksProof,
@@ -292,4 +294,54 @@ test('proof failures map each lifecycle step to one infrastructure error', () =>
   assert.equal(afterRestore.ok, false);
   assert.equal(afterRestore.result, result);
   assert.equal(failedOutcome(gate, red, { step: 'check', error }, 7).result, undefined);
+});
+
+test('a Gate module must default-export a Gate and may export proofs for that same Gate', () => {
+  const gate = defineGate({ id: 'unit-gate', adapter: adapter() });
+  const other = defineGate({ id: 'other-gate', adapter: adapter() });
+  const suite = { gate, proofs: [proof.green('stays green')] };
+
+  assert.deepEqual(gateModuleFrom('/p/gates/a.ts', { default: gate }), { file: '/p/gates/a.ts', gate });
+  assert.deepEqual(
+    gateModuleFrom('/p/gates/a.ts', { default: gate, proofs: suite }),
+    { file: '/p/gates/a.ts', gate, proofs: suite },
+  );
+  assert.throws(() => gateModuleFrom('/p/gates/a.ts', {}), /must default-export a Gate/);
+  assert.throws(
+    () => gateModuleFrom('/p/gates/a.ts', { default: other, proofs: suite }),
+    /proofs for a different Gate instance/,
+  );
+});
+
+test('discovered Gate files are sorted and unique, and none is an error', () => {
+  assert.deepEqual(
+    gateFilesFrom('/p', ['gates/*.ts'], ['/p/gates/b.ts', '/p/gates/a.ts', '/p/gates/b.ts']),
+    ['/p/gates/a.ts', '/p/gates/b.ts'],
+  );
+  assert.throws(
+    () => gateFilesFrom('/p', ['gates/*.ts', 'more/*.ts'], []),
+    /No Gate modules found under \/p for "gates\/\*\.ts", "more\/\*\.ts"\./,
+  );
+});
+
+test('Gate selection keeps discovery order, accepts relative and absolute names, and reports an unmatched name', () => {
+  const a = { file: '/p/gates/a.ts', gate: defineGate({ id: 'a', adapter: adapter() }) };
+  const b = { file: '/p/gates/b.ts', gate: defineGate({ id: 'b', adapter: adapter() }) };
+  const project = { root: '/p', refusalExit: 2, execution: { mode: 'in-place' as const }, modules: [a, b] };
+
+  assert.deepEqual(selectModules(project, []), { kind: 'selected', modules: [a, b] });
+  assert.deepEqual(selectModules(project, ['gates/b.ts', '/p/gates/a.ts', 'gates/b.ts']), {
+    kind: 'selected',
+    modules: [a, b],
+  });
+  assert.deepEqual(selectModules(project, ['gates/a.ts', 'gates/missing.ts']), {
+    kind: 'unmatched',
+    gateFile: 'gates/missing.ts',
+    target: '/p/gates/missing.ts',
+  });
+});
+
+test('an unmatched Gate name explains whether the file exists outside gatesRoot', () => {
+  assert.equal(unmatchedMessage('src/x.ts', true), 'src/x.ts is not a discovered Gate. gatesRoot does not match it.');
+  assert.equal(unmatchedMessage('src/x.ts', false), 'No Gate matched: src/x.ts');
 });
