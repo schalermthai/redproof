@@ -67,6 +67,21 @@ test('CLI reports a missing config value without an internal stack trace', () =>
   assert.doesNotMatch(result.stderr, /node:path|at main|ERR_/);
 });
 
+test('CLI discovers an ESM config in a CommonJS project', () => {
+  const result = spawnSync(process.execPath, [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-strip-types',
+    resolve('packages/redproof/src/cli.ts'),
+    'check',
+    '--reporter=json',
+  ], { cwd: resolve('fixtures/commonjs-config'), encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.status, 'passed');
+  assert.deepEqual(report.gates.map((gate: { id: string }) => gate.id), ['commonjs-config']);
+});
+
 test('CLI writes JSON output relative to the project root', async () => {
   const output = resolve('fixtures/pass-single/.redproof/reporter-test.json');
   await rm(output, { force: true });
