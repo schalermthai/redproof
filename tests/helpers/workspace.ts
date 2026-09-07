@@ -2,10 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export async function withWorkspace(fn: (root: string) => Promise<void>): Promise<void> {
+export async function withWorkspace<T>(fn: (root: string) => Promise<T>): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), 'redproof-test-'));
   try {
-    await fn(root);
+    return await fn(root);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

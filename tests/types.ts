@@ -1,6 +1,7 @@
 import { vitest } from '@redproof/testing';
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
 import { stryker } from '@redproof/stryker';
+import { command } from 'redproof/command';
 import {
   counting,
   defineAdapter,
@@ -39,6 +40,14 @@ const scan: Scan = {
 
 const R1 = defineRule({ id: 'r1', description: 'R1' });
 const R2 = defineRule({ id: 'r2', description: 'R2' });
+
+const commandCheck: Check<'r1'> = command({
+  rule: R1,
+  command: 'npm',
+  args: ['run', 'lint'],
+  exitCodes: { pass: [0], breach: [1] },
+});
+void commandCheck;
 
 const diagnostic: Diagnostic = {
   code: 'x',
