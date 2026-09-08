@@ -139,6 +139,10 @@ const adapter = defineAdapter({
   },
 });
 const gate = defineGate({ id: 'g', adapter });
+defineGate({ id: 'optional', adapter, allowEmptyInspection: true });
+
+// @ts-expect-error empty-inspection policy is boolean.
+defineGate({ id: 'bad-policy', adapter, allowEmptyInspection: 'yes' });
 
 defineProofs(gate, [proof.green('green')]);
 
@@ -153,6 +157,7 @@ const composedRules = defineRules({
 
 const nativeGate = defineGate({
   id: 'native-composed',
+  allowEmptyInspection: false,
   rules: composedRules,
   check: defineCheck(composedRules, {
     description: 'native composed check',

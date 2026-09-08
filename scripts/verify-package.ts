@@ -242,13 +242,16 @@ try {
     + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
     + "export const mutation = stryker({ cwd: 'packages/parser', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } });\n"
     + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', rules: { testsPass: true, noFlakyTests: true } });\n"
+    + "export const optional = defineGate({ id: 'optional', rules: { command: rule }, check, allowEmptyInspection: true });\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
   report(typesOk.ok, 'valid consumer code type-checks', typesOk.ok ? '' : typesOk.output.slice(0, 400));
 
   console.log('\n7. Red-proof: the type check must reject bad code');
-  const red = "import { thisExportDoesNotExist } from 'redproof';\nvoid thisExportDoesNotExist;\n";
+  const red = "import { counting, defineGate, pass } from 'redproof';\n"
+    + "const rule = { id: 'consumer/rule', description: 'rule' } as const;\n"
+    + "defineGate({ id: 'bad', rules: { rule }, check: { description: 'check', counting: counting.supported, async run() { return pass({ source: 'consumer', startedAt: '', finishedAt: '', inspected: 0 }); } }, allowEmptyInspection: 'yes' });\n";
   await writeFile(join(consumer, 'consumer.ts'), red);
   const typesRed = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
   report(!typesRed.ok, 'invalid consumer code is rejected', typesRed.ok ? 'type check passed when it should have failed' : '');

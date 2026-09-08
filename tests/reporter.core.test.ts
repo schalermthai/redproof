@@ -56,6 +56,12 @@ test('a diagnostic without a line never asks for source', () => {
   assert.doesNotMatch(output, /ignored/);
 });
 
+test('terminal output makes an explicitly allowed zero-inspection PASS visible', () => {
+  const output = renderRun(runWith(pass({ ...scan, inspected: 0 })), new Map());
+
+  assert.match(output, /gates\/unit\.ts \(1 rule \| 0 inspected\)/);
+});
+
 function completed<E extends CompletedProofOutcome['expected']>(
   expected: E,
   reason: Extract<CompletedProofOutcome, { expected: E }>['reason'],

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, vitest, type TestRunner } from '@redproof/testing';
-import { defineRule } from 'redproof';
+import { defineGate, defineRule, runGate } from 'redproof';
 import { configuredVitestReport } from '../../packages/testing/src/shell/vitest-runner.ts';
 import { withWorkspace } from '../helpers/workspace.ts';
 
@@ -400,6 +400,44 @@ test('testing adapter refuses an unexplained non-zero exit even when an empty re
     if (result.verdict !== 'refuse') return;
     assert.equal(result.why.code, 'test-runner-unsuccessful');
     assert.match(result.why.detail ?? '', /exit code: 5/);
+  });
+});
+
+test('a valid empty Vitest-compatible report passes parsing but is refused by the Gate by default', async () => {
+  await withWorkspace(async root => {
+    const runner: TestRunner = {
+      description: 'write an empty Vitest-compatible report',
+      async run(ctx) {
+        await writeFile(ctx.reportFile, JSON.stringify({
+          success: true,
+          numTotalTests: 0,
+          numPassedTests: 0,
+          numFailedTests: 0,
+          numPendingTests: 0,
+          numTodoTests: 0,
+          testResults: [],
+        }), 'utf8');
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const adapter = testing({
+      runner,
+      report: report.jestJson(),
+      rules: { testsPass: true },
+    });
+
+    const parsed = await adapter.check.run({ root, rules: [adapter.rules.testsPass.id] });
+    assert.equal(parsed.verdict, 'pass', 'an empty but internally consistent report is trustworthy');
+    assert.equal(parsed.scan.inspected, 0);
+
+    const guarded = await runGate(defineGate({ id: 'tests', adapter }), root);
+    assert.equal(guarded.verdict, 'refuse');
+    if (guarded.verdict !== 'refuse') return;
+    assert.equal(guarded.why.code, 'nothing-inspected');
+
+    const allowed = await runGate(defineGate({ id: 'optional-tests', adapter, allowEmptyInspection: true }), root);
+    assert.equal(allowed.verdict, 'pass');
+    assert.equal(allowed.scan.inspected, 0);
   });
 });
 

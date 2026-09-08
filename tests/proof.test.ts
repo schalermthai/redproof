@@ -33,17 +33,19 @@ type World = {
   breached: readonly RuleId[];
   refused: boolean;
   checkThrows: boolean;
+  inspected: number | null;
   readonly contexts: CheckContext[];
   readonly log: string[];
 };
 
 function world(overrides: Partial<World> = {}): World {
-  return { breached: [], refused: false, checkThrows: false, contexts: [], log: [], ...overrides };
+  return { breached: [], refused: false, checkThrows: false, inspected: 1, contexts: [], log: [], ...overrides };
 }
 
-function gateOver(state: World) {
+function gateOver(state: World, allowEmptyInspection = false) {
   return defineGate({
     id: 'world',
+    ...(allowEmptyInspection ? { allowEmptyInspection: true } : {}),
     adapter: defineAdapter({
       kind: 'test',
       rules: { r1: R1, r2: R2 },
@@ -53,10 +55,11 @@ function gateOver(state: World) {
         async run(ctx) {
           state.contexts.push(ctx);
           if (state.checkThrows) throw new Error('check exploded');
-          if (state.refused) return refuse(scan, { code: 'unavailable', message: 'Unavailable', location: null });
+          const checkScan = { ...scan, inspected: state.inspected };
+          if (state.refused) return refuse(checkScan, { code: 'unavailable', message: 'Unavailable', location: null });
           const [first, ...rest] = state.breached.map(rule =>
             breach(rule, { code: rule, message: `${rule} breached`, location: null }));
-          return first ? fail(scan, [first, ...rest]) : pass(scan);
+          return first ? fail(checkScan, [first, ...rest]) : pass(checkScan);
         },
       },
     }),
@@ -104,6 +107,20 @@ test('runGate hands the Check its root and every Rule of the Adapter', async () 
 
   assert.equal(result.verdict, 'pass');
   assert.deepEqual(state.contexts, [{ root: '/project', rules: ['r1', 'r2'] }]);
+});
+
+test('runGate refuses a zero-inspected PASS by default and permits an explicit empty scope', async () => {
+  const state = world({ inspected: 0 });
+
+  const guarded = await runGate(gateOver(state), '/project');
+  assert.equal(guarded.verdict, 'refuse');
+  if (guarded.verdict !== 'refuse') throw new Error('expected refusal');
+  assert.equal(guarded.why.code, 'nothing-inspected');
+  assert.equal(guarded.scan.inspected, 0);
+
+  const allowed = await runGate(gateOver(state, true), '/project');
+  assert.equal(allowed.verdict, 'pass');
+  assert.equal(allowed.scan.inspected, 0);
 });
 
 test('RED proof proves when its mutation breaches the target, then restores the world', async () => {
