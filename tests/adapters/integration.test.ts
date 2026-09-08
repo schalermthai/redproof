@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { checkProject, proofEstablished, proveProject } from 'redproof';
@@ -25,6 +26,33 @@ test('dependency-cruiser adapter passes clean architecture and proves both mappe
       ['refuse', true, 'refuse'],
     ],
   );
+});
+
+test('Vitest adapter preserves a nested project report while proving test policies', async () => {
+  const config = configOf('testing-vitest');
+  const sentinel = resolve('fixtures/testing-vitest/project/results.json');
+  const check = await checkProject(config);
+  assert.equal(check.exitCode, 0);
+  assert.equal(check.results[0]?.result.verdict, 'pass');
+  assert.equal(await readFile(sentinel, 'utf8'), '{"sentinel":true}\n');
+
+  const proof = await proveProject(config);
+  assert.equal(proof.exitCode, 0);
+  assert.deepEqual(
+    proof.outcomes.map(outcome => [
+      outcome.expected,
+      proofEstablished(outcome),
+      outcome.status === 'completed' ? outcome.result.verdict : outcome.error.code,
+    ]),
+    [
+      ['red', true, 'fail'],
+      ['red', true, 'fail'],
+      ['red', true, 'fail'],
+      ['green', true, 'pass'],
+      ['refuse', true, 'refuse'],
+    ],
+  );
+  assert.equal(await readFile(sentinel, 'utf8'), '{"sentinel":true}\n');
 });
 
 test('Stryker adapter passes strong tests and proves strict, baseline, score, and refusal policies', async () => {

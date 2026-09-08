@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, type TestRunner } from '@redproof/testing';
 import { defineRule } from 'redproof';
+import { configuredVitestReport } from '../../packages/testing/src/shell/vitest-runner.ts';
 import { withWorkspace } from '../helpers/workspace.ts';
 
 const jestSample = JSON.stringify({
@@ -163,6 +166,37 @@ test('testing adapter trusts structured failures over the command exit code', as
   });
 });
 
+test('testing adapter normalizes files against the canonical Gate root', async () => {
+  await withWorkspace(async root => {
+    const alias = join(root, 'alias');
+    await symlink(root, alias, 'dir');
+    const canonicalRoot = await realpath(root);
+    const sample = JSON.stringify({
+      testResults: [{
+        name: join(canonicalRoot, 'test', 'example.test.ts'),
+        assertionResults: [{ title: 'fails', status: 'failed', failureMessages: ['broken'] }],
+      }],
+    });
+    const fake: TestRunner = {
+      description: 'write canonical report paths',
+      async run(ctx) {
+        await writeFile(ctx.reportFile, sample, 'utf8');
+        return { kind: 'completed', exitCode: 1, stdout: '', stderr: '' };
+      },
+    };
+    const adapter = testing({
+      runner: fake,
+      report: report.jestJson(),
+      rules: { testsPass: true },
+    });
+
+    const result = await adapter.check.run({ root: alias, rules: ['testing/tests-pass'] });
+    assert.equal(result.verdict, 'fail');
+    if (result.verdict !== 'fail') return;
+    assert.equal(result.breaches[0]?.location?.file, 'test/example.test.ts');
+  });
+});
+
 test('testing adapter refuses when a command completes without a readable report', async () => {
   await withWorkspace(async root => {
     const runner: TestRunner = {
@@ -253,4 +287,113 @@ test('an explicit runner description still wins over the command line', () => {
 
   assert.equal(built.description, 'run the acceptance suite');
   assert.deepEqual(built.plan, { command: 'npm', args: ['test'] });
+});
+
+test('a command runner executes from a confined working directory', async () => {
+  await withWorkspace(async root => {
+    await mkdir(join(root, 'project'));
+    const built = runner.command({
+      command: process.execPath,
+      args: ['-e', 'process.stdout.write(process.cwd())'],
+      cwd: 'project',
+    });
+
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(result.kind, 'completed');
+    if (result.kind !== 'completed') return;
+    assert.equal(result.stdout, await realpath(join(root, 'project')));
+  });
+});
+
+test('a command runner refuses lexical and symbolic-link cwd escapes', async () => {
+  await withWorkspace(async root => {
+    const lexical = runner.command({ command: process.execPath, cwd: '..' });
+    const lexicalResult = await lexical.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(lexicalResult.kind, 'unavailable');
+    if (lexicalResult.kind === 'unavailable') {
+      assert.match(lexicalResult.message, /outside the Gate root/);
+    }
+
+    await symlink(tmpdir(), join(root, 'escape'));
+    const symbolic = runner.command({ command: process.execPath, cwd: 'escape' });
+    const symbolicResult = await symbolic.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(symbolicResult.kind, 'unavailable');
+    if (symbolicResult.kind === 'unavailable') {
+      assert.match(symbolicResult.message, /outside the Gate root/);
+    }
+  });
+});
+
+test('a configured Vitest report is fresh for the run and the previous file is restored', async () => {
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    const configuredReport = join(project, 'results.json');
+    const capturedReport = join(root, 'captured.json');
+    await mkdir(project);
+    await writeFile(configuredReport, 'stale report', 'utf8');
+
+    const fake: TestRunner = {
+      description: 'fake Vitest',
+      async run() {
+        await writeFile(configuredReport, jestSample, 'utf8');
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, { cwd: 'project', reportFile: 'results.json' });
+    const result = await wrapped.run({ root, reportFile: capturedReport });
+
+    assert.equal(result.kind, 'completed');
+    assert.equal(await readFile(capturedReport, 'utf8'), jestSample);
+    assert.equal(await readFile(configuredReport, 'utf8'), 'stale report');
+  });
+});
+
+test('a configured Vitest report refuses a stale file when the run writes nothing', async () => {
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    const configuredReport = join(project, 'results.json');
+    const capturedReport = join(root, 'captured.json');
+    await mkdir(project);
+    await writeFile(configuredReport, 'stale report', 'utf8');
+
+    const fake: TestRunner = {
+      description: 'fake Vitest that writes nothing',
+      async run() {
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, { cwd: 'project', reportFile: 'results.json' });
+    const result = await wrapped.run({ root, reportFile: capturedReport });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind === 'unavailable') {
+      assert.match(result.message, /did not produce its configured JSON report/);
+    }
+    assert.equal(await readFile(capturedReport, 'utf8').catch(() => null), null);
+    assert.equal(await readFile(configuredReport, 'utf8'), 'stale report');
+  });
+});
+
+test('a configured Vitest report refuses paths outside the Gate root', async () => {
+  await withWorkspace(async root => {
+    let ran = false;
+    const fake: TestRunner = {
+      description: 'fake Vitest',
+      async run() {
+        ran = true;
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, { cwd: '.', reportFile: '../results.json' });
+    const result = await wrapped.run({ root, reportFile: join(root, 'captured.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    assert.equal(ran, false);
+
+    await symlink(tmpdir(), join(root, 'escape'));
+    const symbolic = configuredVitestReport(fake, { cwd: 'escape', reportFile: 'results.json' });
+    const symbolicResult = await symbolic.run({ root, reportFile: join(root, 'captured.json') });
+    assert.equal(symbolicResult.kind, 'unavailable');
+    assert.equal(ran, false);
+  });
 });

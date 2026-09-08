@@ -44,6 +44,7 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/stryker/src/index.ts',
   'packages/testing/src/index.ts',
   'packages/testing/src/runner.ts',
+  'packages/testing/src/shell/vitest-runner.ts',
 ]);
 
 function literalText(node: ts.Expression | undefined): string | undefined {

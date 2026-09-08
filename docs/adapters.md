@@ -45,6 +45,34 @@ export const proofs = defineProofs(gate, [
 export default gate;
 ```
 
+For a Vitest project below the Gate root, select its working directory. If the
+project already configures a JSON `outputFile` that setup or teardown code
+consumes, name it with `reportFile`; Redproof will use that fresh report and
+restore any file that existed before the run:
+
+```ts
+import { vitest } from '@redproof/testing';
+
+const adapter = vitest({
+  cwd: 'packages/app',
+  configFile: 'vitest.config.ts',
+  reportFile: 'test-results.json',
+  rules: { testsPass: true },
+});
+```
+
+`cwd` is relative to and confined inside the Gate root. `configFile` and test
+file filters follow Vitest's normal cwd-relative resolution. `reportFile` is
+relative to `cwd` and must name the same file as the JSON `outputFile` in the
+Vitest config. Keep the Vitest `root` at `cwd`. If the two disagree, the Check
+refuses because the report is not found. A keyed `outputFile` works when
+`reportFile` matches its `json` entry. When `reportFile` is absent, Redproof
+continues to direct Vitest to a private temporary JSON report.
+
+Redproof passes `--no-cache` to Vitest. Without it, Vitest writes a results
+cache under `node_modules/.vite` inside the project, and a proof run refuses
+with `workspace-not-restored`. The adapter is proven against Vitest 5.
+
 The testing integration can expose these Rules, depending on the selected report format:
 
 - `testing/tests-pass`
@@ -116,6 +144,9 @@ alone and `argsFor` answers for one run.
 The default description uses the command's base name. A description therefore
 reads the same on every machine, even when `command` is an absolute path. Set
 `description` yourself when a sentence explains more than the command line does.
+
+Set `cwd` to run a generic test command below the Gate root. Redproof rejects
+both `..` escapes and symbolic links that resolve outside the root.
 
 A Check built from `redproof/command` reports itself the same way. See
 **[Command Checks](commands.md#what-a-check-says-about-itself)**.
