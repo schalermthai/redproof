@@ -1,5 +1,6 @@
 import { Stryker } from '@stryker-mutator/core';
-import { realpath } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import {
   counting,
   defineAdapter,
@@ -7,12 +8,19 @@ import {
   result,
   type Adapter,
   type Breach,
+  type Diagnostic,
   rejectUnknownKeys,
   type NoUnknownKeys,
   type Rule,
   type RuleCatalog,
   type RuleRefOfCatalog,
 } from 'redproof';
+import {
+  assessStrykerBaseline,
+  parseAcceptedStrykerMutants,
+  type AcceptedStrykerMutant,
+  type StrykerBaselineAssessment,
+} from './baseline.ts';
 import {
   mutationMetrics,
   mutationScoreBreach,
@@ -23,6 +31,10 @@ import { confineCanonicalStrykerCwd, resolveStrykerCwd } from './cwd.ts';
 
 export type StrykerRuleOptions = {
   readonly mutantsDetected?: true;
+  readonly noNewUndetectedMutants?: {
+    /** JSON baseline path relative to the Gate root. */
+    readonly acceptedMutantsFile: string;
+  };
   readonly mutationScore?: {
     readonly minimum: number;
   };
@@ -32,9 +44,11 @@ export type StrykerRuleCatalog<O extends StrykerRuleOptions> = {
   readonly [K in keyof O]:
     K extends 'mutantsDetected'
       ? Rule<'stryker/mutants-detected'>
-      : K extends 'mutationScore'
-        ? Rule<'stryker/mutation-score'>
-        : never;
+      : K extends 'noNewUndetectedMutants'
+        ? Rule<'stryker/no-new-undetected-mutants'>
+        : K extends 'mutationScore'
+          ? Rule<'stryker/mutation-score'>
+          : never;
 };
 
 export type StrykerAdapterOptions<O extends StrykerRuleOptions> = {
@@ -46,6 +60,41 @@ export type StrykerAdapterOptions<O extends StrykerRuleOptions> = {
 
 function now(): string {
   return new Date().toISOString();
+}
+
+function refuseBeforeRun(startedAt: string, why: Diagnostic) {
+  return result.refuse({ source: 'stryker', startedAt, finishedAt: now(), inspected: null }, why);
+}
+
+function cwdOutsideRoot(startedAt: string, path: string) {
+  return refuseBeforeRun(startedAt, {
+    code: 'stryker-cwd-outside-root',
+    message: 'The Stryker working directory resolves outside the Gate root.',
+    location: null,
+    detail: path,
+  });
+}
+
+type LoadedBaseline =
+  | { readonly kind: 'loaded'; readonly accepted: readonly AcceptedStrykerMutant[] }
+  | { readonly kind: 'outside'; readonly path: string }
+  | { readonly kind: 'invalid'; readonly detail: string };
+
+/** The baseline is resolved from the working directory, like configFile, and must stay inside the Gate root. */
+async function loadAcceptedMutants(canonicalRoot: string, workingDirectory: string, file: string): Promise<LoadedBaseline> {
+  const lexical = confineCanonicalStrykerCwd(canonicalRoot, resolve(workingDirectory, file));
+  if (lexical.kind === 'outside') return lexical;
+
+  const canonical = await realpath(lexical.path).catch((error: Error) => error);
+  if (canonical instanceof Error) return { kind: 'invalid', detail: canonical.message };
+  const confined = confineCanonicalStrykerCwd(canonicalRoot, canonical);
+  if (confined.kind === 'outside') return confined;
+
+  const text = await readFile(confined.path, 'utf8').catch((error: Error) => error);
+  const parsed = text instanceof Error ? text : parseAcceptedStrykerMutants(text);
+  return parsed instanceof Error
+    ? { kind: 'invalid', detail: parsed.message }
+    : { kind: 'loaded', accepted: parsed };
 }
 
 function withCwd<T>(root: string, action: () => Promise<T>): Promise<T> {
@@ -71,14 +120,26 @@ function withoutTestRunnerEnv<T>(action: () => Promise<T>): Promise<T> {
   });
 }
 
-const STRYKER_RULE_NAMES = ['mutantsDetected', 'mutationScore'] as const;
+const BASELINE_INVALID_MESSAGES = {
+  'stryker-accepted-mutants-stale': 'Accepted mutants are now detected. Remove them from the baseline.',
+  'stryker-mutant-identity-unavailable': 'Stryker produced an undetected mutant without a stable identity.',
+  'stryker-mutant-identity-ambiguous': 'Stryker reported two undetected mutants with one identity.',
+} as const satisfies Record<Extract<StrykerBaselineAssessment, { kind: 'invalid' }>['code'], string>;
+
+const STRYKER_RULE_NAMES = [
+  'mutantsDetected',
+  'noNewUndetectedMutants',
+  'mutationScore',
+] as const;
 
 export function stryker<const O extends StrykerRuleOptions>(
   options: StrykerAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, StrykerRuleOptions> },
 ): Adapter<StrykerRuleCatalog<O>> {
   rejectUnknownKeys(options.rules, STRYKER_RULE_NAMES, 'Stryker rule');
 
-  if (!options.rules.mutantsDetected && !options.rules.mutationScore) {
+  if (!options.rules.mutantsDetected
+    && !options.rules.noNewUndetectedMutants
+    && !options.rules.mutationScore) {
     throw new Error('Stryker adapter requires at least one Redproof rule.');
   }
 
@@ -88,12 +149,24 @@ export function stryker<const O extends StrykerRuleOptions>(
       throw new Error('Stryker mutationScore.minimum must be between 0 and 100.');
     }
   }
+  if (options.rules.noNewUndetectedMutants) {
+    const baselineFile = options.rules.noNewUndetectedMutants.acceptedMutantsFile;
+    if (typeof baselineFile !== 'string' || baselineFile.trim() === '') {
+      throw new Error('Stryker noNewUndetectedMutants.acceptedMutantsFile must be a non-empty string.');
+    }
+  }
 
   const catalog: Record<string, Rule> = {};
   if (options.rules.mutantsDetected) {
     catalog.mutantsDetected = {
       id: 'stryker/mutants-detected',
       description: 'All valid Stryker mutants must be detected by the test suite.',
+    };
+  }
+  if (options.rules.noNewUndetectedMutants) {
+    catalog.noNewUndetectedMutants = {
+      id: 'stryker/no-new-undetected-mutants',
+      description: 'No undetected Stryker mutants may appear outside the accepted baseline.',
     };
   }
   if (options.rules.mutationScore) {
@@ -121,33 +194,39 @@ export function stryker<const O extends StrykerRuleOptions>(
 
         try {
           const lexicalWorkingDirectory = resolveStrykerCwd(ctx.root, cwd);
-          const workingDirectory = lexicalWorkingDirectory.kind === 'inside'
-            ? confineCanonicalStrykerCwd(
-              await realpath(ctx.root),
-              await realpath(lexicalWorkingDirectory.path),
-            )
-            : lexicalWorkingDirectory;
-          if (workingDirectory.kind === 'outside') {
-            return result.refuse(
-              {
-                source: 'stryker',
-                startedAt,
-                finishedAt: now(),
-                inspected: null,
-              },
-              {
-                code: 'stryker-cwd-outside-root',
-                message: 'The Stryker working directory resolves outside the Gate root.',
-                location: null,
-                detail: workingDirectory.path,
-              },
-            );
-          }
+          if (lexicalWorkingDirectory.kind === 'outside') return cwdOutsideRoot(startedAt, lexicalWorkingDirectory.path);
+          const canonicalRoot = await realpath(ctx.root);
+          const workingDirectory = confineCanonicalStrykerCwd(canonicalRoot, await realpath(lexicalWorkingDirectory.path));
+          if (workingDirectory.kind === 'outside') return cwdOutsideRoot(startedAt, workingDirectory.path);
 
           return await withCwd(workingDirectory.path, async () => withoutTestRunnerEnv(async () => {
+            let acceptedMutants: readonly AcceptedStrykerMutant[] | undefined;
+            const acceptedMutantsFile = options.rules.noNewUndetectedMutants?.acceptedMutantsFile;
+            if (acceptedMutantsFile) {
+              const loaded = await loadAcceptedMutants(canonicalRoot, workingDirectory.path, acceptedMutantsFile);
+              if (loaded.kind === 'outside') {
+                return refuseBeforeRun(startedAt, {
+                  code: 'stryker-accepted-mutants-outside-root',
+                  message: 'The accepted-mutants baseline resolves outside the Gate root.',
+                  location: { file: acceptedMutantsFile, line: null, column: null },
+                  detail: loaded.path,
+                });
+              }
+              if (loaded.kind === 'invalid') {
+                return refuseBeforeRun(startedAt, {
+                  code: 'stryker-accepted-mutants-invalid',
+                  message: 'The accepted-mutants baseline could not be read.',
+                  location: { file: acceptedMutantsFile, line: null, column: null },
+                  detail: loaded.detail,
+                });
+              }
+              acceptedMutants = loaded.accepted;
+            }
+
             const engine = new Stryker({
               ...(configFile ? { configFile } : {}),
               reporters: [],
+              cleanTempDir: 'always',
             });
             const mutants = await engine.runMutationTest() as readonly StrykerMutantResult[];
             const metrics = mutationMetrics(mutants);
@@ -175,12 +254,34 @@ export function stryker<const O extends StrykerRuleOptions>(
               });
             }
 
+            const baseline = acceptedMutants
+              ? assessStrykerBaseline(workingDirectory.path, mutants, acceptedMutants)
+              : undefined;
+            if (baseline?.kind === 'invalid') {
+              return result.refuse(scan, {
+                code: baseline.code,
+                message: BASELINE_INVALID_MESSAGES[baseline.code],
+                location: acceptedMutantsFile
+                  ? { file: acceptedMutantsFile, line: null, column: null }
+                  : null,
+                detail: baseline.detail,
+              });
+            }
+
             const breaches: Breach<Ref>[] = [];
 
             if (options.rules.mutantsDetected) {
               breaches.push(...undetectedMutantBreaches(
                 mutants,
                 rulesByAlias.mutantsDetected!,
+              ));
+            }
+
+            if (options.rules.noNewUndetectedMutants && baseline?.kind === 'compared') {
+              breaches.push(...undetectedMutantBreaches(
+                baseline.newUndetected,
+                rulesByAlias.noNewUndetectedMutants!,
+                'outside the accepted baseline',
               ));
             }
 
@@ -196,24 +297,17 @@ export function stryker<const O extends StrykerRuleOptions>(
             return result.fromBreaches(scan, breaches);
           }));
         } catch (error) {
-          return result.refuse(
-            {
-              source: 'stryker',
-              startedAt,
-              finishedAt: now(),
-              inspected: null,
-            },
-            {
-              code: 'stryker-unavailable',
-              message: 'Stryker could not complete the mutation check.',
-              location: null,
-              detail: error instanceof Error ? error.message : String(error),
-            },
-          );
+          return refuseBeforeRun(startedAt, {
+            code: 'stryker-unavailable',
+            message: 'Stryker could not complete the mutation check.',
+            location: null,
+            detail: error instanceof Error ? error.message : String(error),
+          });
         }
       },
     },
   });
 }
 
+export type { AcceptedStrykerMutant } from './baseline.ts';
 export type { MutationMetrics, StrykerMutantResult, StrykerMutantStatus } from './model.ts';

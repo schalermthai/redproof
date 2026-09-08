@@ -6,6 +6,9 @@ const adapter = stryker({
   configFile: 'stryker.config.mjs',
   rules: {
     mutantsDetected: true,
+    noNewUndetectedMutants: {
+      acceptedMutantsFile: 'accepted-mutants.json',
+    },
     mutationScore: {
       minimum: 100,
     },
@@ -31,11 +34,39 @@ export const proofs = defineProofs(gate, [
     weakenBoundaryTest(),
   ),
   proof.red(
+    adapter.rules.noNewUndetectedMutants,
+    'detects an undetected mutant outside the accepted baseline',
+    weakenBoundaryTest(),
+  ),
+  proof.red(
     adapter.rules.mutationScore,
     'detects mutation score dropping below 100%',
     weakenBoundaryTest(),
   ),
   proof.green('accepts the strong baseline test suite'),
+  proof.refuse(
+    'refuses a stale accepted-mutant baseline',
+    mutate.replaceText(
+      locate.text({ files: 'project/accepted-mutants.json', find: '[]' }),
+      JSON.stringify([{
+        fileName: 'src/is-adult.js',
+        mutatorName: 'EqualityOperator',
+        replacement: 'age > 18',
+        location: {
+          start: { line: 2, column: 10 },
+          end: { line: 2, column: 19 },
+        },
+        reason: 'Fixture entry is intentionally stale.',
+      }]),
+    ),
+  ),
+  proof.refuse(
+    'refuses when the initial test run fails, and leaves no Stryker temp files behind',
+    mutate.replaceText(
+      locate.text({ files: 'project/test/is-adult.test.js', find: 'assert.equal(isAdult(17), false);' }),
+      'assert.equal(isAdult(17), true);',
+    ),
+  ),
   proof.refuse(
     'refuses when Stryker configuration is unavailable',
     mutate.rename(

@@ -87,7 +87,7 @@ export function mutationMetrics(mutants: readonly StrykerMutantResult[]): Mutati
   };
 }
 
-function mutantDiagnostic(mutant: StrykerMutantResult): Diagnostic {
+function mutantDiagnostic(mutant: StrykerMutantResult, context?: string): Diagnostic {
   const status = mutant.status === 'NoCoverage' ? 'had no test coverage' : 'survived the test suite';
   const parts = [
     mutant.mutatorName,
@@ -97,7 +97,7 @@ function mutantDiagnostic(mutant: StrykerMutantResult): Diagnostic {
 
   return {
     code: mutant.status === 'NoCoverage' ? 'mutant-no-coverage' : 'mutant-survived',
-    message: `Stryker mutant ${status}.`,
+    message: `Stryker mutant ${status}${context ? `, ${context}` : ''}.`,
     location: mutant.fileName
       ? {
           file: mutant.fileName,
@@ -112,10 +112,11 @@ function mutantDiagnostic(mutant: StrykerMutantResult): Diagnostic {
 export function undetectedMutantBreaches<R extends string>(
   mutants: readonly StrykerMutantResult[],
   rule: Rule<R>,
+  context?: string,
 ): readonly Breach<R>[] {
   return mutants
     .filter(mutant => mutant.status === 'Survived' || mutant.status === 'NoCoverage')
-    .map(mutant => breach(rule, mutantDiagnostic(mutant)));
+    .map(mutant => breach(rule, mutantDiagnostic(mutant, context)));
 }
 
 export function mutationScoreBreach<R extends string>(
