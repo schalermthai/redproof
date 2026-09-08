@@ -418,13 +418,13 @@ bad option                → throw before any Check exists
 
 Do not infer Redproof semantics from a process exit code when structured evidence can distinguish the two.
 
-See **[Building an Adapter](building-an-adapter.md)** for a complete example and
+See **[Custom Adapter](custom-adapter.md)** for a complete example and
 the guidelines that keep its verdicts honest.
 
 ## Next
 
-- **[Building an Adapter](building-an-adapter.md)**
-- **[Built-in integrations](adapters.md)**
+- **[Custom Adapter](custom-adapter.md)**
+- **[Built-in Adapters](built-in-adapters.md)**
 - **[Execution isolation](tutorials/execution-isolation.md)**
 - **[Reporters](tutorials/reporters.md)**
 - **[Legacy modernization](legacy-modernization.md)**

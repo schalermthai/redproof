@@ -1,11 +1,12 @@
-# Building an Adapter
+# Custom Adapter
 
-An Adapter translates an external tool into Redproof Rules and one Check. The
-tool keeps doing the real analysis. The Adapter decides what its output means.
+An Adapter translates an external tool into Redproof Rules and one Check. It
+is for a serious integration: a tool that brings its own policy model, such as
+a rule catalogue or a score. Most Gates do not need one.
 
-This page shows how to build one, and the rules that keep its verdicts honest.
-The `@redproof/testing` package follows every rule here, so its source is the
-worked example.
+This page first shows the two simpler options. Then it shows how to build an
+Adapter, and the rules that keep its verdicts honest. The `@redproof/testing`
+package follows every rule here, so its source is the worked example.
 
 - [Decide what to build](#decide-what-to-build)
 - [Three lanes for a wrong answer](#three-lanes-for-a-wrong-answer)
@@ -16,19 +17,91 @@ worked example.
 
 ## Decide what to build
 
-Three pieces can wrap a tool. Pick the smallest one that fits.
+Try the two simpler options first. Build an Adapter only when neither fits.
 
-> Create a Check when the tool is an executable and its exit code is the result.
+### A native Check with `run()`
 
-> Create a runner or a report format when the tool only changes how a test
-> suite starts, or how its results are written.
+When you can find the evidence yourself, write the Check inline. The no-todo
+Gate in the README is complete with no Adapter. It scans source files and
+reports each match as a Breach of one Rule.
+
+```ts
+import { breach, counting, defineGate, defineRules, result, text } from 'redproof';
+
+const rules = defineRules({
+  noTodo: {
+    id: 'source/no-todo',
+    description: 'Source files must not contain TODO comments.',
+  },
+});
+
+export default defineGate({
+  id: 'no-todo',
+  rules,
+
+  check: {
+    description: 'scan TypeScript source files for TODO comments',
+    counting: counting.supported,
+
+    async run(ctx) {
+      const found = await text.find(ctx, { files: 'src/**/*.ts', find: /\bTODO\b/g });
+      return result.fromBreaches(
+        found.scan(),
+        found.matches.map(match =>
+          breach(rules.noTodo, {
+            code: 'todo-found',
+            message: 'TODO comment found.',
+            location: match.location,
+          }),
+        ),
+      );
+    },
+  },
+});
+```
+
+### A Command Check that delegates to the tool
+
+When the guardrail already exists as an executable, `redproof/command` builds
+the Check for you. The exit code decides the verdict. A missing executable, a
+timeout, or an exit code outside the policy becomes REFUSE.
+
+```ts
+import { defineGate, defineRules } from 'redproof';
+import { command } from 'redproof/command';
+
+const rules = defineRules({
+  docs: {
+    id: 'docs/lint',
+    description: 'Documentation must pass lint.',
+  },
+});
+
+export default defineGate({
+  id: 'docs',
+  rules,
+  check: command({
+    rule: rules.docs,
+    command: 'npm',
+    args: ['run', 'lint:docs'],
+  }),
+});
+```
+
+See **[Command Checks](commands.md)** for exit-code policy, command groups, and
+what a Check reports about itself.
+
+### An Adapter
 
 > Create an Adapter when the tool brings its own policy model, such as a rule
-> catalogue or a score.
+> catalogue or a score, and one Gate must expose several of its policies as
+> Redproof Rules.
 
-For the first case, `redproof/command` builds the Check for you. See
-**[Command Checks](commands.md)**. For the second case, see
-[Extend the testing adapter instead](#extend-the-testing-adapter-instead).
+> Create a runner or a report format, not an Adapter, when the tool only changes
+> how a test suite starts, or how its results are written. See
+> [Extend the testing adapter instead](#extend-the-testing-adapter-instead).
+
+The rest of this page is for the Adapter case.
 
 ## Three lanes for a wrong answer
 
@@ -319,4 +392,4 @@ kinds against one Adapter.
 
 - **[Composing Redproof](composition.md)** for Rules, Checks, Proofs, and Mutations.
 - **[Command Checks](commands.md)** for a guardrail that is already an executable.
-- **[Built-in integrations](adapters.md)** for the Adapters that ship with Redproof.
+- **[Built-in Adapters](built-in-adapters.md)** for the Adapters that ship with Redproof.

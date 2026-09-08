@@ -4,7 +4,7 @@ A **Check** decides whether the Rules of a Gate hold. When a guardrail already
 exists as an executable, you do not need to write that Check by hand.
 
 `redproof/command` builds a Check from a command line. It is part of the Check
-layer, not an Adapter. See **[Decide what to build](building-an-adapter.md#decide-what-to-build)**
+layer, not an Adapter. See **[Decide what to build](custom-adapter.md#decide-what-to-build)**
 when you are not sure which one you need.
 
 - [One command](#one-command)
@@ -136,7 +136,7 @@ does. An explicit description always wins.
 
 - **[Composing Redproof](composition.md)** for Rules, Checks, Proofs, and
   Mutations.
-- **[Building an Adapter](building-an-adapter.md)** for tools that bring their
+- **[Custom Adapter](custom-adapter.md)** for tools that bring their
   own policy model.
-- **[Built-in integrations](adapters.md)** for the Adapters that ship with
+- **[Built-in Adapters](built-in-adapters.md)** for the Adapters that ship with
   Redproof.
