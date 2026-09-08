@@ -81,9 +81,11 @@ The testing integration can expose these Rules, depending on the selected report
 - `testing/no-skipped-tests`
 - `testing/no-todo-tests`
 
-The flaky-test Rule treats an ultimately passing assertion with retained failure
-messages as flaky. Vitest preserves that evidence for earlier retry attempts in
-its Jest-compatible JSON report. JUnit XML records only the final outcome, so
+The flaky-test Rule breaches when a test passes only after a retry. The evidence
+differs by producer. Vitest keeps the failure messages of earlier attempts in
+its Jest-compatible JSON report. Jest clears them, reports `invocations` greater
+than 1, and fills `retryReasons` only when `logErrorsBeforeRetry` is set.
+Redproof reads all three signals. JUnit XML records only the final outcome, so
 Redproof refuses `noFlakyTests` with that format at composition time.
 
 ### Other test runners

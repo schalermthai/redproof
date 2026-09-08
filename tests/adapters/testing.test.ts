@@ -63,6 +63,33 @@ const flakyJestSample = JSON.stringify({
   }],
 });
 
+const retriedJestSample = JSON.stringify({
+  success: true,
+  testResults: [{
+    name: '/workspace/test/retry.test.ts',
+    assertionResults: [
+      {
+        ancestorTitles: ['retry'],
+        title: 'eventually passes',
+        status: 'passed',
+        failureMessages: [],
+        retryReasons: [],
+        invocations: 2,
+        location: { line: 8, column: 3 },
+      },
+      {
+        ancestorTitles: ['retry'],
+        title: 'passes first time',
+        status: 'passed',
+        failureMessages: [],
+        retryReasons: [],
+        invocations: 1,
+        location: { line: 14, column: 3 },
+      },
+    ],
+  }],
+});
+
 const junitSample = `<?xml version="1.0" encoding="utf-8"?>
 <testsuites name="pytest tests">
   <testsuite name="pytest" failures="1" skipped="1" tests="3">
@@ -151,6 +178,23 @@ test('Jest-compatible retry evidence maps an ultimately passing test to noFlakyT
   assert.equal(breaches[0]?.code, 'test-flaky');
   assert.equal(breaches[0]?.detail, 'expected attempt 1 to succeed');
   assert.equal(testRunBreaches(parseJestJson(jestSample), { noFlakyTests }).length, 0);
+});
+
+test('Jest retry counts map a passing test with empty failure messages to noFlakyTests', () => {
+  const noFlakyTests = defineRule({
+    id: 'testing/no-flaky-tests',
+    description: 'tests pass on their first attempt',
+  });
+  const run = parseJestJson(retriedJestSample);
+
+  assert.deepEqual(run.tests.map(item => item.status), ['passed', 'passed']);
+  assert.equal(run.tests[0]?.failure?.message, 'passed after 2 invocations');
+  assert.equal(run.tests[1]?.failure, undefined);
+  const breaches = testRunBreaches(run, { noFlakyTests });
+  assert.equal(breaches.length, 1);
+  assert.equal(breaches[0]?.code, 'test-flaky');
+  assert.equal(breaches[0]?.message, 'retry > eventually passes');
+  assert.equal(breaches[0]?.detail, 'passed after 2 invocations');
 });
 
 test('JUnit refuses rules for semantics its final-outcome format cannot distinguish', () => {

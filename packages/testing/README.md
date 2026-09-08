@@ -41,8 +41,8 @@ same file as the config `outputFile`. Redproof restores any pre-existing report
 afterward. Omit `reportFile` to use Redproof's private temporary report.
 
 `noFlakyTests` is available for Jest-compatible JSON reports. It breaches when
-a test ultimately passes but the report retains failures from earlier retry
-attempts.
+a test passes only after a retry. Vitest keeps the earlier failure messages in
+the report. Jest reports `invocations` greater than 1. Redproof reads both.
 
 Then run:
 

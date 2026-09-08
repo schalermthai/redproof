@@ -249,7 +249,7 @@ REFUSE   the Check could not decide safely
 
 You do not need to build every Gate yourself.
 
-- **[`@redproof/testing`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#testing)** — test suites, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
+- **[`@redproof/testing`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#testing)** — test suites, flaky tests, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
 - **[`@redproof/eslint`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#eslint)** — selected ESLint rules as Redproof Rules
 - **[`@redproof/dependency-cruiser`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#dependency-cruiser)** — architecture and dependency boundaries
 - **[`@redproof/stryker`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#stryker)** — mutation detection and mutation-score policies
