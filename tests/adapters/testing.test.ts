@@ -3,7 +3,7 @@ import { chmod, mkdir, readdir, readFile, realpath, rm, symlink, writeFile } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, type TestRunner } from '@redproof/testing';
+import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, vitest, type TestRunner } from '@redproof/testing';
 import { defineRule } from 'redproof';
 import { configuredVitestReport } from '../../packages/testing/src/shell/vitest-runner.ts';
 import { withWorkspace } from '../helpers/workspace.ts';
@@ -560,4 +560,15 @@ test('a configured Vitest report refuses paths outside the Gate root', async () 
     assert.equal(symbolicResult.kind, 'unavailable');
     assert.equal(ran, false);
   });
+});
+
+test('the Vitest adapter rejects invalid configured report paths before execution', () => {
+  assert.throws(
+    () => vitest({ reportFile: '', rules: { testsPass: true } }),
+    /reportFile must not be empty/,
+  );
+  assert.throws(
+    () => vitest({ reportFile: join(tmpdir(), 'results.json'), rules: { testsPass: true } }),
+    /reportFile must be relative/,
+  );
 });
