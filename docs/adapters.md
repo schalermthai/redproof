@@ -68,9 +68,7 @@ relative to `cwd` and must name the same file as the JSON `outputFile` in the
 Vitest config. Keep the Vitest `root` at `cwd`. If the two disagree, the Check
 refuses because the report is not found. A keyed `outputFile` works when
 `reportFile` matches its `json` entry. When `reportFile` is absent, Redproof
-continues to direct Vitest to a private temporary JSON report. If the previous
-report cannot be set aside or restored, the Check refuses and names the backup
-file, so a file-system problem never looks like a test result.
+continues to direct Vitest to a private temporary JSON report.
 
 Redproof passes `--no-cache` to Vitest. Without it, Vitest writes a results
 cache under `node_modules/.vite` inside the project, and a proof run refuses
