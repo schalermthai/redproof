@@ -245,16 +245,16 @@ FAIL     one or more Rules were breached
 REFUSE   the Check could not decide safely
 ```
 
-## Built-in integrations
+## Built-in Adapters
 
 You do not need to build every Gate yourself.
 
-- **[`@redproof/testing`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#testing)** — test suites, flaky tests, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
-- **[`@redproof/eslint`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#eslint)** — selected ESLint rules as Redproof Rules
-- **[`@redproof/dependency-cruiser`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#dependency-cruiser)** — architecture and dependency boundaries
-- **[`@redproof/stryker`](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md#stryker)** — mutation detection and mutation-score policies
+- **[`@redproof/testing`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#testing)** — test suites, flaky tests, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
+- **[`@redproof/eslint`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#eslint)** — selected ESLint rules as Redproof Rules
+- **[`@redproof/dependency-cruiser`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#dependency-cruiser)** — architecture and dependency boundaries
+- **[`@redproof/stryker`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#stryker)** — mutation detection and mutation-score policies
 
-See **[Built-in integrations](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md)** for examples.
+See **[Built-in Adapters](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md)** for examples.
 
 ## Build your own
 
@@ -283,7 +283,7 @@ command groups, and what a Check reports about itself.
 
 See **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, and Mutations.
 
-See **[Building an Adapter](https://github.com/schalermthai/redproof/blob/main/docs/building-an-adapter.md)** when a tool brings its own policy model, and for the guidelines that keep an Adapter's verdicts honest.
+See **[Custom Adapter](https://github.com/schalermthai/redproof/blob/main/docs/custom-adapter.md)** when a tool brings its own policy model, and for the guidelines that keep an Adapter's verdicts honest.
 
 For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**.
 
@@ -355,10 +355,10 @@ npm run redproof:describe -- gates/no-todo.ts
 
 ## Learn more
 
-- **[Built-in integrations](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md)**
+- **[Built-in Adapters](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md)**
 - **[Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/commands.md)**
 - **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)**
-- **[Building an Adapter](https://github.com/schalermthai/redproof/blob/main/docs/building-an-adapter.md)**
+- **[Custom Adapter](https://github.com/schalermthai/redproof/blob/main/docs/custom-adapter.md)**
 - **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**
 - **[Legacy modernization](https://github.com/schalermthai/redproof/blob/main/docs/legacy-modernization.md)**
 - **[Self-hosting Redproof](https://github.com/schalermthai/redproof/blob/main/docs/self-hosting.md)**

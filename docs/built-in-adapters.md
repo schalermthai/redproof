@@ -1,4 +1,4 @@
-# Built-in integrations
+# Built-in Adapters
 
 Redproof integrations translate an existing tool or result format into Redproof Rules and Check results.
 
@@ -128,7 +128,7 @@ report.junitXml()
 ```
 
 For a custom test system, implement only the runner or the report format. See
-**[Extend the testing adapter instead](building-an-adapter.md#extend-the-testing-adapter-instead)**.
+**[Extend the testing adapter instead](custom-adapter.md#extend-the-testing-adapter-instead)**.
 
 ### What a command runner reports about itself
 
@@ -308,6 +308,6 @@ For a useful RED proof, weaken the test suite and confirm Stryker notices the lo
 
 ## Next
 
-- **[Building an Adapter](building-an-adapter.md)** when no built-in integration fits, and for
+- **[Custom Adapter](custom-adapter.md)** when no built-in integration fits, and for
   choosing between a Check, a runner or report format, and an Adapter.
 - **[Command Checks](commands.md)** when the tool is an executable and its exit code is the result.

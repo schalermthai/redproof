@@ -28,4 +28,4 @@ For a guardrail that is already an executable, see **[Command Checks](../command
 
 For authoring Rules, Checks, Proofs, and Mutations, see **[Composing Redproof](../composition.md)**.
 
-For wrapping a tool that brings its own policy model, see **[Building an Adapter](../building-an-adapter.md)**.
+For wrapping a tool that brings its own policy model, see **[Custom Adapter](../custom-adapter.md)**.

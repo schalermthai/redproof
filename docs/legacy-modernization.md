@@ -419,5 +419,5 @@ Together, the two directions cover the whole strangler program. One set of Gates
 ## Next
 
 - **[Composing Redproof](composition.md)** for authoring Rules, Checks, Proofs, Mutations, and Adapters
-- **[Built-in integrations](adapters.md)** for the testing, ESLint, dependency-cruiser, and Stryker Adapters
+- **[Built-in Adapters](built-in-adapters.md)** for the testing, ESLint, dependency-cruiser, and Stryker Adapters
 - **[Execution isolation](tutorials/execution-isolation.md)** for running proof mutations against copied workspaces
