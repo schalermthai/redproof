@@ -25,6 +25,7 @@ const adapter = vitest({
   reportFile: 'test-results.json',
   rules: {
     testsPass: true,
+    noFlakyTests: true,
     noSkippedTests: true,
     noTodoTests: true,
   },
@@ -38,6 +39,10 @@ export default defineGate({ id: 'unit-tests', adapter });
 to inspect the same fresh report. It is relative to `cwd` and must name the
 same file as the config `outputFile`. Redproof restores any pre-existing report
 afterward. Omit `reportFile` to use Redproof's private temporary report.
+
+`noFlakyTests` is available for Jest-compatible JSON reports. It breaches when
+a test passes only after a retry. Vitest keeps the earlier failure messages in
+the report. Jest reports `invocations` greater than 1. Redproof reads both.
 
 Then run:
 

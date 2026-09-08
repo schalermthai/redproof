@@ -64,15 +64,24 @@ function normalizeRun(root: string, run: TestRun): TestRun {
   };
 }
 
-const TEST_RULE_NAMES = ['testsPass', 'noSkippedTests', 'noTodoTests'] as const;
+const TEST_RULE_NAMES = ['testsPass', 'noFlakyTests', 'noSkippedTests', 'noTodoTests'] as const;
 
 export function testing<const O extends TestRuleOptions>(
   options: TestingAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, TestRuleOptions> },
 ): Adapter<TestRuleCatalog<O>> {
   rejectUnknownKeys(options.rules, TEST_RULE_NAMES, 'testing rule');
 
-  if (!options.rules.testsPass && !options.rules.noSkippedTests && !options.rules.noTodoTests) {
+  if (
+    !options.rules.testsPass
+    && !options.rules.noFlakyTests
+    && !options.rules.noSkippedTests
+    && !options.rules.noTodoTests
+  ) {
     throw new Error('Testing adapter requires at least one Redproof rule.');
+  }
+
+  if (options.rules.noFlakyTests && !options.report.capabilities.flaky) {
+    throw new Error(`Report format ${options.report.kind} cannot distinguish flaky tests.`);
   }
 
   if (options.rules.noTodoTests && !options.report.capabilities.todo) {
@@ -84,6 +93,12 @@ export function testing<const O extends TestRuleOptions>(
     catalog.testsPass = {
       id: 'testing/tests-pass',
       description: 'All tests must pass.',
+    };
+  }
+  if (options.rules.noFlakyTests) {
+    catalog.noFlakyTests = {
+      id: 'testing/no-flaky-tests',
+      description: 'Tests must pass without failed attempts.',
     };
   }
   if (options.rules.noSkippedTests) {
@@ -194,6 +209,7 @@ export function testing<const O extends TestRuleOptions>(
             scan,
             testRunBreaches(run, {
               ...(options.rules.testsPass ? { testsPass: byAlias.testsPass! } : {}),
+              ...(options.rules.noFlakyTests ? { noFlakyTests: byAlias.noFlakyTests! } : {}),
               ...(options.rules.noSkippedTests ? { noSkippedTests: byAlias.noSkippedTests! } : {}),
               ...(options.rules.noTodoTests ? { noTodoTests: byAlias.noTodoTests! } : {}),
             }),

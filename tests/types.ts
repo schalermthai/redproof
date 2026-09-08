@@ -236,6 +236,7 @@ baselineStryker.rules.mutationScore;
 const vitestAdapter = vitest({
   rules: {
     testsPass: true,
+    noFlakyTests: true,
     noSkippedTests: true,
   },
 });
@@ -247,11 +248,17 @@ proof.red(vitestAdapter.rules.noSkippedTests, 'no skipped tests proof', {
   description: 'noop',
   async apply() { return async () => {}; },
 });
+proof.red(vitestAdapter.rules.noFlakyTests, 'no flaky tests proof', {
+  description: 'noop',
+  async apply() { return async () => {}; },
+});
 
 const passOnlyVitest = vitest({ rules: { testsPass: true } });
 passOnlyVitest.rules.testsPass;
 // @ts-expect-error noSkippedTests is not exposed when the rule was not selected.
 passOnlyVitest.rules.noSkippedTests;
+// @ts-expect-error noFlakyTests is not exposed when the rule was not selected.
+passOnlyVitest.rules.noFlakyTests;
 
 vitest({
   cwd: 'packages/app',

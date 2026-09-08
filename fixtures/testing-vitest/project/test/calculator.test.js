@@ -7,4 +7,5 @@ describe('calculator', () => {
   });
 
   // REDPROOF_TODO_SLOT
+  // REDPROOF_FLAKY_SLOT
 });

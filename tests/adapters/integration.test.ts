@@ -48,6 +48,7 @@ test('Vitest adapter preserves a nested project report while proving test polici
       ['red', true, 'fail'],
       ['red', true, 'fail'],
       ['red', true, 'fail'],
+      ['red', true, 'fail'],
       ['green', true, 'pass'],
       ['refuse', true, 'refuse'],
     ],

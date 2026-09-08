@@ -7,6 +7,9 @@ type JestAssertionLike = {
   readonly title?: string;
   readonly duration?: number | null;
   readonly failureMessages?: readonly string[];
+  /** Jest fills retryReasons only with logErrorsBeforeRetry; invocations counts every attempt. */
+  readonly retryReasons?: readonly string[];
+  readonly invocations?: number;
   readonly location?: {
     readonly line?: number;
     readonly column?: number;
@@ -55,6 +58,11 @@ export function parseJestJson(input: string): TestRun {
     for (const assertion of file.assertionResults) {
       const status = statusOf(assertion.status);
       const failureMessage = assertion.failureMessages?.filter(Boolean).join('\n\n');
+      const retryReasons = assertion.retryReasons?.filter(Boolean).join('\n\n');
+      const retried = typeof assertion.invocations === 'number' && assertion.invocations > 1;
+      const evidence = failureMessage
+        || retryReasons
+        || (retried ? `passed after ${assertion.invocations} invocations` : '');
       const line = assertion.location?.line ?? null;
       const column = assertion.location?.column ?? null;
       const location = file.name
@@ -68,8 +76,8 @@ export function parseJestJson(input: string): TestRun {
         status,
         location,
         ...(typeof assertion.duration === 'number' ? { durationMs: assertion.duration } : {}),
-        ...(failureMessage
-          ? { failure: { message: failureMessage } }
+        ...(evidence
+          ? { failure: { message: evidence } }
           : {}),
       });
     }
@@ -82,7 +90,7 @@ export function jestJson(): TestReportFormat {
   return {
     kind: 'jest-json',
     extension: '.json',
-    capabilities: { todo: true },
+    capabilities: { todo: true, flaky: true },
     parse: parseJestJson,
   };
 }

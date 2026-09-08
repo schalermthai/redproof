@@ -241,7 +241,7 @@ try {
     + "export const check = command({ rule, command: 'node' });\n"
     + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
     + "export const mutation = stryker({ cwd: 'packages/parser', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } });\n"
-    + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', rules: { testsPass: true } });\n"
+    + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', rules: { testsPass: true, noFlakyTests: true } });\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);

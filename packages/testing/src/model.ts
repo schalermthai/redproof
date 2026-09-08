@@ -34,6 +34,7 @@ export type TestRun = {
 
 export type TestRuleOptions = {
   readonly testsPass?: true;
+  readonly noFlakyTests?: true;
   readonly noSkippedTests?: true;
   readonly noTodoTests?: true;
 };
@@ -42,15 +43,19 @@ export type TestRuleCatalog<O extends TestRuleOptions> = {
   readonly [K in keyof O]:
     K extends 'testsPass'
       ? Rule<'testing/tests-pass'>
-      : K extends 'noSkippedTests'
-        ? Rule<'testing/no-skipped-tests'>
-        : K extends 'noTodoTests'
-          ? Rule<'testing/no-todo-tests'>
-          : never;
+      : K extends 'noFlakyTests'
+        ? Rule<'testing/no-flaky-tests'>
+        : K extends 'noSkippedTests'
+          ? Rule<'testing/no-skipped-tests'>
+          : K extends 'noTodoTests'
+            ? Rule<'testing/no-todo-tests'>
+            : never;
 };
 
 export type TestReportCapabilities = {
   readonly todo: boolean;
+  /** Whether a passing test preserves failure evidence from earlier attempts. */
+  readonly flaky?: boolean;
 };
 
 export type TestReportFormat = {
@@ -114,6 +119,7 @@ export function testRunBreaches<R extends RuleRef>(
   run: TestRun,
   rules: {
     readonly testsPass?: Rule<R>;
+    readonly noFlakyTests?: Rule<R>;
     readonly noSkippedTests?: Rule<R>;
     readonly noTodoTests?: Rule<R>;
   },
@@ -125,6 +131,15 @@ export function testRunBreaches<R extends RuleRef>(
       breaches.push(breach(
         rules.testsPass,
         testDiagnostic(test, 'test-failed', displayName(test)),
+      ));
+    }
+  }
+
+  if (rules.noFlakyTests) {
+    for (const test of run.tests.filter(item => item.status === 'passed' && item.failure)) {
+      breaches.push(breach(
+        rules.noFlakyTests,
+        testDiagnostic(test, 'test-flaky', displayName(test)),
       ));
     }
   }
