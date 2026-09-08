@@ -32,22 +32,32 @@ type JestReportLike = {
 
 type JestSummaryField = Exclude<keyof JestReportLike, 'testResults'>;
 
-function validateSummary(parsed: JestReportLike, tests: readonly TestCase[]): void {
-  const expected: Readonly<Record<JestSummaryField, number>> = {
-    numTotalTests: tests.length,
-    numPassedTests: tests.filter(test => test.status === 'passed').length,
-    numFailedTests: tests.filter(test => test.status === 'failed').length,
-    numPendingTests: tests.filter(test => test.status === 'skipped').length,
-    numTodoTests: tests.filter(test => test.status === 'todo').length,
-  };
+const SUMMARY_FIELDS: readonly JestSummaryField[] = [
+  'numTotalTests',
+  'numPassedTests',
+  'numFailedTests',
+  'numPendingTests',
+  'numTodoTests',
+];
 
-  for (const field of Object.keys(expected) as JestSummaryField[]) {
+/** Only total and failed agree with assertionResults across Vitest versions and under bail. */
+function validateSummary(parsed: JestReportLike, tests: readonly TestCase[]): void {
+  for (const field of SUMMARY_FIELDS) {
     const reported = parsed[field];
     if (reported === undefined) continue;
     if (!Number.isSafeInteger(reported) || reported < 0) {
       throw new Error(`Jest-compatible JSON ${field} must be a non-negative safe integer.`);
     }
-    if (reported !== expected[field]) {
+  }
+
+  const expected = {
+    numTotalTests: tests.length,
+    numFailedTests: tests.filter(test => test.status === 'failed').length,
+  } as const;
+
+  for (const field of Object.keys(expected) as (keyof typeof expected)[]) {
+    const reported = parsed[field];
+    if (reported !== undefined && reported !== expected[field]) {
       throw new Error(
         `Jest-compatible JSON ${field} is ${reported}, but assertionResults contain ${expected[field]}.`,
       );

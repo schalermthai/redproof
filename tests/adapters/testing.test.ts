@@ -191,17 +191,14 @@ test('Jest-compatible JSON validates its reported assertion totals', () => {
   };
   assert.equal(parseJestJson(JSON.stringify(complete)).tests.length, 4);
 
-  for (const field of [
-    'numTotalTests',
-    'numPassedTests',
-    'numFailedTests',
-    'numPendingTests',
-    'numTodoTests',
-  ] as const) {
+  for (const field of ['numTotalTests', 'numFailedTests'] as const) {
     assert.throws(
       () => parseJestJson(JSON.stringify({ ...complete, [field]: 99 })),
       new RegExp(`${field} is 99, but assertionResults contain`),
     );
+  }
+  for (const field of ['numPassedTests', 'numPendingTests', 'numTodoTests'] as const) {
+    assert.equal(parseJestJson(JSON.stringify({ ...complete, [field]: 99 })).tests.length, 4);
   }
   assert.throws(
     () => parseJestJson(JSON.stringify({ ...complete, numTotalTests: -1 })),
@@ -211,6 +208,25 @@ test('Jest-compatible JSON validates its reported assertion totals', () => {
     () => parseJestJson(JSON.stringify({ ...complete, numTotalTests: 1.5 })),
     /numTotalTests must be a non-negative safe integer/,
   );
+});
+
+test('Jest-compatible JSON keeps a bailed Vitest run whose pending tests are uncounted', () => {
+  const bailed = JSON.stringify({
+    numTotalTests: 3,
+    numPassedTests: 1,
+    numFailedTests: 1,
+    numPendingTests: 0,
+    numTodoTests: 0,
+    testResults: [{
+      name: '/repo/test/bail.test.js',
+      assertionResults: [
+        { title: 'a passes', status: 'passed' },
+        { title: 'b fails', status: 'failed', failureMessages: ['expected 1 to be 2'] },
+        { title: 'c never ran', status: 'pending' },
+      ],
+    }],
+  });
+  assert.deepEqual(parseJestJson(bailed).tests.map(item => item.status), ['passed', 'failed', 'skipped']);
 });
 
 test('Jest retry counts map a passing test with empty failure messages to noFlakyTests', () => {
