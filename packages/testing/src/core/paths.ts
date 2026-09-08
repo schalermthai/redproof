@@ -4,6 +4,12 @@ export type ResolvedTestingPath =
   | { readonly kind: 'inside'; readonly path: string }
   | { readonly kind: 'outside'; readonly path: string };
 
+/** Reject a path option whose contract requires a non-empty relative value. */
+export function validateRelativeTestingPath(name: string, path: string): void {
+  if (!path.trim()) throw new Error(`${name} must not be empty.`);
+  if (isAbsolute(path)) throw new Error(`${name} must be relative.`);
+}
+
 /** Both paths must be absolute. */
 function isInsideRoot(root: string, candidate: string): boolean {
   const rel = relative(root, candidate);

@@ -255,7 +255,7 @@ export function vitest<const O extends TestRuleOptions>(
       'run',
       '--reporter=json',
       '--no-cache',
-      ...(options.reportFile ? [] : [`--outputFile=${reportFile}`]),
+      ...(options.reportFile !== undefined ? [] : [`--outputFile=${reportFile}`]),
       ...(options.configFile ? ['--config', options.configFile] : []),
       ...(options.args ?? []),
       ...(options.files ?? []),
@@ -263,7 +263,7 @@ export function vitest<const O extends TestRuleOptions>(
   });
 
   return testing({
-    runner: options.reportFile
+    runner: options.reportFile !== undefined
       ? configuredVitestReport(runner, { cwd, reportFile: options.reportFile })
       : runner,
     report: jestJson(),

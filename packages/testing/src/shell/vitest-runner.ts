@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { copyFile, lstat, realpath, rename, rm } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { TestRunner, TestRunnerCompleted, TestRunnerResult } from '../model.ts';
-import { confineCanonicalTestingPath, resolveTestingPath } from '../core/paths.ts';
+import {
+  confineCanonicalTestingPath,
+  resolveTestingPath,
+  validateRelativeTestingPath,
+} from '../core/paths.ts';
 
 export type ConfiguredVitestReportOptions = {
   readonly cwd: string;
@@ -53,6 +57,8 @@ export function configuredVitestReport(
   runner: TestRunner,
   options: ConfiguredVitestReportOptions,
 ): TestRunner {
+  validateRelativeTestingPath('reportFile', options.reportFile);
+
   return {
     ...runner,
 
