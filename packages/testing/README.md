@@ -38,9 +38,9 @@ export default defineGate({ id: 'unit-tests', adapter });
 `outputFile` already configured by Vitest, allowing project setup or teardown
 to inspect the same fresh report. It is relative to `cwd` and must name the
 same file as the config `outputFile`. Redproof restores any pre-existing report
-afterward. Its parent directory may be absent when Vitest creates it during the
-run; Redproof removes newly created report directories that remain empty. Omit
-`reportFile` to use Redproof's private temporary report.
+afterward. The report's parent directory may be absent when Vitest creates it
+during the run; Redproof removes newly created report directories that remain
+empty. Omit `reportFile` to use Redproof's private temporary report.
 
 `noFlakyTests` is available for Jest-compatible JSON reports. It breaches when
 a test passes only after a retry. Vitest keeps the earlier failure messages in

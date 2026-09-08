@@ -6,6 +6,9 @@ import { checkProject, proofEstablished, proveProject } from 'redproof';
 
 const configOf = (name: string) => resolve(`fixtures/${name}/redproof.config.ts`);
 
+/** A fixture precondition: the Vitest fixture runs in copies mode, so a committed
+ * `reports/` directory would stop it from exercising the missing-directory path.
+ * Cleanup itself is proven end to end by the workspace check after each proof. */
 async function assertMissing(path: string): Promise<void> {
   const entry = await lstat(path).catch((error: NodeJS.ErrnoException) => error);
   assert.equal(entry instanceof Error && entry.code, 'ENOENT');
