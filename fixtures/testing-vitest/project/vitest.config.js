@@ -3,6 +3,6 @@ export default {
     include: ['test/**/*.test.js'],
     globalSetup: './global-setup.js',
     reporters: ['json'],
-    outputFile: 'results.json',
+    outputFile: 'reports/results.json',
   },
 };
