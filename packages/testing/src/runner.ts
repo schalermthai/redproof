@@ -1,12 +1,16 @@
 import { spawn } from 'node:child_process';
+import { realpath } from 'node:fs/promises';
 import { basename } from 'node:path';
 import type { CommandPlan, TestRunner, TestRunnerContext, TestRunnerResult } from './model.ts';
+import { confineCanonicalTestingPath, resolveTestingPath } from './core/paths.ts';
 
 export type CommandArgs = readonly string[] | ((ctx: TestRunnerContext) => readonly string[]);
 
 export type CommandRunnerOptions = {
   readonly command: string;
   readonly args?: CommandArgs;
+  /** Relative to the Gate root and confined inside it. Defaults to the root. */
+  readonly cwd?: string;
   readonly env?: Readonly<Record<string, string>>;
   readonly description?: string;
 };
@@ -38,10 +42,41 @@ export function command(options: CommandRunnerOptions): TestRunner {
 
     async run(ctx): Promise<TestRunnerResult> {
       const args = argsFor(options.args, ctx);
+      const cwd = resolveTestingPath(ctx.root, options.cwd ?? '.');
+      if (cwd.kind === 'outside') {
+        return {
+          kind: 'unavailable',
+          message: 'The test working directory resolves outside the Gate root.',
+          detail: cwd.path,
+        };
+      }
+
+      const canonicalRoot = await realpath(ctx.root).catch((error: Error) => error);
+      const canonicalCwd = await realpath(cwd.path).catch((error: Error) => error);
+      if (canonicalRoot instanceof Error || canonicalCwd instanceof Error) {
+        const detail = canonicalRoot instanceof Error
+          ? canonicalRoot.message
+          : canonicalCwd instanceof Error
+            ? canonicalCwd.message
+            : 'Unknown working-directory error.';
+        return {
+          kind: 'unavailable',
+          message: 'The test working directory could not be resolved.',
+          detail,
+        };
+      }
+      const confinedCwd = confineCanonicalTestingPath(canonicalRoot, canonicalCwd);
+      if (confinedCwd.kind === 'outside') {
+        return {
+          kind: 'unavailable',
+          message: 'The test working directory resolves outside the Gate root.',
+          detail: confinedCwd.path,
+        };
+      }
 
       return new Promise(resolve => {
         const child = spawn(options.command, args, {
-          cwd: ctx.root,
+          cwd: confinedCwd.path,
           env: {
             ...process.env,
             REDPROOF_TEST_REPORT: ctx.reportFile,

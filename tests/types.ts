@@ -253,6 +253,16 @@ passOnlyVitest.rules.testsPass;
 // @ts-expect-error noSkippedTests is not exposed when the rule was not selected.
 passOnlyVitest.rules.noSkippedTests;
 
+vitest({
+  cwd: 'packages/app',
+  reportFile: 'test-results.json',
+  rules: { testsPass: true },
+});
+// @ts-expect-error cwd must be a path string.
+vitest({ cwd: 1, rules: { testsPass: true } });
+// @ts-expect-error reportFile must be a path string.
+vitest({ reportFile: 1, rules: { testsPass: true } });
+
 // An unknown option name must be rejected, not accepted and then ignored.
 
 defineConfig({ root: '.', gatesRoot: 'gates/**/*.ts', refusalExit: 2 });
@@ -268,7 +278,7 @@ vitest({ rules: { testsPass: true, noPurpleTests: true } });
 vitest({ rules: { noPurpleTests: true } });
 
 testing({
-  runner: runner.command({ command: 'npm', args: () => ['test'] }),
+  runner: runner.command({ command: 'npm', cwd: 'packages/app', args: () => ['test'] }),
   report: report.junitXml(),
   // @ts-expect-error noPurpleTests is not a testing Rule.
   rules: { testsPass: true, noPurpleTests: true },

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import {
@@ -26,6 +26,7 @@ import {
 import { command } from './runner.ts';
 import { jestJson, parseJestJson } from './reports/jest-json.ts';
 import { junitXml, parseJunitXml } from './reports/junit-xml.ts';
+import { configuredVitestReport } from './shell/vitest-runner.ts';
 
 export type TestingAdapterOptions<O extends TestRuleOptions> = {
   readonly runner: TestRunner;
@@ -135,7 +136,8 @@ export function testing<const O extends TestRuleOptions>(
 
           let run: TestRun;
           try {
-            run = normalizeRun(ctx.root, options.report.parse(await readFile(reportFile, 'utf8')));
+            const canonicalRoot = await realpath(ctx.root).catch(() => ctx.root);
+            run = normalizeRun(canonicalRoot, options.report.parse(await readFile(reportFile, 'utf8')));
           } catch (error) {
             return result.refuse(
               {
@@ -215,7 +217,11 @@ export function defineTestReport<const R extends TestReportFormat>(report: R): R
 
 export type VitestAdapterOptions<O extends TestRuleOptions> = {
   readonly command?: string;
+  /** Relative to the Gate root and confined inside it. Defaults to the root. */
+  readonly cwd?: string;
   readonly configFile?: string;
+  /** A JSON output file configured in Vitest, relative to cwd. */
+  readonly reportFile?: string;
   readonly files?: readonly string[];
   readonly args?: readonly string[];
   readonly rules: O;
@@ -224,19 +230,25 @@ export type VitestAdapterOptions<O extends TestRuleOptions> = {
 export function vitest<const O extends TestRuleOptions>(
   options: VitestAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, TestRuleOptions> },
 ): Adapter<TestRuleCatalog<O>> {
+  const cwd = options.cwd ?? '.';
+  const runner = command({
+    command: options.command ?? 'vitest',
+    cwd,
+    description: 'run Vitest',
+    args: ({ reportFile }) => [
+      'run',
+      '--reporter=json',
+      ...(options.reportFile ? [] : [`--outputFile=${reportFile}`]),
+      ...(options.configFile ? ['--config', options.configFile] : []),
+      ...(options.args ?? []),
+      ...(options.files ?? []),
+    ],
+  });
+
   return testing({
-    runner: command({
-      command: options.command ?? 'vitest',
-      description: 'run Vitest',
-      args: ({ reportFile }) => [
-        'run',
-        '--reporter=json',
-        `--outputFile=${reportFile}`,
-        ...(options.configFile ? ['--config', options.configFile] : []),
-        ...(options.args ?? []),
-        ...(options.files ?? []),
-      ],
-    }),
+    runner: options.reportFile
+      ? configuredVitestReport(runner, { cwd, reportFile: options.reportFile })
+      : runner,
     report: jestJson(),
     rules: options.rules,
   });
