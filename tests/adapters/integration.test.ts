@@ -27,7 +27,7 @@ test('dependency-cruiser adapter passes clean architecture and proves both mappe
   );
 });
 
-test('Stryker adapter passes strong tests and proves mutant detection, score, and refusal', async () => {
+test('Stryker adapter passes strong tests and proves strict, baseline, score, and refusal policies', async () => {
   const check = await checkProject(configOf('stryker-project'));
   assert.equal(check.exitCode, 0);
   assert.equal(check.results[0]?.result.verdict, 'pass');
@@ -43,7 +43,9 @@ test('Stryker adapter passes strong tests and proves mutant detection, score, an
     [
       ['red', true, 'fail'],
       ['red', true, 'fail'],
+      ['red', true, 'fail'],
       ['green', true, 'pass'],
+      ['refuse', true, 'refuse'],
       ['refuse', true, 'refuse'],
     ],
   );
@@ -58,5 +60,13 @@ test('Stryker adapter passes strong tests and proves mutant detection, score, an
   if (!secondRed || secondRed.status !== 'completed' || secondRed.result.verdict !== 'fail') {
     throw new Error('expected completed RED failure');
   }
-  assert.ok(secondRed.result.breaches.some(item => item.rule === 'stryker/mutation-score'));
+  assert.ok(secondRed.result.breaches.some(
+    item => item.rule === 'stryker/no-new-undetected-mutants',
+  ));
+
+  const thirdRed = proof.outcomes[2];
+  if (!thirdRed || thirdRed.status !== 'completed' || thirdRed.result.verdict !== 'fail') {
+    throw new Error('expected completed RED failure');
+  }
+  assert.ok(thirdRed.result.breaches.some(item => item.rule === 'stryker/mutation-score'));
 });

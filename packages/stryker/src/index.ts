@@ -1,5 +1,6 @@
 import { Stryker } from '@stryker-mutator/core';
-import { realpath } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import {
   counting,
   defineAdapter,
@@ -14,6 +15,11 @@ import {
   type RuleRefOfCatalog,
 } from 'redproof';
 import {
+  assessStrykerBaseline,
+  parseAcceptedStrykerMutants,
+  type AcceptedStrykerMutant,
+} from './baseline.ts';
+import {
   mutationMetrics,
   mutationScoreBreach,
   undetectedMutantBreaches,
@@ -23,6 +29,10 @@ import { confineCanonicalStrykerCwd, resolveStrykerCwd } from './cwd.ts';
 
 export type StrykerRuleOptions = {
   readonly mutantsDetected?: true;
+  readonly noNewUndetectedMutants?: {
+    /** JSON baseline path relative to the Gate root. */
+    readonly acceptedMutantsFile: string;
+  };
   readonly mutationScore?: {
     readonly minimum: number;
   };
@@ -32,9 +42,11 @@ export type StrykerRuleCatalog<O extends StrykerRuleOptions> = {
   readonly [K in keyof O]:
     K extends 'mutantsDetected'
       ? Rule<'stryker/mutants-detected'>
-      : K extends 'mutationScore'
-        ? Rule<'stryker/mutation-score'>
-        : never;
+      : K extends 'noNewUndetectedMutants'
+        ? Rule<'stryker/no-new-undetected-mutants'>
+        : K extends 'mutationScore'
+          ? Rule<'stryker/mutation-score'>
+          : never;
 };
 
 export type StrykerAdapterOptions<O extends StrykerRuleOptions> = {
@@ -71,14 +83,20 @@ function withoutTestRunnerEnv<T>(action: () => Promise<T>): Promise<T> {
   });
 }
 
-const STRYKER_RULE_NAMES = ['mutantsDetected', 'mutationScore'] as const;
+const STRYKER_RULE_NAMES = [
+  'mutantsDetected',
+  'noNewUndetectedMutants',
+  'mutationScore',
+] as const;
 
 export function stryker<const O extends StrykerRuleOptions>(
   options: StrykerAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, StrykerRuleOptions> },
 ): Adapter<StrykerRuleCatalog<O>> {
   rejectUnknownKeys(options.rules, STRYKER_RULE_NAMES, 'Stryker rule');
 
-  if (!options.rules.mutantsDetected && !options.rules.mutationScore) {
+  if (!options.rules.mutantsDetected
+    && !options.rules.noNewUndetectedMutants
+    && !options.rules.mutationScore) {
     throw new Error('Stryker adapter requires at least one Redproof rule.');
   }
 
@@ -88,12 +106,24 @@ export function stryker<const O extends StrykerRuleOptions>(
       throw new Error('Stryker mutationScore.minimum must be between 0 and 100.');
     }
   }
+  if (options.rules.noNewUndetectedMutants) {
+    const baselineFile = options.rules.noNewUndetectedMutants.acceptedMutantsFile;
+    if (typeof baselineFile !== 'string' || baselineFile.trim() === '') {
+      throw new Error('Stryker noNewUndetectedMutants.acceptedMutantsFile must be a non-empty string.');
+    }
+  }
 
   const catalog: Record<string, Rule> = {};
   if (options.rules.mutantsDetected) {
     catalog.mutantsDetected = {
       id: 'stryker/mutants-detected',
       description: 'All valid Stryker mutants must be detected by the test suite.',
+    };
+  }
+  if (options.rules.noNewUndetectedMutants) {
+    catalog.noNewUndetectedMutants = {
+      id: 'stryker/no-new-undetected-mutants',
+      description: 'No undetected Stryker mutants may appear outside the accepted baseline.',
     };
   }
   if (options.rules.mutationScore) {
@@ -145,6 +175,35 @@ export function stryker<const O extends StrykerRuleOptions>(
           }
 
           return await withCwd(workingDirectory.path, async () => withoutTestRunnerEnv(async () => {
+            let acceptedMutants: readonly AcceptedStrykerMutant[] | undefined;
+            const acceptedMutantsFile = options.rules.noNewUndetectedMutants?.acceptedMutantsFile;
+            if (acceptedMutantsFile) {
+              const baselinePath = resolve(ctx.root, acceptedMutantsFile);
+              const baselineText = await readFile(baselinePath, 'utf8').catch(
+                (error: NodeJS.ErrnoException) => error,
+              );
+              const loaded = baselineText instanceof Error
+                ? baselineText
+                : parseAcceptedStrykerMutants(baselineText);
+              if (loaded instanceof Error) {
+                return result.refuse(
+                  {
+                    source: 'stryker',
+                    startedAt,
+                    finishedAt: now(),
+                    inspected: null,
+                  },
+                  {
+                    code: 'stryker-accepted-mutants-invalid',
+                    message: 'The accepted-mutants baseline could not be read.',
+                    location: { file: acceptedMutantsFile, line: null, column: null },
+                    detail: loaded.message,
+                  },
+                );
+              }
+              acceptedMutants = loaded;
+            }
+
             const engine = new Stryker({
               ...(configFile ? { configFile } : {}),
               reporters: [],
@@ -175,12 +234,35 @@ export function stryker<const O extends StrykerRuleOptions>(
               });
             }
 
+            const baseline = acceptedMutants
+              ? assessStrykerBaseline(process.cwd(), mutants, acceptedMutants)
+              : undefined;
+            if (baseline?.kind === 'invalid') {
+              return result.refuse(scan, {
+                code: baseline.code,
+                message: baseline.code === 'stryker-accepted-mutants-stale'
+                  ? 'The accepted-mutants baseline is stale.'
+                  : 'Stryker produced an undetected mutant without a stable identity.',
+                location: acceptedMutantsFile
+                  ? { file: acceptedMutantsFile, line: null, column: null }
+                  : null,
+                detail: baseline.detail,
+              });
+            }
+
             const breaches: Breach<Ref>[] = [];
 
             if (options.rules.mutantsDetected) {
               breaches.push(...undetectedMutantBreaches(
                 mutants,
                 rulesByAlias.mutantsDetected!,
+              ));
+            }
+
+            if (options.rules.noNewUndetectedMutants && baseline?.kind === 'compared') {
+              breaches.push(...undetectedMutantBreaches(
+                baseline.newUndetected,
+                rulesByAlias.noNewUndetectedMutants!,
               ));
             }
 
@@ -216,4 +298,5 @@ export function stryker<const O extends StrykerRuleOptions>(
   });
 }
 
+export type { AcceptedStrykerMutant } from './baseline.ts';
 export type { MutationMetrics, StrykerMutantResult, StrykerMutantStatus } from './model.ts';

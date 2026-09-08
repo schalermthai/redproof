@@ -35,6 +35,44 @@ export default defineGate({ id: 'test-strength', adapter });
 through a symbolic link. `configFile` and Stryker's own relative paths are
 resolved from that working directory.
 
+If a mature project intentionally carries surviving or uncovered mutants, use
+an exact accepted-mutant baseline instead of weakening the score until unrelated
+regressions fit under it:
+
+```ts
+const adapter = stryker({
+  configFile: 'stryker.config.mjs',
+  rules: {
+    noNewUndetectedMutants: {
+      acceptedMutantsFile: 'accepted-mutants.json',
+    },
+  },
+});
+```
+
+```json
+[
+  {
+    "fileName": "src/parser.ts",
+    "mutatorName": "EqualityOperator",
+    "replacement": ">",
+    "location": {
+      "start": { "line": 4, "column": 10 },
+      "end": { "line": 4, "column": 12 }
+    },
+    "reason": "Equivalent for the supported input domain."
+  }
+]
+```
+
+The file is relative to the Gate root. Redproof uses the same identity
+ingredients as Stryker's cross-report matching: relative file, full location,
+mutator, and replacement. A different undetected mutant breaches the Rule even
+when the total survivor count is unchanged. Malformed, duplicate, or
+unidentifiable data produces REFUSE; a stale-only baseline also refuses so drift
+cannot look like a pass. The optional `reason` is documentation and does not
+participate in matching.
+
 Then run:
 
 ```bash

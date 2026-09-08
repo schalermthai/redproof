@@ -218,6 +218,20 @@ proof.red(scoreOnlyStryker.rules.mutationScore, 'score only', {
 // @ts-expect-error mutantsDetected is not exposed when the rule was not selected.
 scoreOnlyStryker.rules.mutantsDetected;
 
+const baselineStryker = stryker({
+  rules: {
+    noNewUndetectedMutants: {
+      acceptedMutantsFile: 'accepted-mutants.json',
+    },
+  },
+});
+proof.red(baselineStryker.rules.noNewUndetectedMutants, 'mutation baseline proof', {
+  description: 'noop',
+  async apply() { return async () => {}; },
+});
+// @ts-expect-error mutationScore is not exposed when the rule was not selected.
+baselineStryker.rules.mutationScore;
+
 
 const vitestAdapter = vitest({
   rules: {
@@ -263,5 +277,7 @@ testing({
 stryker({ rules: { mutantsDetected: true } });
 // @ts-expect-error cwd must be a path string.
 stryker({ cwd: 1, rules: { mutantsDetected: true } });
+// @ts-expect-error acceptedMutantsFile must be a path string.
+stryker({ rules: { noNewUndetectedMutants: { acceptedMutantsFile: 1 } } });
 // @ts-expect-error mutantsKilled is not a Stryker Rule.
 stryker({ rules: { mutantsDetected: true, mutantsKilled: true } });

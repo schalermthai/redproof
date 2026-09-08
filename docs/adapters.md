@@ -250,7 +250,16 @@ export default defineGate({
 Available policies include:
 
 - all valid mutants must be detected
+- no undetected mutant may appear outside an exact accepted-mutant baseline
 - mutation score must stay at or above a configured minimum
+
+For a project with intentional survivors, select `noNewUndetectedMutants` and
+point its `acceptedMutantsFile` at a checked-in JSON array. Each entry records
+the relative file name, mutator, replacement, full start/end location, and an
+optional reason. Redproof matches identities rather than counts, so replacing
+one accepted survivor with a new survivor still breaches the Rule. Malformed,
+duplicate, or unidentifiable data produces REFUSE; a stale-only baseline also
+refuses rather than passing.
 
 For a useful RED proof, weaken the test suite and confirm Stryker notices the loss of test strength.
 
