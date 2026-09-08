@@ -1,6 +1,6 @@
 {
   "name": "@redproof/stryker",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Redproof adapter for Stryker mutation testing.",
   "type": "module",
   "exports": {
@@ -17,7 +17,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "redproof": "0.9.0"
+    "redproof": "0.10.0"
   },
   "peerDependencies": {
     "@stryker-mutator/core": ">=10"

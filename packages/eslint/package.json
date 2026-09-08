@@ -1,6 +1,6 @@
 {
   "name": "@redproof/eslint",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Redproof adapter for ESLint rules.",
   "type": "module",
   "exports": {
@@ -17,7 +17,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "redproof": "0.9.0"
+    "redproof": "0.10.0"
   },
   "peerDependencies": {
     "eslint": ">=9"
