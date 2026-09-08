@@ -32,7 +32,6 @@ export function command<const R extends RuleRef>(options: CommandCheckOptions<R>
 
   const policy = exitPolicy(options.exitCodes);
   const label = labelOf(options);
-  const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
 
   return {
     description: commandDescription(options),
@@ -46,7 +45,15 @@ export function command<const R extends RuleRef>(options: CommandCheckOptions<R>
         return cwdOutsideRoot(commandScan(label, startedAt, now(), 1), label, cwd);
       }
 
-      const execution = await executeCommand(options, cwd, maxOutputBytes);
+      const execution = await executeCommand({
+        command: options.command,
+        cwd,
+        ...(options.args ? { args: options.args } : {}),
+        ...(options.label === undefined ? {} : { label: options.label }),
+        ...(options.env ? { env: options.env } : {}),
+        ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+        maxOutputBytes: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+      });
       return commandResult(options.rule, label, policy, execution, commandScan(label, startedAt, now(), 1));
     },
   };

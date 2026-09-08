@@ -1,23 +1,25 @@
 import { spawn } from 'node:child_process';
-import type { RuleRef } from '../../domain/index.ts';
-import type { CommandCheckOptions } from '../core/options.ts';
+import {
+  DEFAULT_MAX_OUTPUT_BYTES,
+  validateCommandExecutionOptions,
+  type CommandExecutionOptions,
+} from '../core/options.ts';
 import { outputDetail, type CommandExecution } from '../core/outcome.ts';
+import { terminateProcessTree } from './process-tree.ts';
 
-const FORCE_KILL_AFTER_MS = 250;
+export function executeCommand(options: CommandExecutionOptions): Promise<CommandExecution> {
+  validateCommandExecutionOptions(options);
+  const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
 
-export function executeCommand(
-  options: CommandCheckOptions<RuleRef>,
-  cwd: string,
-  maxOutputBytes: number,
-): Promise<CommandExecution> {
   return new Promise(resolveExecution => {
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(options.command, options.args ?? [], {
-        cwd,
+        cwd: options.cwd,
         env: { ...process.env, ...options.env },
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
       });
     } catch (error) {
       resolveExecution({
@@ -35,7 +37,7 @@ export function executeCommand(
     let settled = false;
     let interruption: 'timeout' | 'output-limit' | undefined;
     let timeout: NodeJS.Timeout | undefined;
-    let forceKill: NodeJS.Timeout | undefined;
+    let termination: Promise<void> | undefined;
 
     const captured = () => ({
       stdout: Buffer.concat(stdout).toString('utf8'),
@@ -46,16 +48,13 @@ export function executeCommand(
       if (settled) return;
       settled = true;
       if (timeout) clearTimeout(timeout);
-      if (forceKill) clearTimeout(forceKill);
       resolveExecution(outcome);
     };
 
     const interrupt = (reason: 'timeout' | 'output-limit'): void => {
       if (interruption) return;
       interruption = reason;
-      child.kill();
-      forceKill = setTimeout(() => child.kill('SIGKILL'), FORCE_KILL_AFTER_MS);
-      forceKill.unref();
+      termination = terminateProcessTree(child);
     };
 
     const capture = (target: Buffer[], chunk: Buffer | string): void => {
@@ -80,8 +79,9 @@ export function executeCommand(
       });
     });
 
-    child.once('close', (code, signal) => {
+    child.once('close', async (code, signal) => {
       const output = captured();
+      if (interruption || signal) await (termination ??= terminateProcessTree(child));
       if (interruption === 'timeout') {
         const detail = outputDetail(output.stdout, output.stderr);
         settle({

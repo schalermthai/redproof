@@ -29,6 +29,7 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/redproof/src/cli.ts',
   'packages/redproof/src/cli/shell/main.ts',
   'packages/redproof/src/command/shell/check.ts',
+  'packages/redproof/src/command/shell/process-tree.ts',
   'packages/redproof/src/command/shell/spawn.ts',
   'packages/redproof/src/inspect/shell/files.ts',
   'packages/redproof/src/inspect/shell/search.ts',

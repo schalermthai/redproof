@@ -10,6 +10,7 @@ when you are not sure which one you need.
 - [One command](#one-command)
 - [Exit codes decide the verdict](#exit-codes-decide-the-verdict)
 - [When a command REFUSES](#when-a-command-refuses)
+- [Reuse process execution](#reuse-process-execution)
 - [Several commands](#several-commands)
 - [Order and precedence](#order-and-precedence)
 - [What a Check says about itself](#what-a-check-says-about-itself)
@@ -32,7 +33,8 @@ const check = command({
 
 Relative `cwd` values resolve inside the Gate workspace and cannot escape it.
 Child output is captured for diagnostics. It is never inherited by reporter
-output, so a machine-readable report stays clean.
+output, so a machine-readable report stays clean. A timeout or output overflow
+terminates the complete process tree before the Check returns.
 
 ## Exit codes decide the verdict
 
@@ -67,6 +69,34 @@ pass, and it is never a rule breach. These five cases produce it.
 - The process is terminated by a signal.
 - Combined stdout and stderr exceed `maxOutputBytes`, which defaults to 10 MiB.
 - The process returns an exit code that no explicit policy covers.
+
+## Reuse process execution
+
+An Adapter that needs to parse structured output can reuse the same supervised
+process shell without adopting the command Check's exit-code policy:
+
+```ts
+import { executeCommand } from 'redproof/command';
+
+const execution = await executeCommand({
+  command: process.execPath,
+  args: ['tool.mjs', '--json'],
+  cwd: process.cwd(),
+  timeoutMs: 60_000,
+  maxOutputBytes: 10 * 1024 * 1024,
+});
+
+if (execution.kind === 'completed') {
+  console.log(execution.exitCode, execution.stdout, execution.stderr);
+} else {
+  console.error(execution.code, execution.message, execution.detail);
+}
+```
+
+`executeCommand()` owns spawning, bounded capture, timeout, signal handling,
+and process-tree termination. It does not decide PASS, FAIL, or which Rule an
+exit code breaches. The caller owns that policy and must supply an absolute,
+already-confined `cwd`.
 
 ## Several commands
 

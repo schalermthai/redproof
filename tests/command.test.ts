@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { command, commands, type CommandCheckOptions } from 'redproof/command';
+import { setTimeout as delay } from 'node:timers/promises';
+import { command, commands, executeCommand, type CommandCheckOptions } from 'redproof/command';
 import { defineRule } from 'redproof';
 import { withWorkspace } from './helpers/workspace.ts';
 
@@ -26,6 +27,30 @@ async function runNode(
     ...options,
   }).run({ root, rules: [rule.id] }));
 }
+
+test('executeCommand exposes supervised execution without applying Gate policy', async () => {
+  await withWorkspace(async root => {
+    const execution = await executeCommand({
+      command: process.execPath,
+      args: ['-e', "process.stdout.write('structured'); process.exit(3)"],
+      cwd: root,
+    });
+
+    assert.deepEqual(execution, {
+      kind: 'completed',
+      exitCode: 3,
+      stdout: 'structured',
+      stderr: '',
+    });
+  });
+});
+
+test('executeCommand requires its adapter caller to supply an absolute working directory', () => {
+  assert.throws(
+    () => executeCommand({ command: process.execPath, cwd: '.' }),
+    /executeCommand cwd must be absolute/,
+  );
+});
 
 test('command maps exit zero to PASS without forwarding captured output', async () => {
   const checkResult = await runNode("process.stdout.write('captured output')");
@@ -75,6 +100,26 @@ test('command refuses when execution exceeds its timeout', async () => {
   assert.equal(checkResult.verdict, 'refuse');
   if (checkResult.verdict !== 'refuse') return;
   assert.equal(checkResult.why.code, 'command-timeout');
+});
+
+test('command timeout terminates descendants before they can outlive the Check', async () => {
+  await withWorkspace(async root => {
+    const descendant = "require('node:fs').writeFileSync('descendant-started.txt', ''); process.on('SIGTERM', () => {}); setTimeout(() => require('node:fs').writeFileSync('escaped.txt', 'alive'), 1_600); setInterval(() => {}, 1_000)";
+    const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setInterval(() => {}, 1_000)`;
+    const checkResult = await command({
+      rule,
+      command: process.execPath,
+      args: ['-e', parent],
+      timeoutMs: 1_000,
+    }).run({ root, rules: [rule.id] });
+
+    assert.equal(checkResult.verdict, 'refuse');
+    if (checkResult.verdict !== 'refuse') return;
+    assert.equal(checkResult.why.code, 'command-timeout');
+    assert.equal(await readFile(join(root, 'descendant-started.txt'), 'utf8'), '');
+    await delay(500);
+    await assert.rejects(readFile(join(root, 'escaped.txt')));
+  });
 });
 
 test('command refuses when execution is terminated by a signal', async () => {

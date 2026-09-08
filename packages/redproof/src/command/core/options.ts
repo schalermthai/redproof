@@ -1,22 +1,27 @@
-import { basename } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 import type { Rule, RuleRef } from '../../domain/index.ts';
 import type { CommandExitCodes } from './exit-codes.ts';
 
 export const DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 export const DEFAULT_MAX_AT_ONCE = 4;
 
-export type CommandCheckOptions<R extends RuleRef> = {
-  readonly rule: Rule<R>;
+export type CommandExecutionOptions = {
   readonly command: string;
   readonly args?: readonly string[];
   readonly label?: string;
-  readonly description?: string;
-  /** Relative to the Gate root and confined inside it. Defaults to the root. */
-  readonly cwd?: string;
+  /** Absolute working directory already chosen and confined by the caller. */
+  readonly cwd: string;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly timeoutMs?: number;
   /** Combined stdout and stderr capture limit. Defaults to 10 MiB. */
   readonly maxOutputBytes?: number;
+};
+
+export type CommandCheckOptions<R extends RuleRef> = Omit<CommandExecutionOptions, 'cwd'> & {
+  readonly rule: Rule<R>;
+  readonly description?: string;
+  /** Relative to the Gate root and confined inside it. Defaults to the root. */
+  readonly cwd?: string;
   readonly exitCodes?: CommandExitCodes;
 };
 
@@ -43,10 +48,19 @@ function validatePositiveInteger(name: string, value: number | undefined): void 
   }
 }
 
-export function validateCommandOptions(options: CommandCheckOptions<RuleRef>): void {
+function validateProcessOptions(options: Omit<CommandExecutionOptions, 'cwd'>): void {
   if (!options.command.trim()) throw new Error('command must not be empty.');
   validatePositiveInteger('timeoutMs', options.timeoutMs);
   validatePositiveInteger('maxOutputBytes', options.maxOutputBytes);
+}
+
+export function validateCommandExecutionOptions(options: CommandExecutionOptions): void {
+  validateProcessOptions(options);
+  if (!isAbsolute(options.cwd)) throw new Error('executeCommand cwd must be absolute.');
+}
+
+export function validateCommandOptions(options: CommandCheckOptions<RuleRef>): void {
+  validateProcessOptions(options);
 }
 
 export function validateGroupOptions(options: CommandGroupOptions<RuleRef>): void {

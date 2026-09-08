@@ -152,9 +152,10 @@ try {
 
   await writeFile(
     join(consumer, 'probe-command.mjs'),
-    "import { command, commands } from 'redproof/command';\n"
+    "import { command, commands, executeCommand } from 'redproof/command';\n"
     + "if (typeof command !== 'function') throw new Error('missing command export');\n"
-    + "if (typeof commands !== 'function') throw new Error('missing commands export');\n",
+    + "if (typeof commands !== 'function') throw new Error('missing commands export');\n"
+    + "if (typeof executeCommand !== 'function') throw new Error('missing executeCommand export');\n",
   );
   const commandImport = tryRun('node', ['probe-command.mjs'], consumer);
   report(commandImport.ok, 'redproof/command imports at run time', commandImport.ok ? '' : commandImport.output.slice(0, 300));
@@ -234,12 +235,13 @@ try {
   const tsc = join(REPO, 'node_modules', '.bin', 'tsc');
 
   const green = "import { defineGate, defineRule } from 'redproof';\n"
-    + "import { command, commands } from 'redproof/command';\n"
+    + "import { command, commands, executeCommand } from 'redproof/command';\n"
     + "import { stryker } from '@redproof/stryker';\n"
     + "import { vitest } from '@redproof/testing';\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
     + "export const check = command({ rule, command: 'node' });\n"
     + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
+    + "export const execution = executeCommand({ command: 'node', cwd: '/project', timeoutMs: 1_000 });\n"
     + "export const mutation = stryker({ cwd: 'packages/parser', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } });\n"
     + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', rules: { testsPass: true, noFlakyTests: true } });\n"
     + "export const gate = defineGate;\n";
