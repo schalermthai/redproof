@@ -223,7 +223,7 @@ test('accepted-mutant baselines reject malformed or escaping entries', () => {
     { ...acceptedMutant, fileName: '../outside.ts' },
   ]));
   assert.ok(escaping instanceof Error);
-  assert.match(escaping.message, /inside the Gate root/u);
+  assert.match(escaping.message, /inside the working directory/u);
 });
 
 test('the mutation baseline accepts the exact undetected identity across copied roots', () => {
@@ -274,6 +274,45 @@ test('the mutation baseline refuses an undetected mutant without a stable identi
   assert.equal(assessment.kind, 'invalid');
   if (assessment.kind !== 'invalid') return;
   assert.equal(assessment.code, 'stryker-mutant-identity-unavailable');
+});
+
+test('the mutation baseline refuses two undetected mutants that share one identity', () => {
+  const root = join(tmpdir(), 'redproof-copy');
+  const assessment = assessStrykerBaseline(root, [
+    { ...mutant('1', 'Survived'), fileName: join(root, 'src/parser.ts') },
+    { ...mutant('2', 'NoCoverage'), fileName: join(root, 'src/parser.ts') },
+  ], []);
+
+  assert.equal(assessment.kind, 'invalid');
+  if (assessment.kind !== 'invalid') return;
+  assert.equal(assessment.code, 'stryker-mutant-identity-ambiguous');
+});
+
+test('the Stryker adapter refuses an accepted-mutants file outside the Gate root', async () => {
+  await withWorkspace(async root => {
+    const check = await stryker({
+      rules: { noNewUndetectedMutants: { acceptedMutantsFile: '../accepted-mutants.json' } },
+    }).check.run({ root, rules: ['stryker/no-new-undetected-mutants'] });
+
+    assert.equal(check.verdict, 'refuse');
+    if (check.verdict !== 'refuse') return;
+    assert.equal(check.why.code, 'stryker-accepted-mutants-outside-root');
+  });
+});
+
+test('the Stryker adapter refuses an accepted-mutants symlink that leaves the Gate root', async () => {
+  const outside = join(tmpdir(), `redproof-outside-accepted-${process.pid}.json`);
+  await writeFile(outside, '[]', 'utf8');
+  await withWorkspace(async root => {
+    await symlink(outside, join(root, 'accepted-mutants.json'));
+    const check = await stryker({
+      rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } },
+    }).check.run({ root, rules: ['stryker/no-new-undetected-mutants'] });
+
+    assert.equal(check.verdict, 'refuse');
+    if (check.verdict !== 'refuse') return;
+    assert.equal(check.why.code, 'stryker-accepted-mutants-outside-root');
+  });
 });
 
 test('the Stryker adapter refuses an invalid accepted-mutants file before mutation testing', async () => {

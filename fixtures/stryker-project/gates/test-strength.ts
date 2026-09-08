@@ -47,7 +47,7 @@ export const proofs = defineProofs(gate, [
   proof.refuse(
     'refuses a stale accepted-mutant baseline',
     mutate.replaceText(
-      locate.text({ files: 'accepted-mutants.json', find: '[]' }),
+      locate.text({ files: 'project/accepted-mutants.json', find: '[]' }),
       JSON.stringify([{
         fileName: 'src/is-adult.js',
         mutatorName: 'EqualityOperator',
@@ -58,6 +58,13 @@ export const proofs = defineProofs(gate, [
         },
         reason: 'Fixture entry is intentionally stale.',
       }]),
+    ),
+  ),
+  proof.refuse(
+    'refuses when the initial test run fails, and leaves no Stryker temp files behind',
+    mutate.replaceText(
+      locate.text({ files: 'project/test/is-adult.test.js', find: 'assert.equal(isAdult(17), false);' }),
+      'assert.equal(isAdult(17), true);',
     ),
   ),
   proof.refuse(

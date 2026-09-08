@@ -253,13 +253,17 @@ Available policies include:
 - no undetected mutant may appear outside an exact accepted-mutant baseline
 - mutation score must stay at or above a configured minimum
 
-For a project with intentional survivors, select `noNewUndetectedMutants` and
-point its `acceptedMutantsFile` at a checked-in JSON array. Each entry records
-the relative file name, mutator, replacement, full start/end location, and an
-optional reason. Redproof matches identities rather than counts, so replacing
-one accepted survivor with a new survivor still breaches the Rule. Malformed,
-duplicate, or unidentifiable data produces REFUSE; a stale-only baseline also
-refuses rather than passing.
+Set `cwd` to run Stryker from a package inside the Gate root. `configFile` and
+`acceptedMutantsFile` are resolved from that directory.
+
+For a project with intentional survivors, select `noNewUndetectedMutants`
+instead of `mutantsDetected`, and point `acceptedMutantsFile` at a checked-in
+JSON array. Each entry records the file name relative to the working directory,
+the mutator, the replacement, the full start and end location, and an optional
+reason. Redproof matches identities, not counts, so replacing one accepted
+survivor with a new survivor still breaches the Rule. A malformed, duplicate,
+or escaping entry refuses. An accepted mutant that the tests now detect
+refuses; remove it from the baseline.
 
 For a useful RED proof, weaken the test suite and confirm Stryker notices the loss of test strength.
 

@@ -47,7 +47,13 @@ test('Stryker adapter passes strong tests and proves strict, baseline, score, an
       ['green', true, 'pass'],
       ['refuse', true, 'refuse'],
       ['refuse', true, 'refuse'],
+      ['refuse', true, 'refuse'],
     ],
+  );
+  assert.deepEqual(
+    proof.outcomes.slice(4).map(outcome =>
+      outcome.status === 'completed' && outcome.result.verdict === 'refuse' ? outcome.result.why.code : outcome.status),
+    ['stryker-accepted-mutants-stale', 'stryker-unavailable', 'stryker-unavailable'],
   );
 
   const firstRed = proof.outcomes[0];

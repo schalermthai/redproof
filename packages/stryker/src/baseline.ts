@@ -30,7 +30,10 @@ export type StrykerBaselineAssessment =
     }
   | {
       readonly kind: 'invalid';
-      readonly code: 'stryker-mutant-identity-unavailable' | 'stryker-accepted-mutants-stale';
+      readonly code:
+        | 'stryker-mutant-identity-unavailable'
+        | 'stryker-mutant-identity-ambiguous'
+        | 'stryker-accepted-mutants-stale';
       readonly detail: string;
     };
 
@@ -68,7 +71,7 @@ function parseEntry(value: unknown, index: number): AcceptedStrykerMutant | Erro
     ? normalizedBaselineFileName(value.fileName)
     : null;
   if (!fileName) {
-    return new Error(`Accepted mutant ${index + 1} must have a relative fileName inside the Gate root.`);
+    return new Error(`Accepted mutant ${index + 1} must have a relative fileName inside the working directory.`);
   }
   if (typeof value.mutatorName !== 'string' || value.mutatorName === '') {
     return new Error(`Accepted mutant ${index + 1} must have a non-empty mutatorName.`);
@@ -138,7 +141,7 @@ export function strykerMutantIdentity(mutant: AcceptedStrykerMutant): string {
 }
 
 function currentIdentity(
-  root: string,
+  workingDirectory: string,
   mutant: StrykerMutantResult,
 ): { readonly entry: AcceptedStrykerMutant; readonly mutant: StrykerMutantResult } | Error {
   if (!mutant.fileName || !mutant.mutatorName || mutant.replacement === undefined
@@ -146,14 +149,14 @@ function currentIdentity(
     return new Error(`Stryker mutant ${mutant.id} is missing stable identity fields.`);
   }
 
-  const absoluteRoot = resolve(root);
+  const absoluteRoot = resolve(workingDirectory);
   const absoluteFile = isAbsolute(mutant.fileName)
     ? resolve(mutant.fileName)
     : resolve(absoluteRoot, mutant.fileName);
   const relativeFile = relative(absoluteRoot, absoluteFile);
   if (relativeFile === '' || relativeFile === '..'
     || relativeFile.startsWith(`..${sep}`) || isAbsolute(relativeFile)) {
-    return new Error(`Stryker mutant ${mutant.id} points outside the Gate root: ${mutant.fileName}.`);
+    return new Error(`Stryker mutant ${mutant.id} points outside the working directory: ${mutant.fileName}.`);
   }
 
   const fileName = relativeFile.split(sep).join('/');
@@ -172,16 +175,16 @@ function currentIdentity(
   };
 }
 
-/** Compare current undetected mutants with an exact, identity-based baseline. */
+/** Compare current undetected mutants with an exact, identity-based baseline. File names are relative to the Stryker working directory. */
 export function assessStrykerBaseline(
-  root: string,
+  workingDirectory: string,
   mutants: readonly StrykerMutantResult[],
   accepted: readonly AcceptedStrykerMutant[],
 ): StrykerBaselineAssessment {
   const current = new Map<string, StrykerMutantResult>();
   for (const mutant of mutants) {
     if (mutant.status !== 'Survived' && mutant.status !== 'NoCoverage') continue;
-    const identified = currentIdentity(root, mutant);
+    const identified = currentIdentity(workingDirectory, mutant);
     if (identified instanceof Error) {
       return {
         kind: 'invalid',
@@ -193,7 +196,7 @@ export function assessStrykerBaseline(
     if (current.has(identity)) {
       return {
         kind: 'invalid',
-        code: 'stryker-mutant-identity-unavailable',
+        code: 'stryker-mutant-identity-ambiguous',
         detail: `Stryker reported more than one undetected mutant as ${identity}.`,
       };
     }

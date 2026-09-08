@@ -32,12 +32,15 @@ export default defineGate({ id: 'test-strength', adapter });
 ```
 
 `cwd` is relative to the Gate root and cannot resolve outside it, including
-through a symbolic link. `configFile` and Stryker's own relative paths are
-resolved from that working directory.
+through a symbolic link. `configFile`, `acceptedMutantsFile`, and Stryker's own
+relative paths are resolved from that working directory. A `cwd` that does not
+exist is reported as `stryker-unavailable`.
 
 If a mature project intentionally carries surviving or uncovered mutants, use
-an exact accepted-mutant baseline instead of weakening the score until unrelated
-regressions fit under it:
+an accepted-mutant baseline instead of weakening the score until unrelated
+regressions fit under it. Select `noNewUndetectedMutants` in place of
+`mutantsDetected`. With both selected, every accepted mutant still breaches
+`mutantsDetected`.
 
 ```ts
 const adapter = stryker({
@@ -65,13 +68,21 @@ const adapter = stryker({
 ]
 ```
 
-The file is relative to the Gate root. Redproof uses the same identity
-ingredients as Stryker's cross-report matching: relative file, full location,
-mutator, and replacement. A different undetected mutant breaches the Rule even
-when the total survivor count is unchanged. Malformed, duplicate, or
-unidentifiable data produces REFUSE; a stale-only baseline also refuses so drift
-cannot look like a pass. The optional `reason` is documentation and does not
-participate in matching.
+The baseline is a JSON array. Redproof resolves the file from the working
+directory and refuses a path that leaves the Gate root. Each `fileName` is
+relative to the working directory. The identity of a mutant is its file, its
+full start and end location, its mutator, and its replacement. This is the key
+Stryker uses in `stryker-incremental.json`, so you can copy an entry from that
+report or from the JSON reporter output. A different undetected mutant breaches
+the Rule even when the survivor count is unchanged. The optional `reason` is
+documentation and does not take part in matching.
+
+Three cases REFUSE. A malformed, duplicate, or escaping entry refuses before
+Stryker runs. An accepted mutant that the tests now detect refuses, because the
+baseline would pass that mutant if it survived again. Remove the entry. An
+undetected mutant without a stable identity refuses, and no other Rule is
+evaluated in that run. The `replacement` text comes from Stryker's code
+generator, so a Stryker upgrade can change it and make entries stale.
 
 Then run:
 
