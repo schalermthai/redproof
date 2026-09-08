@@ -180,6 +180,55 @@ test('Jest-compatible retry evidence maps an ultimately passing test to noFlakyT
   assert.equal(testRunBreaches(parseJestJson(jestSample), { noFlakyTests }).length, 0);
 });
 
+test('Jest-compatible JSON validates its reported assertion totals', () => {
+  const complete = {
+    ...JSON.parse(jestSample),
+    numTotalTests: 4,
+    numPassedTests: 1,
+    numFailedTests: 1,
+    numPendingTests: 1,
+    numTodoTests: 1,
+  };
+  assert.equal(parseJestJson(JSON.stringify(complete)).tests.length, 4);
+
+  for (const field of ['numTotalTests', 'numFailedTests'] as const) {
+    assert.throws(
+      () => parseJestJson(JSON.stringify({ ...complete, [field]: 99 })),
+      new RegExp(`${field} is 99, but assertionResults contain`),
+    );
+  }
+  for (const field of ['numPassedTests', 'numPendingTests', 'numTodoTests'] as const) {
+    assert.equal(parseJestJson(JSON.stringify({ ...complete, [field]: 99 })).tests.length, 4);
+  }
+  assert.throws(
+    () => parseJestJson(JSON.stringify({ ...complete, numTotalTests: -1 })),
+    /numTotalTests must be a non-negative safe integer/,
+  );
+  assert.throws(
+    () => parseJestJson(JSON.stringify({ ...complete, numTotalTests: 1.5 })),
+    /numTotalTests must be a non-negative safe integer/,
+  );
+});
+
+test('Jest-compatible JSON keeps a bailed Vitest run whose pending tests are uncounted', () => {
+  const bailed = JSON.stringify({
+    numTotalTests: 3,
+    numPassedTests: 1,
+    numFailedTests: 1,
+    numPendingTests: 0,
+    numTodoTests: 0,
+    testResults: [{
+      name: '/repo/test/bail.test.js',
+      assertionResults: [
+        { title: 'a passes', status: 'passed' },
+        { title: 'b fails', status: 'failed', failureMessages: ['expected 1 to be 2'] },
+        { title: 'c never ran', status: 'pending' },
+      ],
+    }],
+  });
+  assert.deepEqual(parseJestJson(bailed).tests.map(item => item.status), ['passed', 'failed', 'skipped']);
+});
+
 test('Jest retry counts map a passing test with empty failure messages to noFlakyTests', () => {
   const noFlakyTests = defineRule({
     id: 'testing/no-flaky-tests',
@@ -297,6 +346,35 @@ test('testing adapter refuses when a command completes without a readable report
     if (result.verdict !== 'refuse') return;
     assert.equal(result.why.code, 'test-report-unavailable');
     assert.match(result.why.detail ?? '', /configuration failed/);
+  });
+});
+
+test('testing adapter refuses a report whose summary contradicts its assertions', async () => {
+  await withWorkspace(async root => {
+    const contradictory = JSON.stringify({
+      success: true,
+      numTotalTests: 1,
+      numPassedTests: 1,
+      testResults: [],
+    });
+    const runner: TestRunner = {
+      description: 'write contradictory Jest JSON',
+      async run(ctx) {
+        await writeFile(ctx.reportFile, contradictory, 'utf8');
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const adapter = testing({
+      runner,
+      report: report.jestJson(),
+      rules: { testsPass: true },
+    });
+
+    const result = await adapter.check.run({ root, rules: [adapter.rules.testsPass.id] });
+    assert.equal(result.verdict, 'refuse');
+    if (result.verdict !== 'refuse') return;
+    assert.equal(result.why.code, 'test-report-unavailable');
+    assert.match(result.why.detail ?? '', /numTotalTests is 1, but assertionResults contain 0/);
   });
 });
 
