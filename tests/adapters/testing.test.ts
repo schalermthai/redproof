@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdir, readdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, vitest, type TestRunner } from '@redproof/testing';
 import { defineRule } from 'redproof';
@@ -503,6 +503,65 @@ test('a configured Vitest report is fresh for the run and the previous file is r
     assert.equal(result.kind, 'completed');
     assert.equal(await readFile(capturedReport, 'utf8'), jestSample);
     assert.equal(await readFile(configuredReport, 'utf8'), 'stale report');
+  });
+});
+
+test('a configured Vitest report may create missing parent directories', async () => {
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    const configuredReport = join(project, 'reports', 'nested', 'results.json');
+    const capturedReport = join(root, 'captured.json');
+    await mkdir(project);
+
+    const fake: TestRunner = {
+      description: 'fake Vitest that creates its output directory',
+      async run() {
+        await mkdir(dirname(configuredReport), { recursive: true });
+        await writeFile(configuredReport, jestSample, 'utf8');
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, {
+      cwd: 'project',
+      reportFile: 'reports/nested/results.json',
+    });
+    const result = await wrapped.run({ root, reportFile: capturedReport });
+
+    assert.equal(result.kind, 'completed');
+    assert.equal(await readFile(capturedReport, 'utf8'), jestSample);
+    const generatedDirectory = await lstat(join(project, 'reports')).catch(
+      (error: NodeJS.ErrnoException) => error,
+    );
+    assert.equal(generatedDirectory instanceof Error && generatedDirectory.code, 'ENOENT');
+  });
+});
+
+test('configured report cleanup preserves parent directories that already existed', async () => {
+  await withWorkspace(async root => {
+    const reports = join(root, 'project', 'reports');
+    const configuredReport = join(reports, 'nested', 'results.json');
+    await mkdir(reports, { recursive: true });
+
+    const fake: TestRunner = {
+      description: 'fake Vitest that creates a nested output directory',
+      async run() {
+        await mkdir(dirname(configuredReport));
+        await writeFile(configuredReport, jestSample, 'utf8');
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, {
+      cwd: 'project',
+      reportFile: 'reports/nested/results.json',
+    });
+    const result = await wrapped.run({ root, reportFile: join(root, 'captured.json') });
+
+    assert.equal(result.kind, 'completed');
+    assert.equal((await lstat(reports)).isDirectory(), true);
+    const generatedDirectory = await lstat(join(reports, 'nested')).catch(
+      (error: NodeJS.ErrnoException) => error,
+    );
+    assert.equal(generatedDirectory instanceof Error && generatedDirectory.code, 'ENOENT');
   });
 });
 

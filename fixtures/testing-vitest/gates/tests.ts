@@ -4,7 +4,7 @@ import { defineGate, defineProofs, locate, mutate, proof } from 'redproof';
 const adapter = vitest({
   cwd: 'project',
   configFile: 'vitest.config.js',
-  reportFile: 'results.json',
+  reportFile: 'reports/results.json',
   rules: {
     testsPass: true,
     noFlakyTests: true,

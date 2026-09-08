@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { checkProject, proofEstablished, proveProject } from 'redproof';
 
 const configOf = (name: string) => resolve(`fixtures/${name}/redproof.config.ts`);
+
+async function assertMissing(path: string): Promise<void> {
+  const entry = await lstat(path).catch((error: NodeJS.ErrnoException) => error);
+  assert.equal(entry instanceof Error && entry.code, 'ENOENT');
+}
 
 test('dependency-cruiser adapter passes clean architecture and proves both mapped rules plus refusal', async () => {
   const check = await checkProject(configOf('dependency-cruiser-project'));
@@ -28,13 +33,13 @@ test('dependency-cruiser adapter passes clean architecture and proves both mappe
   );
 });
 
-test('Vitest adapter preserves a nested project report while proving test policies', async () => {
+test('Vitest adapter cleans a nested project report while proving test policies', async () => {
   const config = configOf('testing-vitest');
-  const sentinel = resolve('fixtures/testing-vitest/project/results.json');
+  const reports = resolve('fixtures/testing-vitest/project/reports');
   const check = await checkProject(config);
   assert.equal(check.exitCode, 0);
   assert.equal(check.results[0]?.result.verdict, 'pass');
-  assert.equal(await readFile(sentinel, 'utf8'), '{"sentinel":true}\n');
+  await assertMissing(reports);
 
   const proof = await proveProject(config);
   assert.equal(proof.exitCode, 0);
@@ -53,7 +58,7 @@ test('Vitest adapter preserves a nested project report while proving test polici
       ['refuse', true, 'refuse'],
     ],
   );
-  assert.equal(await readFile(sentinel, 'utf8'), '{"sentinel":true}\n');
+  await assertMissing(reports);
 });
 
 test('Stryker adapter passes strong tests and proves strict, baseline, score, and refusal policies', async () => {
