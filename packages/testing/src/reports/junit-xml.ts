@@ -86,7 +86,7 @@ export function junitXml(): TestReportFormat {
   return {
     kind: 'junit-xml',
     extension: '.xml',
-    capabilities: { todo: false },
+    capabilities: { todo: false, flaky: false },
     parse: parseJunitXml,
   };
 }

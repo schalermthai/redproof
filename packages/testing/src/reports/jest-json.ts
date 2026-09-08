@@ -82,7 +82,7 @@ export function jestJson(): TestReportFormat {
   return {
     kind: 'jest-json',
     extension: '.json',
-    capabilities: { todo: true },
+    capabilities: { todo: true, flaky: true },
     parse: parseJestJson,
   };
 }

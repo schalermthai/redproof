@@ -7,6 +7,7 @@ const adapter = vitest({
   reportFile: 'results.json',
   rules: {
     testsPass: true,
+    noFlakyTests: true,
     noSkippedTests: true,
     noTodoTests: true,
   },
@@ -21,6 +22,18 @@ export const proofs = defineProofs(gate, [
     mutate.replaceText(
       locate.text({ files: 'project/src/calculator.js', find: 'return left + right;' }),
       'return left - right;',
+    ),
+  ),
+  proof.red(
+    adapter.rules.noFlakyTests,
+    'detects a test that passes only after retrying',
+    mutate.replaceText(
+      locate.text({ files: 'project/test/calculator.test.js', find: '// REDPROOF_FLAKY_SLOT' }),
+      `let attempts = 0;
+test('eventually passes', { retry: 1 }, () => {
+  attempts += 1;
+  expect(attempts).toBe(2);
+});`,
     ),
   ),
   proof.red(

@@ -23,6 +23,7 @@ import { defineGate, defineProofs, mutate, proof } from 'redproof';
 const adapter = vitest({
   rules: {
     testsPass: true,
+    noFlakyTests: true,
     noSkippedTests: true,
     noTodoTests: true,
   },
@@ -76,8 +77,14 @@ with `workspace-not-restored`. The adapter is proven against Vitest 5.
 The testing integration can expose these Rules, depending on the selected report format:
 
 - `testing/tests-pass`
+- `testing/no-flaky-tests` (Jest-compatible JSON only)
 - `testing/no-skipped-tests`
 - `testing/no-todo-tests`
+
+The flaky-test Rule treats an ultimately passing assertion with retained failure
+messages as flaky. Vitest preserves that evidence for earlier retry attempts in
+its Jest-compatible JSON report. JUnit XML records only the final outcome, so
+Redproof refuses `noFlakyTests` with that format at composition time.
 
 ### Other test runners
 
