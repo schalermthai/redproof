@@ -13,6 +13,28 @@ function unavailable(message: string, detail: string): TestRunnerResult {
   return { kind: 'unavailable', message, detail };
 }
 
+function detailOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Remove the fresh report and put the previous one back. Null when both succeed. */
+async function restoreReport(reportFile: string, backup: string | null): Promise<TestRunnerResult | null> {
+  const removed = await rm(reportFile, { force: true }).catch((error: Error) => error);
+  const restored = backup === null
+    ? null
+    : await rename(backup, reportFile).catch((error: Error) => error);
+  if (restored instanceof Error) {
+    return unavailable(
+      `The previous Vitest report could not be restored from ${backup}.`,
+      restored.message,
+    );
+  }
+  if (removed instanceof Error) {
+    return unavailable('The fresh Vitest report could not be removed after the run.', removed.message);
+  }
+  return null;
+}
+
 async function copyReport(
   execution: TestRunnerCompleted,
   source: string,
@@ -22,10 +44,7 @@ async function copyReport(
     await copyFile(source, target);
     return execution;
   } catch (error) {
-    return unavailable(
-      'Vitest did not produce its configured JSON report.',
-      error instanceof Error ? error.message : String(error),
-    );
+    return unavailable('Vitest did not produce its configured JSON report.', detailOf(error));
   }
 }
 
@@ -74,18 +93,27 @@ export function configuredVitestReport(
         return unavailable('The configured Vitest report is a directory.', reportFile);
       }
 
-      const backup = `${reportFile}.redproof-backup-${randomUUID()}`;
-      const hadExisting = !(existing instanceof Error);
-      if (hadExisting) await rename(reportFile, backup);
+      const backup = existing instanceof Error
+        ? null
+        : `${reportFile}.redproof-backup-${randomUUID()}`;
+      if (backup !== null) {
+        const setAside = await rename(reportFile, backup).catch((error: Error) => error);
+        if (setAside instanceof Error) {
+          return unavailable('The previous Vitest report could not be set aside.', setAside.message);
+        }
+      }
 
+      let outcome: TestRunnerResult;
       try {
         const execution = await runner.run(ctx);
-        if (execution.kind === 'unavailable') return execution;
-        return await copyReport(execution, reportFile, ctx.reportFile);
-      } finally {
-        await rm(reportFile, { force: true });
-        if (hadExisting) await rename(backup, reportFile);
+        outcome = execution.kind === 'unavailable'
+          ? execution
+          : await copyReport(execution, reportFile, ctx.reportFile);
+      } catch (error) {
+        outcome = unavailable('The test command failed before Vitest reported.', detailOf(error));
       }
+
+      return await restoreReport(reportFile, backup) ?? outcome;
     },
   };
 }

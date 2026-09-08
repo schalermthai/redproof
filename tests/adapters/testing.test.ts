@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -451,6 +451,90 @@ test('a configured Vitest report refuses a stale file when the run writes nothin
     }
     assert.equal(await readFile(capturedReport, 'utf8').catch(() => null), null);
     assert.equal(await readFile(configuredReport, 'utf8'), 'stale report');
+  });
+});
+
+test('a configured Vitest report refuses when the previous file cannot be set aside', async () => {
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    const configuredReport = join(project, 'results.json');
+    await mkdir(project);
+    await writeFile(configuredReport, 'previous report', 'utf8');
+    await chmod(project, 0o555);
+
+    let ran = false;
+    const fake: TestRunner = {
+      description: 'fake Vitest',
+      async run() {
+        ran = true;
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, { cwd: 'project', reportFile: 'results.json' });
+    try {
+      const result = await wrapped.run({ root, reportFile: join(root, 'captured.json') });
+      assert.equal(result.kind, 'unavailable');
+      if (result.kind === 'unavailable') {
+        assert.match(result.message, /could not be set aside/);
+      }
+      assert.equal(ran, false);
+    } finally {
+      await chmod(project, 0o755);
+    }
+    assert.equal(await readFile(configuredReport, 'utf8'), 'previous report');
+  });
+});
+
+test('a configured Vitest report refuses when the previous file cannot be restored', async () => {
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    const configuredReport = join(project, 'results.json');
+    const capturedReport = join(root, 'captured.json');
+    await mkdir(project);
+    await writeFile(configuredReport, 'previous report', 'utf8');
+
+    const fake: TestRunner = {
+      description: 'fake Vitest that cleans its output directory',
+      async run() {
+        for (const name of await readdir(project)) {
+          if (name.includes('.redproof-backup-')) await rm(join(project, name));
+        }
+        await writeFile(configuredReport, jestSample, 'utf8');
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, { cwd: 'project', reportFile: 'results.json' });
+    const result = await wrapped.run({ root, reportFile: capturedReport });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind === 'unavailable') {
+      assert.match(result.message, /could not be restored/);
+      assert.match(result.message, /results\.json\.redproof-backup-/);
+    }
+  });
+});
+
+test('a configured Vitest report refuses and restores when the run throws', async () => {
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    const configuredReport = join(project, 'results.json');
+    await mkdir(project);
+    await writeFile(configuredReport, 'previous report', 'utf8');
+
+    const fake: TestRunner = {
+      description: 'fake Vitest that crashes',
+      async run() {
+        throw new Error('spawn failed');
+      },
+    };
+    const wrapped = configuredVitestReport(fake, { cwd: 'project', reportFile: 'results.json' });
+    const result = await wrapped.run({ root, reportFile: join(root, 'captured.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind === 'unavailable') {
+      assert.equal(result.detail, 'spawn failed');
+    }
+    assert.equal(await readFile(configuredReport, 'utf8'), 'previous report');
   });
 });
 
