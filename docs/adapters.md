@@ -88,6 +88,10 @@ than 1, and fills `retryReasons` only when `logErrorsBeforeRetry` is set.
 Redproof reads all three signals. JUnit XML records only the final outcome, so
 Redproof refuses `noFlakyTests` with that format at composition time.
 
+When a Jest-compatible JSON report includes aggregate test counts, Redproof
+checks them against the contained assertions. A contradictory report refuses
+the Gate instead of producing a false PASS from incomplete result data.
+
 ### Other test runners
 
 You do not need a dedicated Redproof package for every test framework.

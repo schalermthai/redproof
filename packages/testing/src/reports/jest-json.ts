@@ -22,8 +22,38 @@ type JestFileLike = {
 };
 
 type JestReportLike = {
+  readonly numTotalTests?: number;
+  readonly numPassedTests?: number;
+  readonly numFailedTests?: number;
+  readonly numPendingTests?: number;
+  readonly numTodoTests?: number;
   readonly testResults?: readonly JestFileLike[];
 };
+
+type JestSummaryField = Exclude<keyof JestReportLike, 'testResults'>;
+
+function validateSummary(parsed: JestReportLike, tests: readonly TestCase[]): void {
+  const expected: Readonly<Record<JestSummaryField, number>> = {
+    numTotalTests: tests.length,
+    numPassedTests: tests.filter(test => test.status === 'passed').length,
+    numFailedTests: tests.filter(test => test.status === 'failed').length,
+    numPendingTests: tests.filter(test => test.status === 'skipped').length,
+    numTodoTests: tests.filter(test => test.status === 'todo').length,
+  };
+
+  for (const field of Object.keys(expected) as JestSummaryField[]) {
+    const reported = parsed[field];
+    if (reported === undefined) continue;
+    if (!Number.isSafeInteger(reported) || reported < 0) {
+      throw new Error(`Jest-compatible JSON ${field} must be a non-negative safe integer.`);
+    }
+    if (reported !== expected[field]) {
+      throw new Error(
+        `Jest-compatible JSON ${field} is ${reported}, but assertionResults contain ${expected[field]}.`,
+      );
+    }
+  }
+}
 
 function statusOf(status: string | undefined): TestStatus {
   switch (status) {
@@ -83,6 +113,7 @@ export function parseJestJson(input: string): TestRun {
     }
   }
 
+  validateSummary(parsed, tests);
   return { tests };
 }
 
