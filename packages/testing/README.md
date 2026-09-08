@@ -35,7 +35,8 @@ export default defineGate({ id: 'unit-tests', adapter });
 
 `cwd` selects a project below the Gate root. `reportFile` consumes a JSON
 `outputFile` already configured by Vitest, allowing project setup or teardown
-to inspect the same fresh report. Redproof restores any pre-existing report
+to inspect the same fresh report. It is relative to `cwd` and must name the
+same file as the config `outputFile`. Redproof restores any pre-existing report
 afterward. Omit `reportFile` to use Redproof's private temporary report.
 
 Then run:

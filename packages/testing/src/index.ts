@@ -238,6 +238,7 @@ export function vitest<const O extends TestRuleOptions>(
     args: ({ reportFile }) => [
       'run',
       '--reporter=json',
+      '--no-cache',
       ...(options.reportFile ? [] : [`--outputFile=${reportFile}`]),
       ...(options.configFile ? ['--config', options.configFile] : []),
       ...(options.args ?? []),

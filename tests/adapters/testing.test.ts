@@ -348,6 +348,32 @@ test('a configured Vitest report is fresh for the run and the previous file is r
   });
 });
 
+test('a configured Vitest report refuses a stale file when the run writes nothing', async () => {
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    const configuredReport = join(project, 'results.json');
+    const capturedReport = join(root, 'captured.json');
+    await mkdir(project);
+    await writeFile(configuredReport, 'stale report', 'utf8');
+
+    const fake: TestRunner = {
+      description: 'fake Vitest that writes nothing',
+      async run() {
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const wrapped = configuredVitestReport(fake, { cwd: 'project', reportFile: 'results.json' });
+    const result = await wrapped.run({ root, reportFile: capturedReport });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind === 'unavailable') {
+      assert.match(result.message, /did not produce its configured JSON report/);
+    }
+    assert.equal(await readFile(capturedReport, 'utf8').catch(() => null), null);
+    assert.equal(await readFile(configuredReport, 'utf8'), 'stale report');
+  });
+});
+
 test('a configured Vitest report refuses paths outside the Gate root', async () => {
   await withWorkspace(async root => {
     let ran = false;

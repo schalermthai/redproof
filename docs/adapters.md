@@ -61,10 +61,17 @@ const adapter = vitest({
 });
 ```
 
-`cwd` is relative to and confined inside the Gate root. `configFile`,
-`reportFile`, and test file filters follow Vitest's normal cwd-relative
-resolution. When `reportFile` is absent, Redproof continues to direct Vitest to
-a private temporary JSON report.
+`cwd` is relative to and confined inside the Gate root. `configFile` and test
+file filters follow Vitest's normal cwd-relative resolution. `reportFile` is
+relative to `cwd` and must name the same file as the JSON `outputFile` in the
+Vitest config. Keep the Vitest `root` at `cwd`. If the two disagree, the Check
+refuses because the report is not found. A keyed `outputFile` works when
+`reportFile` matches its `json` entry. When `reportFile` is absent, Redproof
+continues to direct Vitest to a private temporary JSON report.
+
+Redproof passes `--no-cache` to Vitest. Without it, Vitest writes a results
+cache under `node_modules/.vite` inside the project, and a proof run refuses
+with `workspace-not-restored`. The adapter is proven against Vitest 5.
 
 The testing integration can expose these Rules, depending on the selected report format:
 

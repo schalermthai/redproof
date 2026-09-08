@@ -5,7 +5,6 @@ const adapter = vitest({
   cwd: 'project',
   configFile: 'vitest.config.js',
   reportFile: 'results.json',
-  args: ['--no-cache', '--configLoader', 'runner'],
   rules: {
     testsPass: true,
     noSkippedTests: true,
