@@ -361,7 +361,7 @@ npm run redproof:describe -- gates/no-todo.ts
 - **[Custom Adapter](https://github.com/schalermthai/redproof/blob/main/docs/custom-adapter.md)**
 - **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**
 - **[Legacy modernization](https://github.com/schalermthai/redproof/blob/main/docs/legacy-modernization.md)**
-- **[Self-hosting Redproof](https://github.com/schalermthai/redproof/blob/main/docs/self-hosting.md)**
+- **[Red proving Redproof](https://github.com/schalermthai/redproof/blob/main/docs/red-proving-redproof.md)**
 
 ## License
 
