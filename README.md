@@ -281,7 +281,9 @@ Completed failure exits breach the selected Rule. Missing executables, timeouts,
 See **[Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/commands.md)** for exit-code policy,
 command groups, and what a Check reports about itself.
 
-See **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, Mutations, and Adapters.
+See **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, and Mutations.
+
+See **[Building an Adapter](https://github.com/schalermthai/redproof/blob/main/docs/building-an-adapter.md)** when a tool brings its own policy model, and for the guidelines that keep an Adapter's verdicts honest.
 
 For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**.
 
@@ -356,6 +358,7 @@ npm run redproof:describe -- gates/no-todo.ts
 - **[Built-in integrations](https://github.com/schalermthai/redproof/blob/main/docs/adapters.md)**
 - **[Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/commands.md)**
 - **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)**
+- **[Building an Adapter](https://github.com/schalermthai/redproof/blob/main/docs/building-an-adapter.md)**
 - **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**
 - **[Legacy modernization](https://github.com/schalermthai/redproof/blob/main/docs/legacy-modernization.md)**
 - **[Self-hosting Redproof](https://github.com/schalermthai/redproof/blob/main/docs/self-hosting.md)**

@@ -2,7 +2,7 @@ import { glob, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '../..');
-const MAX_FRAGMENTS = 39;
+const MAX_FRAGMENTS = 37;
 const FENCE = /^```(?:ts|typescript)([^\n]*)\n[\s\S]*?^```$/gm;
 
 let fragments = 0;
