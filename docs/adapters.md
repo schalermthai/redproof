@@ -127,14 +127,8 @@ report.jestJson()
 report.junitXml()
 ```
 
-For a custom test system, implement only the runner or report normalization layer:
-
-```ts fragment
-defineTestRunner(...)
-defineTestReport(...)
-```
-
-Create a new full Adapter only when a tool introduces a genuinely different policy model.
+For a custom test system, implement only the runner or the report format. See
+**[Extend the testing adapter instead](building-an-adapter.md#extend-the-testing-adapter-instead)**.
 
 ### What a command runner reports about itself
 
@@ -312,15 +306,8 @@ refuses; remove it from the baseline.
 
 For a useful RED proof, weaken the test suite and confirm Stryker notices the loss of test strength.
 
-## Choosing between an Adapter and a parser
+## Next
 
-A useful rule of thumb:
-
-> Create a new Adapter when the external system introduces a new policy model.
-
-> Create a runner or parser when it only introduces a new invocation method or data format.
-
-When the tool is simply an executable, a Check is enough. See **[Command
-Checks](commands.md)**.
-
-For writing your own integration, continue with **[Composing Redproof](composition.md#creating-an-adapter)**.
+- **[Building an Adapter](building-an-adapter.md)** when no built-in integration fits, and for
+  choosing between a Check, a runner or report format, and an Adapter.
+- **[Command Checks](commands.md)** when the tool is an executable and its exit code is the result.

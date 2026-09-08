@@ -26,4 +26,6 @@ Use the compact reporter with a problem matcher or open SARIF output with a SARI
 
 For a guardrail that is already an executable, see **[Command Checks](../commands.md)**.
 
-For authoring Rules, Checks, Proofs, Mutations, and Adapters, see **[Composing Redproof](../composition.md)**.
+For authoring Rules, Checks, Proofs, and Mutations, see **[Composing Redproof](../composition.md)**.
+
+For wrapping a tool that brings its own policy model, see **[Building an Adapter](../building-an-adapter.md)**.

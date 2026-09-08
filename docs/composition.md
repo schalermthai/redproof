@@ -406,88 +406,24 @@ sequential and parallel execution, and what a Check reports about itself.
 
 ## Creating an Adapter
 
-Use an Adapter when an external system introduces its own policy model.
-
-```ts fragment
-import {
-  breach,
-  counting,
-  defineAdapter,
-  defineRules,
-  result,
-} from 'redproof';
-
-export function myTool() {
-  const rules = defineRules({
-    policy: {
-      id: 'my-tool/policy',
-      description: 'The external policy must hold.',
-    },
-  });
-
-  return defineAdapter({
-    kind: 'my-tool',
-    rules,
-
-    check: {
-      description: 'run my tool and interpret its structured findings',
-      counting: counting.supported,
-
-      async run(ctx) {
-        const startedAt = new Date().toISOString();
-
-        try {
-          const findings = await runMyTool(ctx.root);
-          const scan = {
-            source: 'my-tool',
-            startedAt,
-            finishedAt: new Date().toISOString(),
-            inspected: findings.length,
-          } as const;
-
-          return result.fromBreaches(
-            scan,
-            findings.map(finding =>
-              breach(rules.policy, {
-                code: finding.code,
-                message: finding.message,
-                location: finding.location,
-              }),
-            ),
-          );
-        } catch (error) {
-          return result.refuse(
-            {
-              source: 'my-tool',
-              startedAt,
-              finishedAt: new Date().toISOString(),
-              inspected: null,
-            },
-            {
-              code: 'my-tool-unavailable',
-              message: 'The external tool could not complete the check.',
-              location: null,
-              detail: error instanceof Error ? error.message : String(error),
-            },
-          );
-        }
-      },
-    },
-  });
-}
-```
-
-The Adapter should translate the external system into Redproof semantics:
+Use an Adapter when an external system introduces its own policy model. An
+Adapter binds a Rule catalogue to one Check with `defineAdapter`, and translates
+the external system into Redproof semantics:
 
 ```text
 real policy violation     → Breach → FAIL
 cannot evaluate reliably  → Diagnostic → REFUSE
+bad option                → throw before any Check exists
 ```
 
 Do not infer Redproof semantics from a process exit code when structured evidence can distinguish the two.
 
+See **[Building an Adapter](building-an-adapter.md)** for a complete example and
+the guidelines that keep its verdicts honest.
+
 ## Next
 
+- **[Building an Adapter](building-an-adapter.md)**
 - **[Built-in integrations](adapters.md)**
 - **[Execution isolation](tutorials/execution-isolation.md)**
 - **[Reporters](tutorials/reporters.md)**
