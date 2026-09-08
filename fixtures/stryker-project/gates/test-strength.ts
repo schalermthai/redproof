@@ -2,6 +2,7 @@ import { stryker } from '@redproof/stryker';
 import { defineGate, defineProofs, locate, mutate, proof } from 'redproof';
 
 const adapter = stryker({
+  cwd: 'project',
   configFile: 'stryker.config.mjs',
   rules: {
     mutantsDetected: true,
@@ -18,7 +19,7 @@ const gate = defineGate({
 
 const weakenBoundaryTest = () => mutate.removeText(
   locate.text({
-    files: 'test/is-adult.test.js',
+    files: 'project/test/is-adult.test.js',
     find: `test('adult boundary is accepted', () => {\n  assert.equal(isAdult(18), true);\n});\n\n`,
   }),
 );
@@ -37,7 +38,10 @@ export const proofs = defineProofs(gate, [
   proof.green('accepts the strong baseline test suite'),
   proof.refuse(
     'refuses when Stryker configuration is unavailable',
-    mutate.rename('stryker.config.mjs', 'stryker.config.off.mjs'),
+    mutate.rename(
+      'project/stryker.config.mjs',
+      'project/stryker.config.off.mjs',
+    ),
   ),
 ]);
 

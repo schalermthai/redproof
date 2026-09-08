@@ -235,9 +235,11 @@ try {
 
   const green = "import { defineGate, defineRule } from 'redproof';\n"
     + "import { command, commands } from 'redproof/command';\n"
+    + "import { stryker } from '@redproof/stryker';\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
     + "export const check = command({ rule, command: 'node' });\n"
     + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
+    + "export const mutation = stryker({ cwd: 'packages/parser', rules: { mutantsDetected: true } });\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);

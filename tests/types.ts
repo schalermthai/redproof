@@ -195,6 +195,7 @@ proof.red(dependencyAdapter.rules.domain, 'domain dependency proof', {
 });
 
 const strykerAdapter = stryker({
+  cwd: 'packages/parser',
   rules: {
     mutantsDetected: true,
     mutationScore: { minimum: 80 },
@@ -260,5 +261,7 @@ testing({
 });
 
 stryker({ rules: { mutantsDetected: true } });
+// @ts-expect-error cwd must be a path string.
+stryker({ cwd: 1, rules: { mutantsDetected: true } });
 // @ts-expect-error mutantsKilled is not a Stryker Rule.
 stryker({ rules: { mutantsDetected: true, mutantsKilled: true } });

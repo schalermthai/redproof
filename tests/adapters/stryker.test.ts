@@ -1,13 +1,21 @@
 import assert from 'node:assert/strict';
+import { symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { defineRule } from 'redproof';
 import { stryker } from '@redproof/stryker';
+import {
+  confineCanonicalStrykerCwd,
+  resolveStrykerCwd,
+} from '../../packages/stryker/src/cwd.ts';
 import {
   mutationMetrics,
   mutationScoreBreach,
   undetectedMutantBreaches,
   type StrykerMutantResult,
 } from '../../packages/stryker/src/model.ts';
+import { withWorkspace } from '../helpers/workspace.ts';
 
 const detectedRule = defineRule({
   id: 'stryker/mutants-detected',
@@ -116,4 +124,45 @@ test('the Stryker adapter rejects a rule name it does not know', () => {
     () => stryker({ rules: { mutantsDetected: true, mutantsKilled: true } as never }),
     /Unknown Stryker rule option: "mutantsKilled"\. Known options: mutantsDetected, mutationScore\./,
   );
+});
+
+test('Stryker working-directory policy is a pure lexical and canonical boundary', () => {
+  const root = join(tmpdir(), 'gate');
+  assert.deepEqual(resolveStrykerCwd(root, 'packages/parser'), {
+    kind: 'inside',
+    path: join(root, 'packages/parser'),
+  });
+  assert.equal(resolveStrykerCwd(root, '..').kind, 'outside');
+  assert.equal(confineCanonicalStrykerCwd(root, tmpdir()).kind, 'outside');
+});
+
+test('the Stryker adapter refuses a working directory outside the Gate root', async () => {
+  await withWorkspace(async root => {
+    const checkResult = await stryker({
+      cwd: '..',
+      rules: { mutantsDetected: true },
+    }).check.run({ root, rules: ['stryker/mutants-detected'] });
+
+    assert.equal(checkResult.verdict, 'refuse');
+    if (checkResult.verdict !== 'refuse') return;
+    assert.equal(checkResult.why.code, 'stryker-cwd-outside-root');
+  });
+});
+
+test('the Stryker adapter refuses a working-directory symlink outside the Gate root', async () => {
+  await withWorkspace(async root => {
+    await symlink(
+      tmpdir(),
+      join(root, 'escape'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const checkResult = await stryker({
+      cwd: 'escape',
+      rules: { mutantsDetected: true },
+    }).check.run({ root, rules: ['stryker/mutants-detected'] });
+
+    assert.equal(checkResult.verdict, 'refuse');
+    if (checkResult.verdict !== 'refuse') return;
+    assert.equal(checkResult.why.code, 'stryker-cwd-outside-root');
+  });
 });
