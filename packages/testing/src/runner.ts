@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { executeCommand, type CommandExecution } from 'redproof/command';
 import type { CommandPlan, TestRunner, TestRunnerContext, TestRunnerResult } from './model.ts';
 import { confineCanonicalTestingPath, resolveTestingPath } from './core/paths.ts';
 
@@ -11,9 +11,18 @@ export type CommandRunnerOptions = {
   readonly args?: CommandArgs;
   /** Relative to the Gate root and confined inside it. Defaults to the root. */
   readonly cwd?: string;
-  readonly env?: Readonly<Record<string, string>>;
+  readonly env?: Readonly<Record<string, string | undefined>>;
   readonly description?: string;
+  readonly timeoutMs?: number;
+  /** Combined stdout and stderr capture limit. Defaults to 10 MiB. */
+  readonly maxOutputBytes?: number;
 };
+
+function validatePositiveInteger(name: string, value: number | undefined): void {
+  if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+}
 
 function argsFor(args: CommandArgs | undefined, ctx: TestRunnerContext): readonly string[] {
   if (!args) return [];
@@ -33,6 +42,8 @@ function describePlan(plan: CommandPlan): string {
 }
 
 export function command(options: CommandRunnerOptions): TestRunner {
+  validatePositiveInteger('timeoutMs', options.timeoutMs);
+  validatePositiveInteger('maxOutputBytes', options.maxOutputBytes);
   const plan = planFor(options);
 
   return {
@@ -74,51 +85,34 @@ export function command(options: CommandRunnerOptions): TestRunner {
         };
       }
 
-      return new Promise(resolve => {
-        const child = spawn(options.command, args, {
+      let execution: CommandExecution;
+      try {
+        execution = await executeCommand({
+          command: options.command,
+          args,
+          label: `Test command ${options.command}`,
           cwd: confinedCwd.path,
           env: {
-            ...process.env,
             REDPROOF_TEST_REPORT: ctx.reportFile,
             ...options.env,
           },
-          stdio: ['ignore', 'pipe', 'pipe'],
+          ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+          ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
         });
+      } catch (error) {
+        return {
+          kind: 'unavailable',
+          message: `Could not start test command ${options.command}.`,
+          detail: error instanceof Error ? error.message : String(error),
+        };
+      }
 
-        let stdout = '';
-        let stderr = '';
-        child.stdout?.setEncoding('utf8');
-        child.stderr?.setEncoding('utf8');
-        child.stdout?.on('data', chunk => { stdout += chunk; });
-        child.stderr?.on('data', chunk => { stderr += chunk; });
-
-        child.once('error', error => {
-          resolve({
-            kind: 'unavailable',
-            message: `Could not start test command ${options.command}.`,
-            detail: error.message,
-          });
-        });
-
-        child.once('close', (code, signal) => {
-          if (signal) {
-            const detail = stderr || stdout;
-            resolve({
-              kind: 'unavailable',
-              message: `Test command ${options.command} was terminated by ${signal}.`,
-              ...(detail ? { detail } : {}),
-            });
-            return;
-          }
-
-          resolve({
-            kind: 'completed',
-            exitCode: code ?? 1,
-            stdout,
-            stderr,
-          });
-        });
-      });
+      if (execution.kind === 'completed') return execution;
+      return {
+        kind: 'unavailable',
+        message: execution.message,
+        detail: [execution.code, execution.detail].filter(Boolean).join('\n\n'),
+      };
     },
   };
 }

@@ -74,11 +74,14 @@ module.exports = {
     {
       name: 'adapters-public-core-api-only',
       severity: 'error',
-      comment: 'Adapters must consume Redproof through its public entrypoint.',
+      comment: 'Adapters must consume Redproof through its public entrypoints.',
       from: { path: '^packages/(?:eslint|dependency-cruiser|stryker|testing)/src/' },
       to: {
         path: '^packages/redproof/src/',
-        pathNot: '^packages/redproof/src/index[.]ts$',
+        pathNot: [
+          '^packages/redproof/src/index[.]ts$',
+          '^packages/redproof/src/command/index[.]ts$',
+        ],
       },
     },
     {

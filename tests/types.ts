@@ -276,6 +276,11 @@ vitest({
 vitest({ cwd: 1, rules: { testsPass: true } });
 // @ts-expect-error reportFile must be a path string.
 vitest({ reportFile: 1, rules: { testsPass: true } });
+vitest({ timeoutMs: 60_000, maxOutputBytes: 5_000_000, rules: { testsPass: true } });
+// @ts-expect-error timeoutMs must be a number.
+vitest({ timeoutMs: 'slow', rules: { testsPass: true } });
+// @ts-expect-error maxOutputBytes must be a number.
+vitest({ maxOutputBytes: 'large', rules: { testsPass: true } });
 
 // An unknown option name must be rejected, not accepted and then ignored.
 
@@ -292,7 +297,13 @@ vitest({ rules: { testsPass: true, noPurpleTests: true } });
 vitest({ rules: { noPurpleTests: true } });
 
 testing({
-  runner: runner.command({ command: 'npm', cwd: 'packages/app', args: () => ['test'] }),
+  runner: runner.command({
+    command: 'npm',
+    cwd: 'packages/app',
+    args: () => ['test'],
+    timeoutMs: 60_000,
+    maxOutputBytes: 5_000_000,
+  }),
   report: report.junitXml(),
   // @ts-expect-error noPurpleTests is not a testing Rule.
   rules: { testsPass: true, noPurpleTests: true },

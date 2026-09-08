@@ -3,6 +3,7 @@ import { chmod, lstat, mkdir, readdir, readFile, realpath, rm, symlink, writeFil
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, vitest, type TestRunner } from '@redproof/testing';
 import { defineRule } from 'redproof';
 import { configuredVitestReport } from '../../packages/testing/src/shell/vitest-runner.ts';
@@ -479,6 +480,67 @@ test('a command runner refuses lexical and symbolic-link cwd escapes', async () 
     if (symbolicResult.kind === 'unavailable') {
       assert.match(symbolicResult.message, /outside the Gate root/);
     }
+  });
+});
+
+test('a command runner refuses bounded output with captured diagnostics', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({
+      command: process.execPath,
+      args: ['-e', "process.stdout.write('1234567890')"],
+      maxOutputBytes: 5,
+    });
+
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /exceeded the 5-byte output limit/);
+    assert.match(result.detail ?? '', /command-output-limit/);
+    assert.match(result.detail ?? '', /stdout:\n12345/);
+  });
+});
+
+test('a command runner timeout terminates descendants before it returns', async () => {
+  await withWorkspace(async root => {
+    const descendant = "require('node:fs').writeFileSync('descendant-started.txt', ''); process.on('SIGTERM', () => {}); setTimeout(() => require('node:fs').writeFileSync('escaped.txt', 'alive'), 1_600); setInterval(() => {}, 1_000)";
+    const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setInterval(() => {}, 1_000)`;
+    const built = runner.command({
+      command: process.execPath,
+      args: ['-e', parent],
+      timeoutMs: 1_000,
+    });
+
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /exceeded its 1000ms timeout/);
+    assert.match(result.detail ?? '', /command-timeout/);
+    assert.equal(await readFile(join(root, 'descendant-started.txt'), 'utf8'), '');
+    await delay(500);
+    await assert.rejects(readFile(join(root, 'escaped.txt')));
+  });
+});
+
+test('testing command limits must be positive integers', () => {
+  assert.throws(
+    () => runner.command({ command: 'test', timeoutMs: 0 }),
+    /timeoutMs must be a positive integer/,
+  );
+  assert.throws(
+    () => vitest({ maxOutputBytes: -1, rules: { testsPass: true } }),
+    /maxOutputBytes must be a positive integer/,
+  );
+});
+
+test('an invalid test command refuses instead of throwing from the runner', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({ command: '' });
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /Could not start test command/);
+    assert.match(result.detail ?? '', /command must not be empty/);
   });
 });
 

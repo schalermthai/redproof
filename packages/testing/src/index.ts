@@ -240,6 +240,9 @@ export type VitestAdapterOptions<O extends TestRuleOptions> = {
   readonly reportFile?: string;
   readonly files?: readonly string[];
   readonly args?: readonly string[];
+  readonly timeoutMs?: number;
+  /** Combined stdout and stderr capture limit. Defaults to 10 MiB. */
+  readonly maxOutputBytes?: number;
   readonly rules: O;
 };
 
@@ -251,6 +254,8 @@ export function vitest<const O extends TestRuleOptions>(
     command: options.command ?? 'vitest',
     cwd,
     description: 'run Vitest',
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
     args: ({ reportFile }) => [
       'run',
       '--reporter=json',

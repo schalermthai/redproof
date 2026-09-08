@@ -243,7 +243,7 @@ try {
     + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
     + "export const execution = executeCommand({ command: 'node', cwd: '/project', timeoutMs: 1_000 });\n"
     + "export const mutation = stryker({ cwd: 'packages/parser', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } });\n"
-    + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', rules: { testsPass: true, noFlakyTests: true } });\n"
+    + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', timeoutMs: 60_000, maxOutputBytes: 5_000_000, rules: { testsPass: true, noFlakyTests: true } });\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
