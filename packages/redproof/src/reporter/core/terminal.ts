@@ -318,6 +318,7 @@ export function formatGateDescription(description: GateDescription): string {
   }
 
   lines.push('', 'Check:', ...indentDescription(description.check));
+  if (description.allowEmptyInspection) lines.push('', 'Empty scope: allowed');
 
   for (const item of description.proofs) {
     const label = item.kind === 'red' ? item.targetLabel ?? 'RED' : item.kind.toUpperCase();

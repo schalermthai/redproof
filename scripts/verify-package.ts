@@ -254,7 +254,12 @@ try {
     + "defineGate({ id: 'bad', rules: { rule }, check: { description: 'check', counting: counting.supported, async run() { return pass({ source: 'consumer', startedAt: '', finishedAt: '', inspected: 0 }); } }, allowEmptyInspection: 'yes' });\n";
   await writeFile(join(consumer, 'consumer.ts'), red);
   const typesRed = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
-  report(!typesRed.ok, 'invalid consumer code is rejected', typesRed.ok ? 'type check passed when it should have failed' : '');
+  const redNamesPolicy = typesRed.output.includes("not assignable to type 'boolean");
+  report(
+    !typesRed.ok && redNamesPolicy,
+    'invalid consumer code is rejected for the planted reason',
+    typesRed.ok ? 'type check passed when it should have failed' : redNamesPolicy ? '' : typesRed.output.slice(0, 400),
+  );
 
   console.log('\n8. Check every package carries the same version');
   const versions = new Set<string>();

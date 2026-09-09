@@ -17,6 +17,7 @@ export type GateDescription = {
   readonly gate: string;
   readonly rules: readonly DescribedRule[];
   readonly check: string;
+  readonly allowEmptyInspection: boolean;
   readonly proofs: readonly DescribedProof[];
 };
 
@@ -59,6 +60,7 @@ export function describeModule(module: LoadedGateModule): GateDescription {
     gate: module.gate.id,
     rules,
     check: module.gate.adapter.check.description,
+    allowEmptyInspection: module.gate.allowEmptyInspection === true,
     proofs,
   };
 }

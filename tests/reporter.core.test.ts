@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { breach, counting, defineAdapter, defineGate, fail, formatProof, pass, refuse, type CheckResult, type CompletedProofOutcome, type ProofOutcome, type Scan } from 'redproof';
 import type { CheckProjectRun } from '../packages/redproof/src/run/core/run.ts';
-import { renderRun } from '../packages/redproof/src/reporter/core/terminal.ts';
+import { formatGateDescription, renderRun } from '../packages/redproof/src/reporter/core/terminal.ts';
+import { describeModule } from '../packages/redproof/src/project/core/description.ts';
 
 const scan: Scan = { source: 'unit', startedAt: '', finishedAt: '', inspected: 1 };
 const R1 = { id: 'unit/r1', description: 'R1' } as const;
@@ -54,6 +55,21 @@ test('a diagnostic without a line never asks for source', () => {
 
   assert.match(output, / ❯ src\/a\.ts\n\n   R1 breached/);
   assert.doesNotMatch(output, /ignored/);
+});
+
+test('describe shows an allowed empty scope and stays silent otherwise', () => {
+  const adapter = defineAdapter({
+    kind: 'described',
+    rules: { r1: { id: 'r1', description: 'R1' } },
+    check: { description: 'inspect', counting: counting.supported, async run() { return pass(scan); } },
+  });
+  const quiet = describeModule({ file: 'gates/quiet.ts', gate: defineGate({ id: 'quiet', adapter, allowEmptyInspection: true }) });
+  const strict = describeModule({ file: 'gates/strict.ts', gate: defineGate({ id: 'strict', adapter }) });
+
+  assert.equal(quiet.allowEmptyInspection, true);
+  assert.equal(strict.allowEmptyInspection, false);
+  assert.match(formatGateDescription(quiet), /Check:\n  inspect\n\nEmpty scope: allowed/);
+  assert.doesNotMatch(formatGateDescription(strict), /Empty scope/);
 });
 
 test('terminal output makes an explicitly allowed zero-inspection PASS visible', () => {
