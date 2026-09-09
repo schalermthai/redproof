@@ -48,7 +48,7 @@ const gate = defineGate({
     dependencies,
     rules,
     sources: 'packages/*/src/**/*.ts',
-    coreTests: 'tests/{*.core,self-hosted-policy}.test.ts',
+    coreTests: 'tests/**/*.core.test.ts',
   }),
 });
 
@@ -131,7 +131,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.coreTestsNoIoHelpers,
     'keeps filesystem fixtures out of functional-core tests',
-    mutate.appendText('tests/proof.core.test.ts', "\nimport './helpers/workspace.ts';\n"),
+    mutate.appendText('tests/proof/evaluation.core.test.ts', "\nimport '../helpers/workspace.ts';\n"),
   ),
   proof.green('accepts the current functional-core and package boundaries'),
 ]);

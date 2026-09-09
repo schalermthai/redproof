@@ -3,28 +3,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { parseReporterArgs } from 'redproof';
 import { withWorkspace } from '../helpers/workspace.ts';
-
-test('reporter CLI parser supports one stdout reporter plus file reporters', () => {
-  assert.deepEqual(parseReporterArgs([
-    'check',
-    '--reporter=default',
-    '--reporter=json:.redproof/results.json',
-    '--reporter=sarif:.redproof/results.sarif',
-  ]), [
-    { name: 'default' },
-    { name: 'json', outputFile: '.redproof/results.json' },
-    { name: 'sarif', outputFile: '.redproof/results.sarif' },
-  ]);
-});
-
-test('reporter CLI parser rejects two reporters writing to stdout', () => {
-  assert.throws(
-    () => parseReporterArgs(['check', '--reporter=json', '--reporter=sarif']),
-    /At most one reporter may write to stdout/,
-  );
-});
 
 test('CLI prints help without loading a project', () => {
   const result = spawnSync(process.execPath, [
