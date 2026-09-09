@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { command, commands, executeCommand, type CommandCheckOptions } from 'redproof/command';
+import { PIPE_RELEASE_GRACE_MS } from '../../packages/redproof/src/command/shell/spawn.ts';
 import { defineRule } from 'redproof';
 import { withWorkspace } from '../helpers/workspace.ts';
 
@@ -326,7 +327,9 @@ test('a direct exit before its deadline is not rewritten as a timeout while the 
     let holder: number | undefined;
     try {
       const timeoutMs = 2_000;
-      const exitAt = Date.now() + timeoutMs - 150;
+      // The deadline must land inside the pipe-release grace, or the bug cannot show.
+      const exitAt = Date.now() + timeoutMs - Math.round(PIPE_RELEASE_GRACE_MS / 2);
+      const started = Date.now();
       const checkResult = await command({
         rule,
         command: process.execPath,
@@ -341,6 +344,8 @@ test('a direct exit before its deadline is not rewritten as a timeout while the 
       holder = await pidFrom(pidFile);
 
       assert.equal(checkResult.verdict, 'pass');
+      assert.ok(Date.now() - started < timeoutMs + 2_000, 'the Check waited for the pipe holder instead of releasing');
+      assert.equal(processAlive(holder), true, 'the Check stopped a holder that was outside its group');
     } finally {
       killQuietly(holder);
     }
@@ -354,6 +359,7 @@ test('a parent signal during pipe release still reaches the surviving command gr
     const signalFile = join(root, 'descendant.signal');
     const descendant = [
       `process.on('SIGINT', () => { require('node:fs').writeFileSync(${JSON.stringify(signalFile)}, 'SIGINT'); process.exit(0); });`,
+      `process.on('SIGTERM', () => { require('node:fs').writeFileSync(${JSON.stringify(signalFile)}, 'SIGTERM'); process.exit(0); });`,
       pipeHoldingDescendant(descendantPidFile),
     ].join(' ');
     const child = [
@@ -367,12 +373,14 @@ test('a parent signal during pipe release still reaches the surviving command gr
     try {
       pids = [await pidFrom(childPidFile), await pidFrom(descendantPidFile)];
       assert.equal(await eventually(() => !processAlive(pids[0]!), 1_000), true, 'the direct command never exited');
+      assert.equal(processAlive(hostProcess.pid!), true, 'the host settled before the pipes were released');
       process.kill(-hostProcess.pid!, 'SIGINT');
 
       assert.equal(await hostExit, 'SIGINT');
       assert.equal(await eventually(() => {
-        try { return readFileSync(signalFile, 'utf8') === 'SIGINT'; } catch { return false; }
-      }, 1_000), true, 'the descendant never received its host signal');
+        try { return readFileSync(signalFile, 'utf8').length > 0; } catch { return false; }
+      }, 1_000), true, 'the descendant received no signal at all');
+      assert.equal(readFileSync(signalFile, 'utf8'), 'SIGINT', 'the descendant was stopped by a group kill, not the host signal');
       assert.equal(await eventually(() => !processAlive(pids[1]!), 1_000), true, 'the descendant outlived its interrupted host');
     } finally {
       for (const pid of pids) killQuietly(pid);

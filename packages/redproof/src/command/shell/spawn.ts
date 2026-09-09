@@ -8,7 +8,7 @@ import { outputDetail, type CommandExecution } from '../core/outcome.ts';
 import { superviseProcessTree, terminateProcessTree } from './process-tree.ts';
 
 /** After a normal exit, how long the pipes may stay open before the rest of the group is stopped. */
-const PIPE_RELEASE_GRACE_MS = 250;
+export const PIPE_RELEASE_GRACE_MS = 250;
 
 export function executeCommand(options: CommandExecutionOptions): Promise<CommandExecution> {
   validateCommandExecutionOptions(options);
