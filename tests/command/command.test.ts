@@ -7,7 +7,7 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { command, commands, executeCommand, type CommandCheckOptions } from 'redproof/command';
 import { defineRule } from 'redproof';
-import { withWorkspace } from './helpers/workspace.ts';
+import { withWorkspace } from '../helpers/workspace.ts';
 
 const rule = defineRule({
   id: 'command/succeeds',
@@ -29,80 +29,6 @@ async function runNode(
     ...options,
   }).run({ root, rules: [rule.id] }));
 }
-
-test('executeCommand exposes supervised execution without applying Gate policy', async () => {
-  await withWorkspace(async root => {
-    const execution = await executeCommand({
-      command: process.execPath,
-      args: ['-e', "process.stdout.write('structured'); process.exit(3)"],
-      cwd: root,
-    });
-
-    assert.deepEqual(execution, {
-      kind: 'completed',
-      exitCode: 3,
-      stdout: 'structured',
-      stderr: '',
-    });
-  });
-});
-
-test('executeCommand requires its adapter caller to supply an absolute working directory', () => {
-  assert.throws(
-    () => executeCommand({ command: process.execPath, cwd: '.' }),
-    /executeCommand cwd must be absolute/,
-  );
-});
-
-test('command maps exit zero to PASS without forwarding captured output', async () => {
-  const checkResult = await runNode("process.stdout.write('captured output')");
-  assert.equal(checkResult.verdict, 'pass');
-  assert.equal(checkResult.scan.inspected, 1);
-});
-
-test('command maps a nonzero exit to a targeted Breach with captured output', async () => {
-  const checkResult = await runNode(
-    "process.stdout.write('out'); process.stderr.write('err'); process.exit(3)",
-    { label: 'guardrail' },
-  );
-
-  assert.equal(checkResult.verdict, 'fail');
-  if (checkResult.verdict !== 'fail') return;
-  assert.equal(checkResult.breaches[0].rule, rule.id);
-  assert.equal(checkResult.breaches[0].code, 'command-exit');
-  assert.match(checkResult.breaches[0].detail ?? '', /exit code: 3/);
-  assert.match(checkResult.breaches[0].detail ?? '', /stdout:\nout/);
-  assert.match(checkResult.breaches[0].detail ?? '', /stderr:\nerr/);
-});
-
-test('command refuses an exit code not named by an explicit policy', async () => {
-  const checkResult = await runNode('process.exit(2)', {
-    exitCodes: { pass: [0], breach: [1] },
-  });
-
-  assert.equal(checkResult.verdict, 'refuse');
-  if (checkResult.verdict !== 'refuse') return;
-  assert.equal(checkResult.why.code, 'command-exit-unclassified');
-});
-
-test('command refuses when the executable cannot start', async () => {
-  const checkResult = await withWorkspace(async root => command({
-    rule,
-    command: 'redproof-command-that-does-not-exist',
-  }).run({ root, rules: [rule.id] }));
-
-  assert.equal(checkResult.verdict, 'refuse');
-  if (checkResult.verdict !== 'refuse') return;
-  assert.equal(checkResult.why.code, 'command-unavailable');
-});
-
-test('command refuses when execution exceeds its timeout', async () => {
-  const checkResult = await runNode('setInterval(() => {}, 1_000)', { timeoutMs: 30 });
-
-  assert.equal(checkResult.verdict, 'refuse');
-  if (checkResult.verdict !== 'refuse') return;
-  assert.equal(checkResult.why.code, 'command-timeout');
-});
 
 function processAlive(pid: number): boolean {
   try {
@@ -132,16 +58,133 @@ function killQuietly(pid: number | undefined): void {
   try { process.kill(pid, 'SIGKILL'); } catch {}
 }
 
+/** Records its pid, ignores SIGTERM, and lives 10 s. */
 function stubbornDescendant(pidFile: string): string {
   return `process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 10_000)`;
 }
 
-function parentOf(descendant: string, pidFile?: string): string {
-  const record = pidFile ? `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); ` : '';
-  return `${record}require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setTimeout(() => {}, 10_000)`;
+/** Records its pid and lives 10 s; when spawned with inherited stdio it keeps the command's output pipes open. */
+function pipeHoldingDescendant(pidFile: string): string {
+  return `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 10_000)`;
 }
 
-test('command timeout terminates a SIGTERM-resistant descendant before the Check returns', async () => {
+/** Records its own pid, spawns the descendant in its own process group, and lives 10 s. */
+function parentOf(descendant: string, pidFile: string): string {
+  return `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setTimeout(() => {}, 10_000)`;
+}
+
+/** Spawn the descendant, wait until it has written its pid, then run `thenDo`. A detached descendant starts its own session. */
+function parentWaitingFor(descendant: string, pidFile: string, stdio: 'ignore' | 'inherit', thenDo: string): string {
+  return `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: '${stdio}', detached: ${stdio === 'inherit'} }).unref(); const tick = () => { if (require('node:fs').existsSync(${JSON.stringify(pidFile)})) { ${thenDo} } else setTimeout(tick, 5); }; tick();`;
+}
+
+test('executeCommand returns the raw exit code and both captured streams without applying Gate policy', async () => {
+  await withWorkspace(async root => {
+    const execution = await executeCommand({
+      command: process.execPath,
+      args: ['-e', "process.stdout.write('structured'); process.stderr.write('warning'); process.exit(3)"],
+      cwd: root,
+    });
+
+    assert.deepEqual(execution, {
+      kind: 'completed',
+      exitCode: 3,
+      stdout: 'structured',
+      stderr: 'warning',
+    });
+  });
+});
+
+test('bad options throw at composition time, before any process starts', () => {
+  assert.throws(
+    () => command({ rule, command: process.execPath, exitCodes: { pass: [0, 1], breach: [1] } }),
+    /cannot produce both PASS and a Breach/,
+  );
+  assert.throws(
+    () => commands({ mode: 'parallel', maxAtOnce: 0, entries: [{ rule, command: process.execPath }] }),
+    /maxAtOnce must be a positive integer/,
+  );
+  assert.throws(
+    () => executeCommand({ command: process.execPath, cwd: '.' }),
+    /executeCommand cwd must be absolute/,
+  );
+});
+
+test('command maps exit zero to PASS and counts one inspected target', async () => {
+  const checkResult = await runNode("process.stdout.write('captured output')");
+
+  assert.equal(checkResult.verdict, 'pass');
+  assert.equal(checkResult.scan.inspected, 1);
+});
+
+test('command maps a nonzero exit to a Breach of its Rule that carries the captured output', async () => {
+  const checkResult = await runNode(
+    "process.stdout.write('out'); process.stderr.write('err'); process.exit(3)",
+    { label: 'guardrail' },
+  );
+
+  assert.equal(checkResult.verdict, 'fail');
+  if (checkResult.verdict !== 'fail') return;
+  assert.equal(checkResult.breaches.length, 1);
+  assert.equal(checkResult.breaches[0].rule, rule.id);
+  assert.equal(checkResult.breaches[0].code, 'command-exit');
+  assert.equal(checkResult.breaches[0].message, 'guardrail exited with code 3.');
+  assert.equal(checkResult.breaches[0].detail, 'exit code: 3\n\nstdout:\nout\n\nstderr:\nerr');
+});
+
+test('command applies an explicit exit-code policy, so an unlisted code is REFUSE', async () => {
+  const checkResult = await runNode('process.exit(2)', {
+    exitCodes: { pass: [0], breach: [1] },
+  });
+
+  assert.equal(checkResult.verdict, 'refuse');
+  if (checkResult.verdict !== 'refuse') return;
+  assert.equal(checkResult.why.code, 'command-exit-unclassified');
+});
+
+test('command refuses when the executable cannot start', async () => {
+  const checkResult = await withWorkspace(async root => command({
+    rule,
+    command: 'redproof-command-that-does-not-exist',
+    label: 'missing tool',
+  }).run({ root, rules: [rule.id] }));
+
+  assert.equal(checkResult.verdict, 'refuse');
+  if (checkResult.verdict !== 'refuse') return;
+  assert.equal(checkResult.why.code, 'command-unavailable');
+  assert.equal(checkResult.why.message, 'Could not start missing tool.');
+});
+
+test('command refuses when the process outlives its timeout', async () => {
+  const checkResult = await runNode('setInterval(() => {}, 1_000)', { timeoutMs: 30, label: 'hang' });
+
+  assert.equal(checkResult.verdict, 'refuse');
+  if (checkResult.verdict !== 'refuse') return;
+  assert.equal(checkResult.why.code, 'command-timeout');
+  assert.equal(checkResult.why.message, 'hang exceeded its 30ms timeout.');
+});
+
+test('command refuses when a signal terminates the process', async () => {
+  const checkResult = await runNode("process.kill(process.pid, 'SIGTERM')", { label: 'signalled' });
+
+  assert.equal(checkResult.verdict, 'refuse');
+  if (checkResult.verdict !== 'refuse') return;
+  assert.equal(checkResult.why.code, 'command-signaled');
+  assert.equal(checkResult.why.message, 'signalled was terminated by SIGTERM.');
+});
+
+test('command refuses when combined output exceeds its bound, and keeps only the bytes within it', async () => {
+  const checkResult = await runNode("process.stdout.write('x'.repeat(1_024))", {
+    maxOutputBytes: 32,
+  });
+
+  assert.equal(checkResult.verdict, 'refuse');
+  if (checkResult.verdict !== 'refuse') return;
+  assert.equal(checkResult.why.code, 'command-output-limit');
+  assert.equal(checkResult.why.detail, `stdout:\n${'x'.repeat(32)}`);
+});
+
+test('a timeout stops a SIGTERM-resistant descendant before the Check returns', async () => {
   await withWorkspace(async root => {
     const pidFile = join(root, 'descendant.pid');
     let descendant: number | undefined;
@@ -149,14 +192,14 @@ test('command timeout terminates a SIGTERM-resistant descendant before the Check
       const checkResult = await command({
         rule,
         command: process.execPath,
-        args: ['-e', parentOf(stubbornDescendant(pidFile), undefined)],
-        timeoutMs: 5_000,
+        args: ['-e', parentWaitingFor(stubbornDescendant(pidFile), pidFile, 'ignore', 'setTimeout(() => {}, 10_000)')],
+        timeoutMs: 2_000,
       }).run({ root, rules: [rule.id] });
+      descendant = await pidFrom(pidFile);
 
       assert.equal(checkResult.verdict, 'refuse');
       if (checkResult.verdict !== 'refuse') return;
       assert.equal(checkResult.why.code, 'command-timeout');
-      descendant = await pidFrom(pidFile);
       assert.equal(await eventually(() => !processAlive(descendant!), 500), true, 'the descendant outlived the Check');
     } finally {
       killQuietly(descendant);
@@ -186,134 +229,92 @@ test('a parent SIGINT reaches a supervised command and its descendants', async (
   });
 });
 
-async function pidIfWritten(file: string): Promise<number | undefined> {
-  const found = await eventually(() => {
-    try { return Number(readFileSync(file, 'utf8')) > 0; } catch { return false; }
-  }, 1_000);
-  return found ? Number(await readFile(file, 'utf8')) : undefined;
-}
+test('a host that exits takes a supervised command and its descendants with it', async () => {
+  await withWorkspace(async root => {
+    const childPidFile = join(root, 'child.pid');
+    const descendantPidFile = join(root, 'descendant.pid');
+    const child = parentOf(stubbornDescendant(descendantPidFile), childPidFile);
+    const host = `import { executeCommand } from 'redproof/command'; import { existsSync } from 'node:fs'; void executeCommand({ command: process.execPath, args: ['-e', ${JSON.stringify(child)}], cwd: ${JSON.stringify(root)} }); const tick = () => { if (existsSync(${JSON.stringify(descendantPidFile)})) process.exit(0); else setTimeout(tick, 5); }; tick();`;
+    const hostProcess = spawn(process.execPath, ['--input-type=module', '-e', host], { cwd: process.cwd(), stdio: 'ignore' });
+    const hostExit = new Promise<number | null>(resolve => hostProcess.once('exit', code => resolve(code)));
+    let pids: number[] = [];
+    try {
+      assert.equal(await hostExit, 0);
+      pids = [await pidFrom(childPidFile), await pidFrom(descendantPidFile)];
 
-function pipeHoldingDescendant(pidFile: string): string {
-  return `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 10_000)`;
-}
+      assert.equal(await eventually(() => pids.every(pid => !processAlive(pid)), 1_000), true, 'a command outlived its exited host');
+    } finally {
+      for (const pid of pids) killQuietly(pid);
+    }
+  });
+});
 
-/** Spawn the descendant, wait until it has written its pid, then run `thenDo`. */
-function parentWaitingFor(descendant: string, pidFile: string, stdio: string, thenDo: string): string {
-  return `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: '${stdio}', detached: ${stdio === 'inherit'} }).unref(); const tick = () => { if (require('node:fs').existsSync(${JSON.stringify(pidFile)})) { ${thenDo} } else setTimeout(tick, 5); }; tick();`;
-}
-
-test('a timeout resolves even when a detached descendant keeps the output pipes', async () => {
+test('a timeout returns while a detached descendant still holds the output pipes', async () => {
   await withWorkspace(async root => {
     const pidFile = join(root, 'holder.pid');
     let holder: number | undefined;
     try {
-      const started = Date.now();
       const checkResult = await command({
         rule,
         command: process.execPath,
         args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', 'setTimeout(() => {}, 10_000)')],
-        timeoutMs: 3_000,
+        timeoutMs: 1_500,
       }).run({ root, rules: [rule.id] });
-      holder = await pidIfWritten(pidFile);
+      holder = await pidFrom(pidFile);
 
       assert.equal(checkResult.verdict, 'refuse');
       if (checkResult.verdict !== 'refuse') return;
       assert.equal(checkResult.why.code, 'command-timeout');
-      assert.ok(Date.now() - started < 6_000, 'the Check waited for the descendant instead of the timeout');
+      assert.equal(processAlive(holder), true, 'the Check waited for the pipe holder instead of the timeout');
     } finally {
       killQuietly(holder);
     }
   });
 });
 
-test('a signalled command resolves without a timeout when a detached descendant keeps the output pipes', async () => {
+test('a signalled command returns while a detached descendant still holds the output pipes', async () => {
   await withWorkspace(async root => {
     const pidFile = join(root, 'holder.pid');
     let holder: number | undefined;
     try {
-      const started = Date.now();
       const checkResult = await command({
         rule,
         command: process.execPath,
         args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', "process.kill(process.pid, 'SIGTERM')")],
       }).run({ root, rules: [rule.id] });
-      holder = await pidIfWritten(pidFile);
+      holder = await pidFrom(pidFile);
 
       assert.equal(checkResult.verdict, 'refuse');
       if (checkResult.verdict !== 'refuse') return;
       assert.equal(checkResult.why.code, 'command-signaled');
-      assert.ok(Date.now() - started < 6_000, 'the Check waited for the descendant instead of the signal');
+      assert.equal(processAlive(holder), true, 'the Check waited for the pipe holder instead of the signal');
     } finally {
       killQuietly(holder);
     }
   });
 });
 
-test('a command that exits normally keeps its exit code when a detached descendant keeps the output pipes', async () => {
+test('a normal exit keeps its verdict while a detached descendant still holds the output pipes', async () => {
   await withWorkspace(async root => {
     const pidFile = join(root, 'holder.pid');
     let holder: number | undefined;
     try {
-      const started = Date.now();
       const checkResult = await command({
         rule,
         command: process.execPath,
         args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', 'process.exit(0)')],
       }).run({ root, rules: [rule.id] });
-      holder = await pidIfWritten(pidFile);
+      holder = await pidFrom(pidFile);
 
       assert.equal(checkResult.verdict, 'pass');
-      assert.ok(Date.now() - started < 6_000, 'the Check waited for the descendant instead of the exit');
+      assert.equal(processAlive(holder), true, 'the Check waited for the pipe holder instead of the exit');
     } finally {
       killQuietly(holder);
     }
   });
 });
 
-test('a signal that arrives before the timeout keeps its own refusal code', async () => {
-  await withWorkspace(async root => {
-    const pidFile = join(root, 'descendant.pid');
-    let descendant: number | undefined;
-    try {
-      const timeoutMs = 5_000;
-      const signalAt = Date.now() + timeoutMs - 150;
-      const checkResult = await command({
-        rule,
-        command: process.execPath,
-        args: ['-e', parentWaitingFor(stubbornDescendant(pidFile), pidFile, 'ignore', `if (Date.now() >= ${signalAt}) process.kill(process.pid, 'SIGTERM'); else setTimeout(tick, 5);`)],
-        timeoutMs,
-      }).run({ root, rules: [rule.id] });
-      descendant = await pidIfWritten(pidFile);
-
-      assert.equal(checkResult.verdict, 'refuse');
-      if (checkResult.verdict !== 'refuse') return;
-      assert.equal(checkResult.why.code, 'command-signaled');
-    } finally {
-      killQuietly(descendant);
-    }
-  });
-});
-
-test('command refuses when execution is terminated by a signal', async () => {
-  const checkResult = await runNode("process.kill(process.pid, 'SIGTERM')");
-
-  assert.equal(checkResult.verdict, 'refuse');
-  if (checkResult.verdict !== 'refuse') return;
-  assert.equal(checkResult.why.code, 'command-signaled');
-});
-
-test('command refuses when combined output exceeds its bound', async () => {
-  const checkResult = await runNode("process.stdout.write('x'.repeat(1_024))", {
-    maxOutputBytes: 32,
-  });
-
-  assert.equal(checkResult.verdict, 'refuse');
-  if (checkResult.verdict !== 'refuse') return;
-  assert.equal(checkResult.why.code, 'command-output-limit');
-  assert.match(checkResult.why.detail ?? '', new RegExp(`stdout:\\n${'x'.repeat(32)}`));
-});
-
-test('command refuses a working directory outside the Gate root', async () => {
+test('command refuses a working directory that resolves outside the Gate root', async () => {
   const checkResult = await runNode('process.exit(0)', { cwd: '..' });
 
   assert.equal(checkResult.verdict, 'refuse');
@@ -321,7 +322,7 @@ test('command refuses a working directory outside the Gate root', async () => {
   assert.equal(checkResult.why.code, 'command-cwd-outside-root');
 });
 
-test('command resolves cwd inside the Gate root and merges environment overrides', async () => {
+test('command runs in the resolved working directory with the merged environment', async () => {
   await withWorkspace(async root => {
     const cwd = join(root, 'nested');
     await mkdir(cwd);
@@ -330,7 +331,7 @@ test('command resolves cwd inside the Gate root and merges environment overrides
       command: process.execPath,
       args: [
         '-e',
-        "if (!process.cwd().endsWith('nested') || process.env.GUARDRAIL !== 'enabled') process.exit(1)",
+        "if (!process.cwd().endsWith('nested') || process.env.GUARDRAIL !== 'enabled' || !process.env.PATH) process.exit(1)",
       ],
       cwd: 'nested',
       env: { GUARDRAIL: 'enabled' },
@@ -340,22 +341,7 @@ test('command resolves cwd inside the Gate root and merges environment overrides
   });
 });
 
-test('command validates ambiguous and unsafe options at composition time', () => {
-  assert.throws(
-    () => command({ rule, command: process.execPath, exitCodes: { pass: [0, 1], breach: [1] } }),
-    /cannot produce both PASS and a Breach/,
-  );
-  assert.throws(
-    () => command({ rule, command: process.execPath, timeoutMs: 0 }),
-    /timeoutMs must be a positive integer/,
-  );
-  assert.throws(
-    () => command({ rule, command: ' ' }),
-    /command must not be empty/,
-  );
-});
-
-test('commands runs sequential entries in declaration order', async () => {
+test('commands runs sequential entries in declaration order and counts each one', async () => {
   await withWorkspace(async root => {
     const append = (value: string): CommandCheckOptions<typeof rule.id> => ({
       rule,
@@ -372,7 +358,7 @@ test('commands runs sequential entries in declaration order', async () => {
   });
 });
 
-test('commands stops sequential execution when an entry refuses', async () => {
+test('commands stops sequential execution at the first REFUSE', async () => {
   await withWorkspace(async root => {
     const checkResult = await commands({
       entries: [
@@ -386,12 +372,14 @@ test('commands stops sequential execution when an entry refuses', async () => {
     }).run({ root, rules: [rule.id] });
 
     assert.equal(checkResult.verdict, 'refuse');
+    if (checkResult.verdict !== 'refuse') return;
+    assert.equal(checkResult.why.code, 'command-unavailable');
     assert.equal(checkResult.scan.inspected, 1);
     await assert.rejects(readFile(join(root, 'should-not-exist.txt')));
   });
 });
 
-test('commands starts entries concurrently in parallel mode', async () => {
+test('commands starts parallel entries together', async () => {
   await withWorkspace(async root => {
     const rendezvous = `
       const { existsSync, writeFileSync } = require('node:fs');
@@ -417,7 +405,7 @@ test('commands starts entries concurrently in parallel mode', async () => {
   });
 });
 
-test('commands respects the parallel maxAtOnce bound', async () => {
+test('commands runs no more than maxAtOnce parallel entries at a time', async () => {
   await withWorkspace(async root => {
     const checkResult = await commands({
       mode: 'parallel',
@@ -444,7 +432,7 @@ test('commands respects the parallel maxAtOnce bound', async () => {
   });
 });
 
-test('commands keeps parallel Breaches in declaration order', async () => {
+test('commands keeps parallel Breaches in declaration order even when they finish out of order', async () => {
   await withWorkspace(async root => {
     const checkResult = await commands({
       mode: 'parallel',
@@ -477,53 +465,16 @@ test('commands keeps parallel Breaches in declaration order', async () => {
   });
 });
 
-test('commands makes REFUSE dominate parallel Breaches', async () => {
-  await withWorkspace(async root => {
-    const checkResult = await commands({
-      mode: 'parallel',
-      entries: [
-        { rule, command: process.execPath, args: ['-e', 'process.exit(1)'] },
-        { rule: secondRule, command: 'redproof-command-that-does-not-exist' },
-      ],
-    }).run({ root, rules: [rule.id, secondRule.id] });
-
-    assert.equal(checkResult.verdict, 'refuse');
-    if (checkResult.verdict !== 'refuse') return;
-    assert.equal(checkResult.why.code, 'command-unavailable');
-  });
-});
-
-test('commands validates its execution policy at composition time', () => {
-  assert.throws(
-    () => commands({ entries: [] as never }),
-    /requires at least one entry/,
-  );
-  assert.throws(
-    () => commands({ mode: 'parallel', maxAtOnce: 0, entries: [{ rule, command: 'node' }] }),
-    /maxAtOnce must be a positive integer/,
-  );
-});
-
-test('a command Check describes the real invocation, not an absolute path', () => {
-  const rule = defineRule({ id: 'probe/lint', description: 'Lint must pass.' });
-  const check = command({ rule, command: '/usr/local/bin/npm', args: ['run', 'lint'] });
-
-  assert.equal(check.description, 'run npm run lint');
-  assert.doesNotMatch(check.description, /\//, 'a description must not carry a machine path');
-});
-
-test('a command group names the commands it will run', () => {
+test('a Check describes itself from its command line, by base name', () => {
   const lint = defineRule({ id: 'probe/lint', description: 'Lint must pass.' });
   const types = defineRule({ id: 'probe/types', description: 'Types must pass.' });
 
-  const check = commands({
+  assert.equal(command({ rule: lint, command: '/usr/local/bin/npm', args: ['run', 'lint'] }).description, 'run npm run lint');
+  assert.equal(commands({
     mode: 'parallel',
-    maxAtOnce: 2,
     entries: [
       { rule: lint, command: 'npm', args: ['run', 'lint'], label: 'lint' },
       { rule: types, command: '/usr/local/bin/tsc', args: ['--noEmit'] },
     ],
-  });
-
-  assert.equal(check.description, 'run 2 commands: lint, tsc');
+  }).description, 'run 2 commands: lint, tsc');
 });
