@@ -5,6 +5,8 @@ const adapter = vitest({
   cwd: 'project',
   configFile: 'vitest.config.js',
   reportFile: 'reports/results.json',
+  // Vitest's bundled config loader writes node_modules/.vite-temp during proof copies.
+  args: ['--configLoader', 'runner'],
   rules: {
     testsPass: true,
     noFlakyTests: true,
