@@ -74,8 +74,14 @@ function parentOf(descendant: string, pidFile: string): string {
 }
 
 /** Spawn the descendant, wait until it has written its pid, then run `thenDo`. A detached descendant starts its own session. */
-function parentWaitingFor(descendant: string, pidFile: string, stdio: 'ignore' | 'inherit', thenDo: string): string {
-  return `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: '${stdio}', detached: ${stdio === 'inherit'} }).unref(); const tick = () => { if (require('node:fs').existsSync(${JSON.stringify(pidFile)})) { ${thenDo} } else setTimeout(tick, 5); }; tick();`;
+function parentWaitingFor(
+  descendant: string,
+  pidFile: string,
+  stdio: 'ignore' | 'inherit',
+  thenDo: string,
+  detached = stdio === 'inherit',
+): string {
+  return `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: '${stdio}', detached: ${detached} }).unref(); const tick = () => { if (require('node:fs').existsSync(${JSON.stringify(pidFile)})) { ${thenDo} } else setTimeout(tick, 5); }; tick();`;
 }
 
 test('executeCommand returns the raw exit code and both captured streams without applying Gate policy', async () => {
@@ -310,6 +316,67 @@ test('a normal exit keeps its verdict while a detached descendant still holds th
       assert.equal(processAlive(holder), true, 'the Check waited for the pipe holder instead of the exit');
     } finally {
       killQuietly(holder);
+    }
+  });
+});
+
+test('a direct exit before its deadline is not rewritten as a timeout while the pipes are released', async () => {
+  await withWorkspace(async root => {
+    const pidFile = join(root, 'holder.pid');
+    let holder: number | undefined;
+    try {
+      const timeoutMs = 2_000;
+      const exitAt = Date.now() + timeoutMs - 150;
+      const checkResult = await command({
+        rule,
+        command: process.execPath,
+        args: ['-e', parentWaitingFor(
+          pipeHoldingDescendant(pidFile),
+          pidFile,
+          'inherit',
+          `if (Date.now() >= ${exitAt}) process.exit(0); else setTimeout(tick, 5);`,
+        )],
+        timeoutMs,
+      }).run({ root, rules: [rule.id] });
+      holder = await pidFrom(pidFile);
+
+      assert.equal(checkResult.verdict, 'pass');
+    } finally {
+      killQuietly(holder);
+    }
+  });
+});
+
+test('a parent signal during pipe release still reaches the surviving command group', async () => {
+  await withWorkspace(async root => {
+    const childPidFile = join(root, 'child.pid');
+    const descendantPidFile = join(root, 'descendant.pid');
+    const signalFile = join(root, 'descendant.signal');
+    const descendant = [
+      `process.on('SIGINT', () => { require('node:fs').writeFileSync(${JSON.stringify(signalFile)}, 'SIGINT'); process.exit(0); });`,
+      pipeHoldingDescendant(descendantPidFile),
+    ].join(' ');
+    const child = [
+      `require('node:fs').writeFileSync(${JSON.stringify(childPidFile)}, String(process.pid));`,
+      parentWaitingFor(descendant, descendantPidFile, 'inherit', 'process.exit(0)', false),
+    ].join(' ');
+    const host = `import { executeCommand } from 'redproof/command'; await executeCommand({ command: process.execPath, args: ['-e', ${JSON.stringify(child)}], cwd: ${JSON.stringify(root)} });`;
+    const hostProcess = spawn(process.execPath, ['--input-type=module', '-e', host], { cwd: process.cwd(), stdio: 'ignore', detached: true });
+    const hostExit = new Promise<NodeJS.Signals | null>(resolve => hostProcess.once('exit', (_, signal) => resolve(signal)));
+    let pids: number[] = [];
+    try {
+      pids = [await pidFrom(childPidFile), await pidFrom(descendantPidFile)];
+      assert.equal(await eventually(() => !processAlive(pids[0]!), 1_000), true, 'the direct command never exited');
+      process.kill(-hostProcess.pid!, 'SIGINT');
+
+      assert.equal(await hostExit, 'SIGINT');
+      assert.equal(await eventually(() => {
+        try { return readFileSync(signalFile, 'utf8') === 'SIGINT'; } catch { return false; }
+      }, 1_000), true, 'the descendant never received its host signal');
+      assert.equal(await eventually(() => !processAlive(pids[1]!), 1_000), true, 'the descendant outlived its interrupted host');
+    } finally {
+      for (const pid of pids) killQuietly(pid);
+      killQuietly(hostProcess.pid);
     }
   });
 });

@@ -33,7 +33,7 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
       });
       return;
     }
-    superviseProcessTree(child);
+    const releaseProcessTree = superviseProcessTree(child);
 
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
@@ -48,10 +48,16 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
       stderr: Buffer.concat(stderr).toString('utf8'),
     });
 
+    const clearExecutionTimeout = (): void => {
+      if (timeout) clearTimeout(timeout);
+      timeout = undefined;
+    };
+
     const settle = (outcome: CommandExecution): void => {
       if (settled) return;
       settled = true;
-      if (timeout) clearTimeout(timeout);
+      clearExecutionTimeout();
+      releaseProcessTree();
       resolveExecution(outcome);
     };
 
@@ -92,6 +98,7 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
     });
 
     child.once('exit', (_, signal) => {
+      clearExecutionTimeout();
       if (interruption) return;
       if (signal) {
         termination ??= terminate();
