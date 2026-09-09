@@ -281,7 +281,7 @@ const gate = defineGate({
 });
 ```
 
-Completed failure exits breach the selected Rule. Missing executables, timeouts, signals, output overflow, and explicitly unclassified exits produce **REFUSE**. Use `commands()` from the same subpath for deterministic sequential or bounded-parallel command groups.
+Completed failure exits breach the selected Rule. Missing executables, timeouts, signals, output overflow, and explicitly unclassified exits produce **REFUSE**. Each command runs in its own process group. Timeouts, output overflow, and an interrupted Redproof process stop that group. Use `commands()` from the same subpath for deterministic sequential or bounded-parallel command groups.
 
 See **[Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/commands.md)** for exit-code policy,
 command groups, and what a Check reports about itself.

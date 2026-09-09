@@ -1,7 +1,7 @@
 import { testing, vitest, report, runner } from '@redproof/testing';
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
 import { stryker } from '@redproof/stryker';
-import { command, commands } from 'redproof/command';
+import { command, commands, executeCommand, type CommandExecutionOptions } from 'redproof/command';
 import {
   counting,
   defineAdapter,
@@ -38,6 +38,13 @@ const scan: Scan = {
   finishedAt: '',
   inspected: 1,
 };
+
+const executionOptions: CommandExecutionOptions = {
+  command: 'node',
+  cwd: '/project',
+  timeoutMs: 1_000,
+};
+void executeCommand(executionOptions);
 
 const R1 = defineRule({ id: 'r1', description: 'R1' });
 const R2 = defineRule({ id: 'r2', description: 'R2' });
