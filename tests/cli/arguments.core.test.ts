@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { noConfigMessage, parseArguments } from '../packages/redproof/src/cli/core/arguments.ts';
+import { noConfigMessage, parseArguments } from '../../packages/redproof/src/cli/core/arguments.ts';
 
 test('help and version win over every other argument', () => {
   assert.deepEqual(parseArguments(['check', '--help', '--config'], true), { kind: 'help' });
