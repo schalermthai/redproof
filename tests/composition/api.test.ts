@@ -32,7 +32,7 @@ test('defineRules preserves aliases and native defineGate supplies only native a
 
   const gate = defineGate({
     id: 'source-markers',
-    allowEmptyInspection: true,
+    policies: { emptyEvidence: 'allow' },
     rules,
     check: {
       description: 'check source markers',
@@ -44,7 +44,7 @@ test('defineRules preserves aliases and native defineGate supplies only native a
   assert.equal(gate.adapter.kind, 'native');
   assert.equal(gate.adapter.rules.noTodo, rules.noTodo);
   assert.equal(gate.adapter.rules.noFixme, rules.noFixme);
-  assert.equal(gate.allowEmptyInspection, true);
+  assert.deepEqual(gate.policies, { emptyEvidence: 'allow' });
 });
 
 test('defineCheck binds a reusable Check to an explicit Rule catalog', () => {

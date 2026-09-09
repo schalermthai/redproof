@@ -1,3 +1,4 @@
+import type { EmptyEvidencePolicy } from '../../domain/index.ts';
 import type { LoadedGateModule, LoadedProject } from './discovery.ts';
 
 export type DescribedRule = {
@@ -17,7 +18,9 @@ export type GateDescription = {
   readonly gate: string;
   readonly rules: readonly DescribedRule[];
   readonly check: string;
-  readonly allowEmptyInspection: boolean;
+  readonly policies: {
+    readonly emptyEvidence: EmptyEvidencePolicy;
+  };
   readonly proofs: readonly DescribedProof[];
 };
 
@@ -60,7 +63,9 @@ export function describeModule(module: LoadedGateModule): GateDescription {
     gate: module.gate.id,
     rules,
     check: module.gate.adapter.check.description,
-    allowEmptyInspection: module.gate.allowEmptyInspection === true,
+    policies: {
+      emptyEvidence: module.gate.policies?.emptyEvidence ?? 'refuse',
+    },
     proofs,
   };
 }

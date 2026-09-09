@@ -1,11 +1,17 @@
-import type { Adapter, Check, Gate, RuleCatalog, RuleRefOfCatalog } from '../../domain/index.ts';
+import type {
+  Adapter,
+  Check,
+  Gate,
+  GatePolicies,
+  RuleCatalog,
+  RuleRefOfCatalog,
+} from '../../domain/index.ts';
 
 export type NativeGateDefinition<C extends RuleCatalog> = {
   readonly id: string;
   readonly rules: C;
   readonly check: Check<RuleRefOfCatalog<C>>;
-  /** Permit PASS when the Check reports that it inspected zero targets. Defaults to false. */
-  readonly allowEmptyInspection?: boolean;
+  readonly policies?: GatePolicies;
 };
 
 export function defineGate<const A extends Adapter<any>>(gate: Gate<A>): Gate<A>;
@@ -22,8 +28,6 @@ export function defineGate(
       rules: gate.rules,
       check: gate.check,
     },
-    ...(gate.allowEmptyInspection === undefined
-      ? {}
-      : { allowEmptyInspection: gate.allowEmptyInspection }),
+    ...(gate.policies === undefined ? {} : { policies: gate.policies }),
   };
 }

@@ -211,7 +211,7 @@ bad option                → throw before any Check exists
 
 The Gate boundary also protects every Adapter from a vacuous success: a PASS
 with `scan.inspected === 0` becomes `nothing-inspected` REFUSE by default. Keep
-valid empty reports parseable, and use `allowEmptyInspection: true` on the Gate
+valid empty reports parseable, and use `policies: { emptyEvidence: 'allow' }` on the Gate
 only when an empty target set is part of that Gate's declared policy.
 
 ## Guidelines

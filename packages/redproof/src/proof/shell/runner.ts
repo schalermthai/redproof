@@ -22,7 +22,7 @@ function ruleRefs(adapter: Adapter<any>): RuleRef[] {
 
 export async function runGate(gate: Gate<any>, root: string): Promise<CheckResult> {
   const result = await gate.adapter.check.run({ root, rules: ruleRefs(gate.adapter) });
-  return applyInspectionPolicy(result, gate.allowEmptyInspection === true);
+  return applyInspectionPolicy(result, gate.policies?.emptyEvidence ?? 'refuse');
 }
 
 async function applyMutations(root: string, plan: MutationPlan | undefined): Promise<UndoMutation[]> {

@@ -21,13 +21,13 @@ test('a zero-inspected PASS becomes REFUSE unless the Gate explicitly allows it'
   const emptyScan: Scan = { ...scan, inspected: 0 };
   const emptyPass = pass(emptyScan);
 
-  assert.deepEqual(applyInspectionPolicy(emptyPass, false), refuse(emptyScan, {
+  assert.deepEqual(applyInspectionPolicy(emptyPass, 'refuse'), refuse(emptyScan, {
     code: 'nothing-inspected',
     message: 'The Check inspected no targets, so the Gate cannot establish its Rules.',
     location: null,
-    hint: 'Set allowEmptyInspection: true on the Gate only when an empty target set is intentional.',
+    hint: "Set policies.emptyEvidence to 'allow' on the Gate only when an empty target set is intentional.",
   }));
-  assert.equal(applyInspectionPolicy(emptyPass, true), emptyPass);
+  assert.equal(applyInspectionPolicy(emptyPass, 'allow'), emptyPass);
 });
 
 test('inspection policy preserves unknown counts and non-PASS evidence', () => {
@@ -39,9 +39,9 @@ test('inspection policy preserves unknown counts and non-PASS evidence', () => {
     code: 'unavailable', message: 'Unavailable', location: null,
   });
 
-  assert.equal(applyInspectionPolicy(unknownPass, false), unknownPass);
-  assert.equal(applyInspectionPolicy(emptyFailure, false), emptyFailure);
-  assert.equal(applyInspectionPolicy(emptyRefusal, false), emptyRefusal);
+  assert.equal(applyInspectionPolicy(unknownPass, 'refuse'), unknownPass);
+  assert.equal(applyInspectionPolicy(emptyFailure, 'refuse'), emptyFailure);
+  assert.equal(applyInspectionPolicy(emptyRefusal, 'refuse'), emptyRefusal);
 });
 
 test('RED proof requires its target Rule, not merely a failed Gate', () => {

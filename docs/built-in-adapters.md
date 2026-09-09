@@ -4,7 +4,7 @@ Redproof integrations translate an existing tool or result format into Redproof 
 
 The external tool remains responsible for doing the real analysis. Redproof adds the Rule model and proofs around it.
 
-Every Adapter reports how many targets it inspected. A PASS over zero targets is refused as `nothing-inspected` unless the Gate sets `allowEmptyInspection: true`. See [Empty inspection](composition.md#empty-inspection).
+Every Adapter reports how many targets it inspected. A PASS over zero targets is refused as `nothing-inspected` unless the Gate sets `policies: { emptyEvidence: 'allow' }`. See [Empty evidence](composition.md#empty-evidence).
 
 ## Testing
 

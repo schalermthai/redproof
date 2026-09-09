@@ -222,7 +222,7 @@ const scan = {
 
 That matters because a Check declaring `counting.supported` promises a reliable count.
 
-## Empty inspection
+## Empty evidence
 
 A Gate refuses an otherwise successful Check when `scan.inspected` is `0`.
 Without a target, PASS would claim that every Rule holds without inspecting the
@@ -251,9 +251,14 @@ const adapter = defineAdapter({
 defineGate({
   id: 'optional-generated-files',
   adapter,
-  allowEmptyInspection: true,
+  policies: {
+    emptyEvidence: 'allow',
+  },
 })
 ```
+
+Gate-wide interpretation options live under `policies`, leaving adapter options
+to describe how evidence is collected.
 
 Use the exception narrowly. `inspected: null` means the Check cannot count its
 targets and is not treated as zero; FAIL and REFUSE results keep their original
