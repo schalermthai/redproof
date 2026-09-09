@@ -244,7 +244,7 @@ try {
     + "export const execution = executeCommand({ command: 'node', cwd: '/project', timeoutMs: 1_000 });\n"
     + "export const mutation = stryker({ cwd: 'packages/parser', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } });\n"
     + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', timeoutMs: 60_000, maxOutputBytes: 5_000_000, rules: { testsPass: true, noFlakyTests: true } });\n"
-    + "export const optional = defineGate({ id: 'optional', rules: { command: rule }, check, allowEmptyInspection: true });\n"
+    + "export const optional = defineGate({ id: 'optional', rules: { command: rule }, check, policies: { emptyEvidence: 'allow' } });\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
@@ -253,10 +253,10 @@ try {
   console.log('\n7. Red-proof: the type check must reject bad code');
   const red = "import { counting, defineGate, pass } from 'redproof';\n"
     + "const rule = { id: 'consumer/rule', description: 'rule' } as const;\n"
-    + "defineGate({ id: 'bad', rules: { rule }, check: { description: 'check', counting: counting.supported, async run() { return pass({ source: 'consumer', startedAt: '', finishedAt: '', inspected: 0 }); } }, allowEmptyInspection: 'yes' });\n";
+    + "defineGate({ id: 'bad', rules: { rule }, check: { description: 'check', counting: counting.supported, async run() { return pass({ source: 'consumer', startedAt: '', finishedAt: '', inspected: 0 }); } }, policies: { emptyEvidence: 'yes' } });\n";
   await writeFile(join(consumer, 'consumer.ts'), red);
   const typesRed = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
-  const redNamesPolicy = typesRed.output.includes("not assignable to type 'boolean");
+  const redNamesPolicy = typesRed.output.includes("not assignable to type 'EmptyEvidencePolicy");
   report(
     !typesRed.ok && redNamesPolicy,
     'invalid consumer code is rejected for the planted reason',

@@ -146,10 +146,16 @@ const adapter = defineAdapter({
   },
 });
 const gate = defineGate({ id: 'g', adapter });
-defineGate({ id: 'optional', adapter, allowEmptyInspection: true });
+defineGate({ id: 'optional', adapter, policies: { emptyEvidence: 'allow' } });
 
-// @ts-expect-error empty-inspection policy is boolean.
-defineGate({ id: 'bad-policy', adapter, allowEmptyInspection: 'yes' });
+// @ts-expect-error empty-evidence policy accepts only refuse or allow.
+defineGate({ id: 'bad-policy', adapter, policies: { emptyEvidence: 'yes' } });
+
+// @ts-expect-error unknown Gate policies are rejected.
+defineGate({ id: 'unknown-policy', adapter, policies: { emptyInspection: 'allow' } });
+
+// @ts-expect-error the former top-level boolean is not part of the Gate contract.
+defineGate({ id: 'legacy-policy', adapter, allowEmptyInspection: true });
 
 defineProofs(gate, [proof.green('green')]);
 
@@ -164,7 +170,7 @@ const composedRules = defineRules({
 
 const nativeGate = defineGate({
   id: 'native-composed',
-  allowEmptyInspection: false,
+  policies: { emptyEvidence: 'refuse' },
   rules: composedRules,
   check: defineCheck(composedRules, {
     description: 'native composed check',

@@ -150,7 +150,7 @@ test('command timeout terminates a SIGTERM-resistant descendant before the Check
         rule,
         command: process.execPath,
         args: ['-e', parentOf(stubbornDescendant(pidFile), undefined)],
-        timeoutMs: 1_000,
+        timeoutMs: 5_000,
       }).run({ root, rules: [rule.id] });
 
       assert.equal(checkResult.verdict, 'refuse');

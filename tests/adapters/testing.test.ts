@@ -435,7 +435,11 @@ test('a valid empty Vitest-compatible report passes parsing but is refused by th
     if (guarded.verdict !== 'refuse') return;
     assert.equal(guarded.why.code, 'nothing-inspected');
 
-    const allowed = await runGate(defineGate({ id: 'optional-tests', adapter, allowEmptyInspection: true }), root);
+    const allowed = await runGate(defineGate({
+      id: 'optional-tests',
+      adapter,
+      policies: { emptyEvidence: 'allow' },
+    }), root);
     assert.equal(allowed.verdict, 'pass');
     assert.equal(allowed.scan.inspected, 0);
   });

@@ -42,10 +42,10 @@ function world(overrides: Partial<World> = {}): World {
   return { breached: [], refused: false, checkThrows: false, inspected: 1, contexts: [], log: [], ...overrides };
 }
 
-function gateOver(state: World, allowEmptyInspection = false) {
+function gateOver(state: World, emptyEvidence: 'refuse' | 'allow' = 'refuse') {
   return defineGate({
     id: 'world',
-    ...(allowEmptyInspection ? { allowEmptyInspection: true } : {}),
+    ...(emptyEvidence === 'allow' ? { policies: { emptyEvidence } } : {}),
     adapter: defineAdapter({
       kind: 'test',
       rules: { r1: R1, r2: R2 },
@@ -118,7 +118,7 @@ test('runGate refuses a zero-inspected PASS by default and permits an explicit e
   assert.equal(guarded.why.code, 'nothing-inspected');
   assert.equal(guarded.scan.inspected, 0);
 
-  const allowed = await runGate(gateOver(state, true), '/project');
+  const allowed = await runGate(gateOver(state, 'allow'), '/project');
   assert.equal(allowed.verdict, 'pass');
   assert.equal(allowed.scan.inspected, 0);
 });

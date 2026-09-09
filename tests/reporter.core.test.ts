@@ -57,19 +57,22 @@ test('a diagnostic without a line never asks for source', () => {
   assert.doesNotMatch(output, /ignored/);
 });
 
-test('describe shows an allowed empty scope and stays silent otherwise', () => {
+test('describe shows allowed empty evidence and stays silent otherwise', () => {
   const adapter = defineAdapter({
     kind: 'described',
     rules: { r1: { id: 'r1', description: 'R1' } },
     check: { description: 'inspect', counting: counting.supported, async run() { return pass(scan); } },
   });
-  const quiet = describeModule({ file: 'gates/quiet.ts', gate: defineGate({ id: 'quiet', adapter, allowEmptyInspection: true }) });
+  const quiet = describeModule({
+    file: 'gates/quiet.ts',
+    gate: defineGate({ id: 'quiet', adapter, policies: { emptyEvidence: 'allow' } }),
+  });
   const strict = describeModule({ file: 'gates/strict.ts', gate: defineGate({ id: 'strict', adapter }) });
 
-  assert.equal(quiet.allowEmptyInspection, true);
-  assert.equal(strict.allowEmptyInspection, false);
-  assert.match(formatGateDescription(quiet), /Check:\n  inspect\n\nEmpty scope: allowed/);
-  assert.doesNotMatch(formatGateDescription(strict), /Empty scope/);
+  assert.deepEqual(quiet.policies, { emptyEvidence: 'allow' });
+  assert.deepEqual(strict.policies, { emptyEvidence: 'refuse' });
+  assert.match(formatGateDescription(quiet), /Check:\n  inspect\n\nEmpty evidence: allowed/);
+  assert.doesNotMatch(formatGateDescription(strict), /Empty evidence/);
 });
 
 test('terminal output makes an explicitly allowed zero-inspection PASS visible', () => {
