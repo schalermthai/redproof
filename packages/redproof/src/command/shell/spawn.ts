@@ -7,6 +7,9 @@ import {
 import { outputDetail, type CommandExecution } from '../core/outcome.ts';
 import { superviseProcessTree, terminateProcessTree } from './process-tree.ts';
 
+/** After a normal exit, how long the pipes may stay open before the rest of the group is stopped. */
+const PIPE_RELEASE_GRACE_MS = 250;
+
 export function executeCommand(options: CommandExecutionOptions): Promise<CommandExecution> {
   validateCommandExecutionOptions(options);
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
@@ -57,7 +60,8 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
       child.stderr?.destroy();
     };
 
-    const terminate = (): Promise<void> => terminateProcessTree(child).then(releasePipes);
+    const terminate = (): Promise<void> =>
+      terminateProcessTree(child).then(releasePipes, releasePipes);
 
     const interrupt = (reason: 'timeout' | 'output-limit'): void => {
       if (interruption || termination) return;
@@ -78,7 +82,7 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
     child.stderr?.on('data', chunk => capture(stderr, chunk));
 
     child.once('error', error => {
-      if (interruption) return;
+      if (interruption || termination) return;
       settle({
         kind: 'refused',
         code: 'command-unavailable',
@@ -88,12 +92,19 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
     });
 
     child.once('exit', (_, signal) => {
-      if (signal && !interruption) termination ??= terminate();
+      if (interruption) return;
+      if (signal) {
+        termination ??= terminate();
+        return;
+      }
+      const grace = setTimeout(() => { termination ??= terminate(); }, PIPE_RELEASE_GRACE_MS);
+      grace.unref();
+      child.once('close', () => clearTimeout(grace));
     });
 
     child.once('close', async (code, signal) => {
       const output = captured();
-      if (interruption || signal) await (termination ??= terminate());
+      if (termination) await termination;
       if (interruption === 'timeout') {
         const detail = outputDetail(output.stdout, output.stderr);
         settle({

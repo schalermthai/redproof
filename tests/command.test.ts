@@ -211,7 +211,7 @@ test('a timeout resolves even when a detached descendant keeps the output pipes'
       const checkResult = await command({
         rule,
         command: process.execPath,
-        args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', 'process.exit(0)')],
+        args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', 'setTimeout(() => {}, 10_000)')],
         timeoutMs: 3_000,
       }).run({ root, rules: [rule.id] });
       holder = await pidIfWritten(pidFile);
@@ -243,6 +243,27 @@ test('a signalled command resolves without a timeout when a detached descendant 
       if (checkResult.verdict !== 'refuse') return;
       assert.equal(checkResult.why.code, 'command-signaled');
       assert.ok(Date.now() - started < 6_000, 'the Check waited for the descendant instead of the signal');
+    } finally {
+      killQuietly(holder);
+    }
+  });
+});
+
+test('a command that exits normally keeps its exit code when a detached descendant keeps the output pipes', async () => {
+  await withWorkspace(async root => {
+    const pidFile = join(root, 'holder.pid');
+    let holder: number | undefined;
+    try {
+      const started = Date.now();
+      const checkResult = await command({
+        rule,
+        command: process.execPath,
+        args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', 'process.exit(0)')],
+      }).run({ root, rules: [rule.id] });
+      holder = await pidIfWritten(pidFile);
+
+      assert.equal(checkResult.verdict, 'pass');
+      assert.ok(Date.now() - started < 6_000, 'the Check waited for the descendant instead of the exit');
     } finally {
       killQuietly(holder);
     }
