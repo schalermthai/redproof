@@ -133,7 +133,7 @@ function killQuietly(pid: number | undefined): void {
 }
 
 function stubbornDescendant(pidFile: string): string {
-  return `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); process.on('SIGTERM', () => {}); setTimeout(() => {}, 10_000)`;
+  return `process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 10_000)`;
 }
 
 function parentOf(descendant: string, pidFile?: string): string {
@@ -182,6 +182,93 @@ test('a parent SIGINT reaches a supervised command and its descendants', async (
     } finally {
       for (const pid of pids) killQuietly(pid);
       killQuietly(hostProcess.pid);
+    }
+  });
+});
+
+async function pidIfWritten(file: string): Promise<number | undefined> {
+  const found = await eventually(() => {
+    try { return Number(readFileSync(file, 'utf8')) > 0; } catch { return false; }
+  }, 1_000);
+  return found ? Number(await readFile(file, 'utf8')) : undefined;
+}
+
+function pipeHoldingDescendant(pidFile: string): string {
+  return `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 10_000)`;
+}
+
+/** Spawn the descendant, wait until it has written its pid, then run `thenDo`. */
+function parentWaitingFor(descendant: string, pidFile: string, stdio: string, thenDo: string): string {
+  return `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: '${stdio}', detached: ${stdio === 'inherit'} }).unref(); const tick = () => { if (require('node:fs').existsSync(${JSON.stringify(pidFile)})) { ${thenDo} } else setTimeout(tick, 5); }; tick();`;
+}
+
+test('a timeout resolves even when a detached descendant keeps the output pipes', async () => {
+  await withWorkspace(async root => {
+    const pidFile = join(root, 'holder.pid');
+    let holder: number | undefined;
+    try {
+      const started = Date.now();
+      const checkResult = await command({
+        rule,
+        command: process.execPath,
+        args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', 'process.exit(0)')],
+        timeoutMs: 3_000,
+      }).run({ root, rules: [rule.id] });
+      holder = await pidIfWritten(pidFile);
+
+      assert.equal(checkResult.verdict, 'refuse');
+      if (checkResult.verdict !== 'refuse') return;
+      assert.equal(checkResult.why.code, 'command-timeout');
+      assert.ok(Date.now() - started < 6_000, 'the Check waited for the descendant instead of the timeout');
+    } finally {
+      killQuietly(holder);
+    }
+  });
+});
+
+test('a signalled command resolves without a timeout when a detached descendant keeps the output pipes', async () => {
+  await withWorkspace(async root => {
+    const pidFile = join(root, 'holder.pid');
+    let holder: number | undefined;
+    try {
+      const started = Date.now();
+      const checkResult = await command({
+        rule,
+        command: process.execPath,
+        args: ['-e', parentWaitingFor(pipeHoldingDescendant(pidFile), pidFile, 'inherit', "process.kill(process.pid, 'SIGTERM')")],
+      }).run({ root, rules: [rule.id] });
+      holder = await pidIfWritten(pidFile);
+
+      assert.equal(checkResult.verdict, 'refuse');
+      if (checkResult.verdict !== 'refuse') return;
+      assert.equal(checkResult.why.code, 'command-signaled');
+      assert.ok(Date.now() - started < 6_000, 'the Check waited for the descendant instead of the signal');
+    } finally {
+      killQuietly(holder);
+    }
+  });
+});
+
+test('a signal that arrives before the timeout keeps its own refusal code', async () => {
+  await withWorkspace(async root => {
+    const pidFile = join(root, 'descendant.pid');
+    let descendant: number | undefined;
+    try {
+      const timeoutMs = 5_000;
+      const signalAt = Date.now() + timeoutMs - 150;
+      const checkResult = await command({
+        rule,
+        command: process.execPath,
+        args: ['-e', parentWaitingFor(stubbornDescendant(pidFile), pidFile, 'ignore', `if (Date.now() >= ${signalAt}) process.kill(process.pid, 'SIGTERM'); else setTimeout(tick, 5);`)],
+        timeoutMs,
+      }).run({ root, rules: [rule.id] });
+      descendant = await pidIfWritten(pidFile);
+
+      assert.equal(checkResult.verdict, 'refuse');
+      if (checkResult.verdict !== 'refuse') return;
+      assert.equal(checkResult.why.code, 'command-signaled');
+    } finally {
+      killQuietly(descendant);
     }
   });
 });

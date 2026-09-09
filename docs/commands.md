@@ -36,8 +36,9 @@ Child output is captured for diagnostics. It is never inherited by reporter
 output, so a machine-readable report stays clean. Each command runs in its own
 process group with no terminal, so it cannot prompt. A timeout or output
 overflow stops that group before the Check returns. A process that starts its
-own session is outside the group. Bad options throw at once, before any process
-starts.
+own session is outside the group. Such a process can keep the output pipes
+open, so the Check releases them after a timeout or a signal instead of
+waiting for it. Bad options throw at once, before any process starts.
 
 ## Exit codes decide the verdict
 

@@ -52,10 +52,17 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
       resolveExecution(outcome);
     };
 
+    const releasePipes = (): void => {
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    };
+
+    const terminate = (): Promise<void> => terminateProcessTree(child).then(releasePipes);
+
     const interrupt = (reason: 'timeout' | 'output-limit'): void => {
-      if (interruption) return;
+      if (interruption || termination) return;
       interruption = reason;
-      termination = terminateProcessTree(child);
+      termination = terminate();
     };
 
     const capture = (target: Buffer[], chunk: Buffer | string): void => {
@@ -80,9 +87,13 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
       });
     });
 
+    child.once('exit', (_, signal) => {
+      if (signal && !interruption) termination ??= terminate();
+    });
+
     child.once('close', async (code, signal) => {
       const output = captured();
-      if (interruption || signal) await (termination ??= terminateProcessTree(child));
+      if (interruption || signal) await (termination ??= terminate());
       if (interruption === 'timeout') {
         const detail = outputDetail(output.stdout, output.stderr);
         settle({
