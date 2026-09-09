@@ -1,16 +1,16 @@
 import { ESLint } from 'eslint';
-import { relative } from 'node:path';
+import { isAbsolute } from 'node:path';
 import {
-  breach,
   counting,
   defineAdapter,
   defineRules,
   result,
   type Adapter,
-  type Breach,
-  type Diagnostic,
+  type NoUnknownKeys,
   type Rule,
+  rejectUnknownKeys,
 } from 'redproof';
+import { eslintBreaches, fatalEslintDiagnostic } from './model.ts';
 
 type EslintRuleInput = Readonly<Record<string, string>>;
 
@@ -27,33 +27,31 @@ function now(): string {
   return new Date().toISOString();
 }
 
-type LintMessageLike = {
-  readonly ruleId: string | null;
-  readonly message: string;
-  readonly line?: number;
-  readonly column?: number;
-};
-
-function messageDiagnostic(file: string, message: LintMessageLike): Diagnostic {
-  return {
-    code: message.ruleId ?? 'eslint-fatal',
-    message: message.message,
-    location: {
-      file,
-      line: message.line ?? null,
-      column: message.column ?? null,
-    },
-  };
-}
-
-export function eslint<const M extends EslintRuleInput>(
-  options: EslintAdapterOptions<M>,
-): Adapter<EslintRuleCatalog<M>> {
+export function eslint<const O extends EslintAdapterOptions<EslintRuleInput>>(
+  options: O & NoUnknownKeys<O, EslintAdapterOptions<EslintRuleInput>>,
+): Adapter<EslintRuleCatalog<O['rules']>> {
+  type M = O['rules'];
   type Catalog = EslintRuleCatalog<M>;
   type Ref = Catalog[keyof Catalog]['id'];
 
+  rejectUnknownKeys(options, ['files', 'rules'], 'ESLint adapter');
+  const configuredRules = Object.entries(options.rules);
+  if (configuredRules.length === 0) {
+    throw new Error('ESLint adapter requires at least one Redproof rule.');
+  }
+  for (const [alias, foreignId] of configuredRules) {
+    if (!alias.trim() || !foreignId.trim()) {
+      throw new Error(`ESLint rule ${JSON.stringify(alias)} must name a non-empty rule.`);
+    }
+  }
+  for (const file of options.files ?? []) {
+    if (!file.trim() || isAbsolute(file)) {
+      throw new Error('ESLint files must contain non-empty relative paths.');
+    }
+  }
+
   const rules = defineRules(Object.fromEntries(
-    Object.entries(options.rules).map(([alias, foreignId]) => [
+    configuredRules.map(([alias, foreignId]) => [
       alias,
       {
         id: `eslint/${foreignId}`,
@@ -63,7 +61,7 @@ export function eslint<const M extends EslintRuleInput>(
   ) as Catalog);
 
   const byForeignId = new Map<string, Rule<Ref>>();
-  for (const [alias, foreignId] of Object.entries(options.rules)) {
+  for (const [alias, foreignId] of configuredRules) {
     byForeignId.set(foreignId, rules[alias as keyof M] as Rule<Ref>);
   }
 
@@ -98,32 +96,10 @@ export function eslint<const M extends EslintRuleInput>(
             inspected: lintResults.length,
           } as const;
 
-          for (const lintResult of lintResults) {
-            const fatal = lintResult.messages.find(message => message.fatal);
-            if (fatal) {
-              return result.refuse(
-                scan,
-                messageDiagnostic(relative(ctx.root, lintResult.filePath), fatal),
-              );
-            }
-          }
+          const fatal = fatalEslintDiagnostic(ctx.root, lintResults);
+          if (fatal) return result.refuse(scan, fatal);
 
-          const breaches: Breach<Ref>[] = [];
-          for (const lintResult of lintResults) {
-            for (const message of lintResult.messages) {
-              if (!message.ruleId) continue;
-              const rule = byForeignId.get(message.ruleId);
-              if (!rule) continue;
-              breaches.push(
-                breach(
-                  rule,
-                  messageDiagnostic(relative(ctx.root, lintResult.filePath), message),
-                ),
-              );
-            }
-          }
-
-          return result.fromBreaches(scan, breaches);
+          return result.fromBreaches(scan, eslintBreaches(ctx.root, lintResults, byForeignId));
         } catch (error) {
           const finishedAt = now();
           return result.refuse(

@@ -394,8 +394,16 @@ See **[Proofs](composition.md#proofs)** for the API, and the
 [Vitest fixture Gate](../fixtures/testing-vitest/gates/tests.ts) for all three
 kinds against one Adapter.
 
+Redproof also turns these five guidelines into one frequent self-hosted Gate.
+See **[Gating Adapter contracts](adapter-contract-gates.md)** for the contract
+matrix, the RED-first implementation sequence, and the split between fast
+behavioral probes and slower real-tool fixtures.
+The general reusable workflow is **[Contract-to-Gate](contract-to-gate.md)**.
+
 ## Next
 
 - **[Composing Redproof](composition.md)** for Rules, Checks, Proofs, and Mutations.
 - **[Command Checks](commands.md)** for a guardrail that is already an executable.
 - **[Built-in Adapters](built-in-adapters.md)** for the Adapters that ship with Redproof.
+- **[Gating Adapter contracts](adapter-contract-gates.md)** for enforcing these guidelines in a repository.
+- **[Contract-to-Gate method](contract-to-gate.md)** for applying the workflow to other guardrails.

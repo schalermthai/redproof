@@ -23,6 +23,7 @@ import {
   type TestRun,
   type TestRunner,
 } from './model.ts';
+import { validateRelativeTestingPath } from './core/paths.ts';
 import { command } from './runner.ts';
 import { jestJson, parseJestJson } from './reports/jest-json.ts';
 import { junitXml, parseJunitXml } from './reports/junit-xml.ts';
@@ -66,9 +67,12 @@ function normalizeRun(root: string, run: TestRun): TestRun {
 
 const TEST_RULE_NAMES = ['testsPass', 'noFlakyTests', 'noSkippedTests', 'noTodoTests'] as const;
 
-export function testing<const O extends TestRuleOptions>(
-  options: TestingAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, TestRuleOptions> },
-): Adapter<TestRuleCatalog<O>> {
+export function testing<const O extends TestingAdapterOptions<TestRuleOptions>>(
+  options: O
+    & NoUnknownKeys<O, TestingAdapterOptions<TestRuleOptions>>
+    & { readonly rules: NoUnknownKeys<O['rules'], TestRuleOptions> },
+): Adapter<TestRuleCatalog<O['rules']>> {
+  rejectUnknownKeys(options, ['runner', 'report', 'rules'], 'testing adapter');
   rejectUnknownKeys(options.rules, TEST_RULE_NAMES, 'testing rule');
 
   if (
@@ -114,8 +118,8 @@ export function testing<const O extends TestRuleOptions>(
     };
   }
 
-  const rules = defineRules(catalog as TestRuleCatalog<O>);
-  type Ref = RuleRefOfCatalog<TestRuleCatalog<O>>;
+  const rules = defineRules(catalog as TestRuleCatalog<O['rules']>);
+  type Ref = RuleRefOfCatalog<TestRuleCatalog<O['rules']>>;
   const byAlias = rules as unknown as Readonly<Record<string, Rule<Ref>>>;
 
   return defineAdapter({
@@ -127,15 +131,37 @@ export function testing<const O extends TestRuleOptions>(
 
       async run(ctx) {
         const startedAt = now();
-        const temp = await mkdtemp(join(tmpdir(), 'redproof-testing-'));
+        const source = `testing/${options.report.kind}`;
+        const refuseUnavailable = (message: string, error: unknown) => result.refuse(
+          { source, startedAt, finishedAt: now(), inspected: null },
+          {
+            code: 'test-runner-unavailable',
+            message,
+            location: null,
+            detail: error instanceof Error ? error.message : String(error),
+          },
+        );
+        const created = await mkdtemp(join(tmpdir(), 'redproof-testing-')).catch(
+          (error: unknown) => error instanceof Error ? error : new Error(String(error)),
+        );
+        if (created instanceof Error) {
+          return refuseUnavailable('The testing Adapter could not prepare its report directory.', created);
+        }
+        const temp = created;
         const reportFile = join(temp, `report${options.report.extension}`);
 
-        try {
-          const execution = await options.runner.run({ root: ctx.root, reportFile });
+        const outcome = await (async () => {
+          const execution = await options.runner.run({ root: ctx.root, reportFile }).catch(
+            (error: unknown) => ({
+              kind: 'unavailable' as const,
+              message: 'The test runner could not complete the check.',
+              detail: error instanceof Error ? error.message : String(error),
+            }),
+          );
           if (execution.kind === 'unavailable') {
             return result.refuse(
               {
-                source: `testing/${options.report.kind}`,
+                source,
                 startedAt,
                 finishedAt: now(),
                 inspected: null,
@@ -156,7 +182,7 @@ export function testing<const O extends TestRuleOptions>(
           } catch (error) {
             return result.refuse(
               {
-                source: `testing/${options.report.kind}`,
+                source,
                 startedAt,
                 finishedAt: now(),
                 inspected: null,
@@ -180,7 +206,7 @@ export function testing<const O extends TestRuleOptions>(
           if (execution.exitCode !== 0 && counts.failed === 0) {
             return result.refuse(
               {
-                source: `testing/${options.report.kind}`,
+                source,
                 startedAt,
                 finishedAt: now(),
                 inspected: run.tests.length,
@@ -199,7 +225,7 @@ export function testing<const O extends TestRuleOptions>(
           }
 
           const scan = {
-            source: `testing/${options.report.kind}`,
+            source,
             startedAt,
             finishedAt: now(),
             inspected: run.tests.length,
@@ -214,9 +240,18 @@ export function testing<const O extends TestRuleOptions>(
               ...(options.rules.noTodoTests ? { noTodoTests: byAlias.noTodoTests! } : {}),
             }),
           );
-        } finally {
-          await rm(temp, { recursive: true, force: true });
+        })().catch((error: unknown) => refuseUnavailable(
+          'The testing Adapter could not complete the check.',
+          error,
+        ));
+
+        const cleanup = await rm(temp, { recursive: true, force: true }).catch(
+          (error: unknown) => error instanceof Error ? error : new Error(String(error)),
+        );
+        if (cleanup instanceof Error) {
+          return refuseUnavailable('The testing Adapter could not remove its report directory.', cleanup);
         }
+        return outcome;
       },
     },
   });
@@ -246,9 +281,36 @@ export type VitestAdapterOptions<O extends TestRuleOptions> = {
   readonly rules: O;
 };
 
-export function vitest<const O extends TestRuleOptions>(
-  options: VitestAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, TestRuleOptions> },
-): Adapter<TestRuleCatalog<O>> {
+export function vitest<const O extends VitestAdapterOptions<TestRuleOptions>>(
+  options: O
+    & NoUnknownKeys<O, VitestAdapterOptions<TestRuleOptions>>
+    & { readonly rules: NoUnknownKeys<O['rules'], TestRuleOptions> },
+): Adapter<TestRuleCatalog<O['rules']>> {
+  rejectUnknownKeys(
+    options,
+    [
+      'command',
+      'cwd',
+      'configFile',
+      'reportFile',
+      'files',
+      'args',
+      'timeoutMs',
+      'maxOutputBytes',
+      'rules',
+    ],
+    'Vitest adapter',
+  );
+  for (const [name, path] of [
+    ['cwd', options.cwd],
+    ['configFile', options.configFile],
+    ['reportFile', options.reportFile],
+  ] as const) {
+    if (path !== undefined) validateRelativeTestingPath(name, path);
+  }
+  for (const [index, file] of (options.files ?? []).entries()) {
+    validateRelativeTestingPath(`files[${index}]`, file);
+  }
   const cwd = options.cwd ?? '.';
   const runner = command({
     command: options.command ?? 'vitest',

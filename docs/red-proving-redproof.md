@@ -1,7 +1,7 @@
 # Red proving Redproof
 
-Redproof runs Redproof on itself. Four Gates guard this repository. They hold
-22 Rules and 27 Proofs, and they run on every push. This page is not a guide
+Redproof runs Redproof on itself. Five Gates guard this repository. They hold
+27 Rules and 34 Proofs, and they run on every push. This page is not a guide
 to running them. It shows what that looks like, and it makes one point: a Gate
 can guard anything that leaves evidence. A module graph, a purity rule, the
 documentation, and the release inventory are all guarded the same way.
@@ -12,7 +12,8 @@ documentation, and the release inventory are all guarded the same way.
 - [Gate 2: static-contracts](#gate-2-static-contracts)
 - [How a proof drives tidy-up](#how-a-proof-drives-tidy-up)
 - [Gate 3: test-health](#gate-3-test-health)
-- [Gate 4: repository-policy](#gate-4-repository-policy)
+- [Gate 4: adapter-contracts](#gate-4-adapter-contracts)
+- [Gate 5: repository-policy](#gate-5-repository-policy)
 - [What this shows](#what-this-shows)
 
 ## The suite at a glance
@@ -22,18 +23,20 @@ documentation, and the release inventory are all guarded the same way.
 | `architecture` | The structure stays intact. Imports point inward. The core stays pure. | `@redproof/dependency-cruiser` plus a TypeScript AST scan | 12 | 13 |
 | `static-contracts` | The code compiles. Every checked example in the docs compiles. Fragment debt cannot grow. | `redproof/command` with three parallel commands | 3 | 4 |
 | `test-health` | Every test ran and passed. None was skipped. | `@redproof/testing` with a JUnit report | 2 | 3 |
+| `adapter-contracts` | Every built-in Adapter keeps the five documented verdict and evidence contracts. | Five focused contract suites through `redproof/command` | 5 | 7 |
 | `repository-policy` | A release ships whole. Docs do not link to missing files. | A native Check over a pure policy model | 5 | 7 |
 
-`npm run self:check` runs the four Gates in isolated copies, in parallel:
+`npm run self:check` runs the five Gates in isolated copies, in parallel:
 
 ```text
  ✓ gates/architecture.ts (12 rules) 7.79s
+ ✓ gates/adapter-contracts.ts (5 rules) 1.63s
  ✓ gates/repository-policy.ts (5 rules) 469ms
  ✓ gates/static-contracts.ts (3 rules) 12.52s
  ✓ gates/test-health.ts (2 rules) 44.83s
 
- Gates      4 passed (4)
- Rules      22 held (22)
+ Gates      5 passed (5)
+ Rules      27 held (27)
 ```
 
 `npm run self:prove` then breaks each Rule on purpose, one defect at a time,
@@ -83,7 +86,7 @@ Proof GREEN:
 
 A reviewer can read this without opening the code. Each Rule is a sentence.
 Each Proof names the defect it plants and the verdict it expects. Run
-`npm run self:describe` to print all four Gates.
+`npm run self:describe` to print all five Gates.
 
 ## Gate 1: architecture
 
@@ -255,7 +258,24 @@ a finding, not an escape.
 **The proofs.** One creates a test file with one failing test. One creates a
 test file with one skipped test. Each expects FAIL.
 
-## Gate 4: repository-policy
+## Gate 4: adapter-contracts
+
+**The promise.** Every built-in Adapter validates options before execution,
+REFUSES unavailable runs, keeps parsers and evidence models pure, declares
+report capabilities where they apply, and creates Breaches only from selected
+structured evidence.
+
+Source: [`gates/adapter-contracts.ts`](../gates/adapter-contracts.ts).
+
+Five small contract suites run in parallel, one per Rule. Each RED proof makes
+one precise promise false: it removes constructor validation, corrupts runner
+mapping, introduces I/O into a pure model, overstates JUnit capabilities, or
+drops a selected ESLint finding. A process timeout supplies the REFUSE proof.
+
+See **[Gating Adapter contracts](adapter-contract-gates.md)** for the contract
+matrix and the RED-first sequence used to build it.
+
+## Gate 5: repository-policy
 
 **The promise.** Five packages ship together. They share one version. Every
 one of them is in every build and release step. The public surfaces are
