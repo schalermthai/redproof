@@ -5,7 +5,7 @@ import {
   type CommandExecutionOptions,
 } from '../core/options.ts';
 import { outputDetail, type CommandExecution } from '../core/outcome.ts';
-import { terminateProcessTree } from './process-tree.ts';
+import { superviseProcessTree, terminateProcessTree } from './process-tree.ts';
 
 export function executeCommand(options: CommandExecutionOptions): Promise<CommandExecution> {
   validateCommandExecutionOptions(options);
@@ -30,6 +30,7 @@ export function executeCommand(options: CommandExecutionOptions): Promise<Comman
       });
       return;
     }
+    superviseProcessTree(child);
 
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];

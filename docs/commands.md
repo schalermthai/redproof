@@ -33,8 +33,11 @@ const check = command({
 
 Relative `cwd` values resolve inside the Gate workspace and cannot escape it.
 Child output is captured for diagnostics. It is never inherited by reporter
-output, so a machine-readable report stays clean. A timeout or output overflow
-terminates the complete process tree before the Check returns.
+output, so a machine-readable report stays clean. Each command runs in its own
+process group with no terminal, so it cannot prompt. A timeout or output
+overflow stops that group before the Check returns. A process that starts its
+own session is outside the group. Bad options throw at once, before any process
+starts.
 
 ## Exit codes decide the verdict
 
@@ -78,10 +81,12 @@ process shell without adopting the command Check's exit-code policy:
 ```ts
 import { executeCommand } from 'redproof/command';
 
+declare const root: string;
+
 const execution = await executeCommand({
   command: process.execPath,
   args: ['tool.mjs', '--json'],
-  cwd: process.cwd(),
+  cwd: root,
   timeoutMs: 60_000,
   maxOutputBytes: 10 * 1024 * 1024,
 });
@@ -93,10 +98,12 @@ if (execution.kind === 'completed') {
 }
 ```
 
-`executeCommand()` owns spawning, bounded capture, timeout, signal handling,
-and process-tree termination. It does not decide PASS, FAIL, or which Rule an
-exit code breaches. The caller owns that policy and must supply an absolute,
-already-confined `cwd`.
+`executeCommand()` owns spawning, bounded capture, timeout, and process-group
+termination. It forwards SIGINT, SIGTERM, and SIGHUP from its own process to
+the group, and it kills the group when its own process exits. It does not
+decide PASS, FAIL, or which Rule an exit code breaches. The caller owns that
+policy and must supply an absolute `cwd` that it has already confined, such as
+the Gate root.
 
 ## Several commands
 
