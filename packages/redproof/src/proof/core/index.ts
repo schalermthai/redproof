@@ -5,6 +5,7 @@ export type {
   RefuseProofEvaluation,
 } from './evaluation.ts';
 export { proofEstablished } from './outcome.ts';
+export { applyInspectionPolicy } from './inspection.ts';
 export type {
   AbortedProofOutcome,
   CompletedProofOutcome,

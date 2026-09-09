@@ -62,7 +62,10 @@ function gateStatusSuffix(run: GateRun): string {
   const ruleCount = model.rules.length;
   const label = `${ruleCount} ${ruleCount === 1 ? 'rule' : 'rules'}`;
 
-  if (model.verdict === 'pass') return `(${label})`;
+  if (model.verdict === 'pass') {
+    const inspection = run.result.scan.inspected === 0 ? ' | 0 inspected' : '';
+    return `(${label}${inspection})`;
+  }
   if (model.verdict === 'refuse') return `(${label} | refused)`;
   if (model.counting.kind === 'unsupported') return `(${label} | breach detected)`;
 
@@ -315,6 +318,7 @@ export function formatGateDescription(description: GateDescription): string {
   }
 
   lines.push('', 'Check:', ...indentDescription(description.check));
+  if (description.allowEmptyInspection) lines.push('', 'Empty scope: allowed');
 
   for (const item of description.proofs) {
     const label = item.kind === 'red' ? item.targetLabel ?? 'RED' : item.kind.toUpperCase();

@@ -4,6 +4,8 @@ export type NativeGateDefinition<C extends RuleCatalog> = {
   readonly id: string;
   readonly rules: C;
   readonly check: Check<RuleRefOfCatalog<C>>;
+  /** Permit PASS when the Check reports that it inspected zero targets. Defaults to false. */
+  readonly allowEmptyInspection?: boolean;
 };
 
 export function defineGate<const A extends Adapter<any>>(gate: Gate<A>): Gate<A>;
@@ -20,5 +22,8 @@ export function defineGate(
       rules: gate.rules,
       check: gate.check,
     },
+    ...(gate.allowEmptyInspection === undefined
+      ? {}
+      : { allowEmptyInspection: gate.allowEmptyInspection }),
   };
 }
