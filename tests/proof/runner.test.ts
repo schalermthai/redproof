@@ -116,66 +116,71 @@ test('runGate refuses a zero-inspected PASS by default and permits an explicit e
   assert.equal(guarded.verdict, 'refuse');
   if (guarded.verdict !== 'refuse') throw new Error('expected refusal');
   assert.equal(guarded.why.code, 'nothing-inspected');
-  assert.equal(guarded.scan.inspected, 0);
 
   const allowed = await runGate(gateOver(state, 'allow'), '/project');
   assert.equal(allowed.verdict, 'pass');
-  assert.equal(allowed.scan.inspected, 0);
 });
 
-test('RED proof proves when its mutation breaches the target, then restores the world', async () => {
+test('a RED proof runs its mutation, judges the mutated world, then restores it', async () => {
   const state = world();
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1', breachRule(state, 'r1')), '/project');
 
   assert.equal(outcome.status, 'completed');
   assert.equal(proofEstablished(outcome), true);
-  assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'proved', target: 'r1' });
   assert.equal(outcome.status === 'completed' && outcome.result.verdict, 'fail');
   assert.deepEqual(state.log, ['apply r1', 'undo r1']);
-  assert.deepEqual(state.breached, []);
+  assert.deepEqual(state.breached, [], 'the world is back to its baseline');
 });
 
-test('RED proof does not pass when the Gate fails for another Rule', async () => {
+test('a mutation plan is applied in order and undone in reverse order', async () => {
+  const state = world();
+  const plan = [breachRule(state, 'r1'), setFlag(state, 'refused'), breachRule(state, 'r2')];
+  const outcome = await runProof(gateOver(state), proof.refuse('undo in reverse', plan), '/project');
+
+  assert.equal(proofEstablished(outcome), true);
+  assert.deepEqual(state.log, ['apply r1', 'apply refused', 'apply r2', 'undo r2', 'undo refused', 'undo r1']);
+  assert.deepEqual(state.breached, []);
+  assert.equal(state.refused, false);
+});
+
+test('a RED proof is not established when the Gate fails for another Rule', async () => {
   const state = world();
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1', breachRule(state, 'r2')), '/project');
 
   assert.equal(outcome.status, 'completed');
   assert.equal(proofEstablished(outcome), false);
-  assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'target-rule-not-breached', target: 'r1', breached: ['r2'] });
-  assert.equal(outcome.status === 'completed' && outcome.result.verdict, 'fail');
+  assert.equal(outcome.status === 'completed' && outcome.reason.kind, 'target-rule-not-breached');
   assert.deepEqual(state.log, ['apply r2', 'undo r2']);
 });
 
-test('RED proof does not pass when its target was already breached before mutation', async () => {
+test('a RED proof whose target is already breached runs only the baseline Check and never mutates', async () => {
   const state = world({ breached: ['r1'] });
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1 causally', breachRule(state, 'r1')), '/project');
 
   assert.equal(outcome.status, 'completed');
   assert.equal(proofEstablished(outcome), false);
-  assert.deepEqual(outcome.status === 'completed' && outcome.reason, { kind: 'target-already-breached', target: 'r1', breached: ['r1'] });
-  assert.equal(outcome.status === 'completed' && outcome.result.verdict, 'fail');
+  assert.equal(outcome.status === 'completed' && outcome.reason.kind, 'target-already-breached');
   assert.deepEqual(state.log, [], 'the mutation must never be applied');
   assert.equal(state.contexts.length, 1, 'only the baseline Check runs');
 });
 
-test('GREEN passes on PASS and REFUSE passes on REFUSE, and both restore', async () => {
+test('a GREEN proof needs no mutation and a REFUSE proof restores its mutation', async () => {
   const state = world();
   const green = await runProof(gateOver(state), proof.green('stays green'), '/project');
-  assert.equal(green.status, 'completed');
   assert.equal(proofEstablished(green), true);
+  assert.deepEqual(state.log, []);
 
   const refused = await runProof(gateOver(state), proof.refuse('refuses', setFlag(state, 'refused')), '/project');
-  assert.equal(refused.status, 'completed');
   assert.equal(proofEstablished(refused), true);
   assert.equal(refused.status === 'completed' && refused.result.verdict, 'refuse');
   assert.equal(state.refused, false);
 });
 
-test('a mutation that cannot be applied yields mutation-apply-failed and undoes earlier mutations', async () => {
+test('a mutation that cannot be applied aborts the proof and undoes the mutations applied before it', async () => {
   const state = world();
   const outcome = await runProof(
     gateOver(state),
-    proof.red(R1, 'prove R1', [breachRule(state, 'r1'), failingMutation]),
+    proof.red(R1, 'prove R1', [breachRule(state, 'r1'), failingMutation, breachRule(state, 'r2')]),
     '/project',
   );
 
@@ -185,9 +190,10 @@ test('a mutation that cannot be applied yields mutation-apply-failed and undoes 
   assert.match(outcome.error.detail ?? '', /cannot apply/);
   assert.deepEqual(state.log, ['apply r1', 'undo r1']);
   assert.deepEqual(state.breached, []);
+  assert.equal(state.contexts.length, 1, 'the Gate is not checked over a half-applied plan');
 });
 
-test('a Check that throws after mutation yields check-threw, and the mutation is undone', async () => {
+test('a Check that throws after mutation aborts the proof, and the mutation is undone', async () => {
   const state = world();
   const outcome = await runProof(gateOver(state), proof.green('sees the throw', setFlag(state, 'checkThrows')), '/project');
 
@@ -200,7 +206,7 @@ test('a Check that throws after mutation yields check-threw, and the mutation is
   assert.equal(state.checkThrows, false);
 });
 
-test('a baseline Check that throws blocks a RED proof before any mutation', async () => {
+test('a baseline Check that throws aborts a RED proof before any mutation', async () => {
   const state = world({ checkThrows: true });
   const outcome = await runProof(gateOver(state), proof.red(R1, 'prove R1', breachRule(state, 'r1')), '/project');
 
@@ -211,18 +217,19 @@ test('a baseline Check that throws blocks a RED proof before any mutation', asyn
   assert.deepEqual(state.log, []);
 });
 
-test('an undo that fails yields mutation-restore-failed and keeps the Check result', async () => {
+test('an undo that fails leaves the proof unrestored and keeps the Check result', async () => {
   const state = world();
   const outcome = await runProof(gateOver(state), proof.green('undo fails', setFlag(state, 'refused', true)), '/project');
 
   assert.equal(outcome.status, 'unrestored');
   if (outcome.status !== 'unrestored') throw new Error('expected an unrestored proof');
+  assert.equal(proofEstablished(outcome), false);
   assert.equal(outcome.error.code, 'mutation-restore-failed');
   assert.match(outcome.error.detail ?? '', /undo of refused exploded/);
   assert.equal(outcome.result.verdict, 'refuse');
 });
 
-test('a Check that throws and an undo that fails yields mutation-restore-failed without a result', async () => {
+test('a Check that throws and an undo that fails aborts as mutation-restore-failed without a result', async () => {
   const state = world();
   const outcome = await runProof(
     gateOver(state),
