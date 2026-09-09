@@ -246,7 +246,7 @@ REFUSE   the Check could not decide safely
 ```
 
 A PASS that inspected zero targets becomes REFUSE by default, because it cannot
-establish the Gate's Rules. A Gate whose empty scope is intentionally valid can
+establish the Gate's Rules. A Gate whose empty evidence is intentionally valid can
 set `policies: { emptyEvidence: 'allow' }`; unknown counts (`inspected: null`)
 are not treated as zero.
 

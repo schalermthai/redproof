@@ -257,8 +257,8 @@ defineGate({
 })
 ```
 
-Gate-wide interpretation options live under `policies`, leaving adapter options
-to describe how evidence is collected.
+Options that change how Redproof reads a Check result belong under
+`policies`. Adapter options say how the Check collects its evidence.
 
 Use the exception narrowly. `inspected: null` means the Check cannot count its
 targets and is not treated as zero; FAIL and REFUSE results keep their original

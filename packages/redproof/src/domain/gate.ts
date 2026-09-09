@@ -1,7 +1,9 @@
 import type { Adapter, RuleRefOfAdapter } from './adapter.ts';
 
+/** What a PASS over zero inspected targets means: refuse it, or allow it. Defaults to 'refuse'. */
 export type EmptyEvidencePolicy = 'refuse' | 'allow';
 
+/** Gate-wide policies that decide how a Check result is read. */
 export type GatePolicies = {
   /** Decide whether PASS may establish the Gate when the Check inspected zero targets. */
   readonly emptyEvidence?: EmptyEvidencePolicy;
