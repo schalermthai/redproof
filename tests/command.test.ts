@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -102,23 +104,85 @@ test('command refuses when execution exceeds its timeout', async () => {
   assert.equal(checkResult.why.code, 'command-timeout');
 });
 
-test('command timeout terminates descendants before they can outlive the Check', async () => {
-  await withWorkspace(async root => {
-    const descendant = "require('node:fs').writeFileSync('descendant-started.txt', ''); process.on('SIGTERM', () => {}); setTimeout(() => require('node:fs').writeFileSync('escaped.txt', 'alive'), 1_600); setInterval(() => {}, 1_000)";
-    const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setInterval(() => {}, 1_000)`;
-    const checkResult = await command({
-      rule,
-      command: process.execPath,
-      args: ['-e', parent],
-      timeoutMs: 1_000,
-    }).run({ root, rules: [rule.id] });
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-    assert.equal(checkResult.verdict, 'refuse');
-    if (checkResult.verdict !== 'refuse') return;
-    assert.equal(checkResult.why.code, 'command-timeout');
-    assert.equal(await readFile(join(root, 'descendant-started.txt'), 'utf8'), '');
-    await delay(500);
-    await assert.rejects(readFile(join(root, 'escaped.txt')));
+async function eventually(condition: () => boolean, withinMs: number): Promise<boolean> {
+  const deadline = Date.now() + withinMs;
+  while (!condition() && Date.now() < deadline) await delay(20);
+  return condition();
+}
+
+async function pidFrom(file: string): Promise<number> {
+  const found = await eventually(() => {
+    try { return Number(readFileSync(file, 'utf8')) > 0; } catch { return false; }
+  }, 5_000);
+  if (!found) throw new Error(`${file} was never written`);
+  return Number(await readFile(file, 'utf8'));
+}
+
+function killQuietly(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try { process.kill(pid, 'SIGKILL'); } catch {}
+}
+
+function stubbornDescendant(pidFile: string): string {
+  return `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); process.on('SIGTERM', () => {}); setTimeout(() => {}, 10_000)`;
+}
+
+function parentOf(descendant: string, pidFile?: string): string {
+  const record = pidFile ? `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); ` : '';
+  return `${record}require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setTimeout(() => {}, 10_000)`;
+}
+
+test('command timeout terminates a SIGTERM-resistant descendant before the Check returns', async () => {
+  await withWorkspace(async root => {
+    const pidFile = join(root, 'descendant.pid');
+    let descendant: number | undefined;
+    try {
+      const checkResult = await command({
+        rule,
+        command: process.execPath,
+        args: ['-e', parentOf(stubbornDescendant(pidFile), undefined)],
+        timeoutMs: 1_000,
+      }).run({ root, rules: [rule.id] });
+
+      assert.equal(checkResult.verdict, 'refuse');
+      if (checkResult.verdict !== 'refuse') return;
+      assert.equal(checkResult.why.code, 'command-timeout');
+      descendant = await pidFrom(pidFile);
+      assert.equal(await eventually(() => !processAlive(descendant!), 500), true, 'the descendant outlived the Check');
+    } finally {
+      killQuietly(descendant);
+    }
+  });
+});
+
+test('a parent SIGINT reaches a supervised command and its descendants', async () => {
+  await withWorkspace(async root => {
+    const childPidFile = join(root, 'child.pid');
+    const descendantPidFile = join(root, 'descendant.pid');
+    const child = parentOf(stubbornDescendant(descendantPidFile), childPidFile);
+    const host = `import { executeCommand } from 'redproof/command'; await executeCommand({ command: process.execPath, args: ['-e', ${JSON.stringify(child)}], cwd: ${JSON.stringify(root)} });`;
+    const hostProcess = spawn(process.execPath, ['--input-type=module', '-e', host], { cwd: process.cwd(), stdio: 'ignore', detached: true });
+    const hostExit = new Promise<NodeJS.Signals | null>(resolve => hostProcess.once('exit', (_, signal) => resolve(signal)));
+    let pids: number[] = [];
+    try {
+      pids = [await pidFrom(childPidFile), await pidFrom(descendantPidFile)];
+      process.kill(-hostProcess.pid!, 'SIGINT');
+
+      assert.equal(await hostExit, 'SIGINT');
+      assert.equal(await eventually(() => pids.every(pid => !processAlive(pid)), 1_000), true, 'a command outlived its interrupted host');
+    } finally {
+      for (const pid of pids) killQuietly(pid);
+      killQuietly(hostProcess.pid);
+    }
   });
 });
 

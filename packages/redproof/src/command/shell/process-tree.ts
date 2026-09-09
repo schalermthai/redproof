@@ -15,13 +15,14 @@ function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
 
   try {
     process.kill(-child.pid, signal);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') child.kill(signal);
+  } catch {
+    child.kill(signal);
   }
 }
 
 function groupIsAlive(child: ChildProcess): boolean {
   if (child.pid === undefined) return false;
+  if (child.exitCode === null && child.signalCode === null) return true;
   try {
     process.kill(-child.pid, 0);
     return true;
@@ -58,8 +59,52 @@ async function terminateWindowsTree(child: ChildProcess): Promise<void> {
       child.kill('SIGKILL');
       resolve();
     });
-    killer.once('close', () => resolve());
+    killer.once('close', code => {
+      if (code !== 0) child.kill('SIGKILL');
+      resolve();
+    });
   });
+}
+
+const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+const liveChildren = new Set<ChildProcess>();
+let forwarding = false;
+
+function forwardSignal(signal: NodeJS.Signals): void {
+  for (const child of liveChildren) signalGroup(child, signal);
+  stopForwarding();
+  if (process.listenerCount(signal) === 0) process.kill(process.pid, signal);
+}
+
+function killLiveGroups(): void {
+  for (const child of liveChildren) signalGroup(child, 'SIGKILL');
+}
+
+function startForwarding(): void {
+  if (forwarding) return;
+  forwarding = true;
+  for (const signal of FORWARDED_SIGNALS) process.on(signal, forwardSignal);
+  process.on('exit', killLiveGroups);
+}
+
+function stopForwarding(): void {
+  if (!forwarding) return;
+  forwarding = false;
+  for (const signal of FORWARDED_SIGNALS) process.removeListener(signal, forwardSignal);
+  process.removeListener('exit', killLiveGroups);
+}
+
+/** A detached child has its own session, so parent signals and parent exit must be forwarded to its group. */
+export function superviseProcessTree(child: ChildProcess): void {
+  if (process.platform === 'win32') return;
+  liveChildren.add(child);
+  const release = (): void => {
+    liveChildren.delete(child);
+    if (liveChildren.size === 0) stopForwarding();
+  };
+  child.once('exit', release);
+  child.once('error', release);
+  startForwarding();
 }
 
 /** Stop the complete process tree before a refused execution can return. */
