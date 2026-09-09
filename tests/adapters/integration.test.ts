@@ -66,7 +66,7 @@ test('Vitest adapter cleans a nested project report while proving test policies'
 
 test('Vitest proofs restore a workspace that has a nested node_modules directory', async () => {
   const nested = resolve('fixtures/testing-vitest/project/node_modules');
-  await mkdir(nested, { recursive: true });
+  const created = await mkdir(nested, { recursive: true });
   try {
     const proof = await proveProject(configOf('testing-vitest'));
     assert.deepEqual(
@@ -74,7 +74,7 @@ test('Vitest proofs restore a workspace that has a nested node_modules directory
       Array.from({ length: 6 }, () => ['completed', true]),
     );
   } finally {
-    await rm(nested, { recursive: true, force: true });
+    if (created !== undefined) await rm(nested, { recursive: true, force: true });
   }
 });
 
