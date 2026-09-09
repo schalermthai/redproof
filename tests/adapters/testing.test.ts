@@ -520,6 +520,74 @@ test('a command runner refuses lexical and symbolic-link cwd escapes', async () 
   });
 });
 
+test('a command runner refuses bounded output with captured diagnostics', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({
+      command: process.execPath,
+      args: ['-e', "process.stdout.write('1234567890')"],
+      maxOutputBytes: 5,
+    });
+
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /exceeded the 5-byte output limit/);
+    assert.match(result.detail ?? '', /command-output-limit/);
+    assert.match(result.detail ?? '', /stdout:\n12345/);
+  });
+});
+
+test('a command runner timeout refuses with the supervisor code and message', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({
+      command: process.execPath,
+      args: ['-e', 'setTimeout(() => {}, 5_000)'],
+      timeoutMs: 100,
+    });
+
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /exceeded its 100ms timeout/);
+    assert.match(result.detail ?? '', /command-timeout/);
+  });
+});
+
+test('a missing test command refuses with the same wording as before', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({ command: 'redproof-no-such-binary' });
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.equal(result.message, 'Could not start test command redproof-no-such-binary.');
+    assert.match(result.detail ?? '', /command-unavailable/);
+  });
+});
+
+test('testing command limits must be positive integers', () => {
+  assert.throws(
+    () => runner.command({ command: 'test', timeoutMs: 0 }),
+    /timeoutMs must be a positive integer/,
+  );
+  assert.throws(
+    () => vitest({ maxOutputBytes: -1, rules: { testsPass: true } }),
+    /maxOutputBytes must be a positive integer/,
+  );
+});
+
+test('an invalid test command refuses instead of throwing from the runner', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({ command: '' });
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /Could not start test command/);
+    assert.match(result.detail ?? '', /command must not be empty/);
+  });
+});
+
 test('a configured Vitest report is fresh for the run and the previous file is restored', async () => {
   await withWorkspace(async root => {
     const project = join(root, 'project');

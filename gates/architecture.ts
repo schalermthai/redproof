@@ -98,6 +98,11 @@ export const proofs = defineProofs(gate, [
     mutate.appendText('packages/eslint/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps adapters on the public command entrypoint, not its core',
+    mutate.appendText('packages/testing/src/index.ts', "\nimport '../../redproof/src/command/core/options.ts';\n"),
+  ),
+  proof.red(
     rules.productionNoTestFixtureDependencies,
     'keeps repository fixtures out of publishable source',
     mutate.appendText(

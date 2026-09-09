@@ -379,8 +379,9 @@ export const adapter = testing({
 });
 ```
 
-The built-in `runner.command` already confines `cwd` inside the Gate root and
-reports what it will run. Prefer it when the tool is a command line.
+The built-in `runner.command` already confines `cwd` inside the Gate root,
+reports what it will run, bounds captured output, and stops the whole process
+group on `timeoutMs`. Prefer it when the tool is a command line.
 
 ## Prove it
 
