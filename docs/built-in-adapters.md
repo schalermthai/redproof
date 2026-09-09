@@ -78,8 +78,10 @@ afterward when they remain empty.
 
 `timeoutMs` bounds the complete Vitest invocation. `maxOutputBytes` bounds
 combined stdout and stderr capture and defaults to 10 MiB. Exceeding either
-limit REFUSES the Gate and terminates the complete Vitest process tree before
-returning, including workers and test-created child processes.
+limit REFUSES the Gate and stops the Vitest process group before returning.
+Workers and test-created child processes in that group stop with it. A process
+that starts its own session is outside the group. The run is stopped, not
+truncated, so a Gate above the limit refuses instead of reading a partial report.
 
 Redproof passes `--no-cache` to Vitest. Without it, Vitest writes a results
 cache under `node_modules/.vite` inside the project, and a proof run refuses

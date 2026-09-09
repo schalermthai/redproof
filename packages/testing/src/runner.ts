@@ -90,7 +90,7 @@ export function command(options: CommandRunnerOptions): TestRunner {
         execution = await executeCommand({
           command: options.command,
           args,
-          label: `Test command ${options.command}`,
+          label: `test command ${options.command}`,
           cwd: confinedCwd.path,
           env: {
             REDPROOF_TEST_REPORT: ctx.reportFile,

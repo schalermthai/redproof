@@ -46,7 +46,7 @@ empty. Omit `reportFile` to use Redproof's private temporary report.
 
 `timeoutMs` bounds the complete run. `maxOutputBytes` bounds combined stdout
 and stderr capture and defaults to 10 MiB. Exceeding either limit REFUSES the
-Gate and terminates the complete process tree before returning.
+Gate and stops the process group before returning.
 
 `noFlakyTests` is available for Jest-compatible JSON reports. It breaches when
 a test passes only after a retry. Vitest keeps the earlier failure messages in

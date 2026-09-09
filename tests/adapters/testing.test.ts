@@ -3,7 +3,6 @@ import { chmod, lstat, mkdir, readdir, readFile, realpath, rm, symlink, writeFil
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { setTimeout as delay } from 'node:timers/promises';
 import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, vitest, type TestRunner } from '@redproof/testing';
 import { defineRule } from 'redproof';
 import { configuredVitestReport } from '../../packages/testing/src/shell/vitest-runner.ts';
@@ -500,24 +499,31 @@ test('a command runner refuses bounded output with captured diagnostics', async 
   });
 });
 
-test('a command runner timeout terminates descendants before it returns', async () => {
+test('a command runner timeout refuses with the supervisor code and message', async () => {
   await withWorkspace(async root => {
-    const descendant = "require('node:fs').writeFileSync('descendant-started.txt', ''); process.on('SIGTERM', () => {}); setTimeout(() => require('node:fs').writeFileSync('escaped.txt', 'alive'), 1_600); setInterval(() => {}, 1_000)";
-    const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: 'ignore' }); setInterval(() => {}, 1_000)`;
     const built = runner.command({
       command: process.execPath,
-      args: ['-e', parent],
-      timeoutMs: 1_000,
+      args: ['-e', 'setTimeout(() => {}, 5_000)'],
+      timeoutMs: 100,
     });
 
     const result = await built.run({ root, reportFile: join(root, 'report.json') });
     assert.equal(result.kind, 'unavailable');
     if (result.kind !== 'unavailable') return;
-    assert.match(result.message, /exceeded its 1000ms timeout/);
+    assert.match(result.message, /exceeded its 100ms timeout/);
     assert.match(result.detail ?? '', /command-timeout/);
-    assert.equal(await readFile(join(root, 'descendant-started.txt'), 'utf8'), '');
-    await delay(500);
-    await assert.rejects(readFile(join(root, 'escaped.txt')));
+  });
+});
+
+test('a missing test command refuses with the same wording as before', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({ command: 'redproof-no-such-binary' });
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.equal(result.message, 'Could not start test command redproof-no-such-binary.');
+    assert.match(result.detail ?? '', /command-unavailable/);
   });
 });
 

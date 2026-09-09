@@ -375,8 +375,8 @@ export const adapter = testing({
 ```
 
 The built-in `runner.command` already confines `cwd` inside the Gate root,
-reports what it will run, bounds captured output, and supports a whole-process-tree
-`timeoutMs`. Prefer it when the tool is a command line.
+reports what it will run, bounds captured output, and stops the whole process
+group on `timeoutMs`. Prefer it when the tool is a command line.
 
 ## Prove it
 
