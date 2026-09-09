@@ -477,9 +477,15 @@ assertion detected its defect.
 ### 7. Prove GREEN and REFUSE
 
 Run `redproof prove`. The four source mutations must FAIL their targeted Rules,
-the untouched implementation must PASS, and the hanging test process must
-REFUSE at its command timeout. Together they show sensitivity, a healthy
-baseline, and honest treatment of unavailable evidence.
+the untouched implementation must PASS, and one mutation must REFUSE. Together
+they show sensitivity, a healthy baseline, and honest treatment of unavailable
+evidence.
+
+Prefer an output-budget flood over a hanging process for the REFUSE proof. A
+flood refuses in well under a second, so the timeout stays free to be a generous
+safety net. Set the timeout for the slowest machine that will run the Gate, not
+for your own. A timeout that doubles as a speed budget makes a slow shared
+machine report a refusal that no defect caused.
 
 ### 8. Verify the right scope
 

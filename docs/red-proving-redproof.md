@@ -269,8 +269,14 @@ Source: [`gates/adapter-contracts.ts`](../gates/adapter-contracts.ts).
 
 Five small contract suites run in parallel, one per Rule. Each RED proof makes
 one precise promise false: it removes constructor validation, corrupts runner
-mapping, introduces I/O into a pure model, overstates JUnit capabilities, or
-drops a selected ESLint finding. A process timeout supplies the REFUSE proof.
+mapping, introduces I/O into a pure model, reads ambient process state, overstates
+JUnit capabilities, or drops a selected ESLint finding. A flooded output budget
+supplies the REFUSE proof.
+
+The command timeout is 60 seconds. It is a safety net, not a speed budget. The
+suites finish in about one second each, and a shared machine can be many times
+slower. A tight timeout turns a slow machine into a false refusal, which reads
+like a broken contract.
 
 See **[Gating Adapter contracts](adapter-contract-gates.md)** for the contract
 matrix and the RED-first sequence used to build it.
