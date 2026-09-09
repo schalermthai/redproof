@@ -21,7 +21,7 @@ const rules = defineRules({
   },
   structuredBreaches: {
     id: 'adapters/breaches-require-structured-evidence',
-    description: 'Adapters emit Breaches only from selected structured findings.',
+    description: 'Adapter evidence models create Breaches only for findings a selected Rule names.',
   },
 });
 
@@ -100,6 +100,11 @@ export const proofs = defineProofs(gate, [
     rules.pureParsers,
     'detects a pure evidence model reaching its I/O shell',
     mutate.appendText('packages/eslint/src/model.ts', "\nimport './index.ts';\n"),
+  ),
+  proof.red(
+    rules.pureParsers,
+    'detects ambient process state inside a pure evidence model',
+    mutate.appendText('packages/stryker/src/model.ts', '\nvoid process.cwd();\n'),
   ),
   proof.red(
     rules.reportCapabilities,

@@ -1,9 +1,16 @@
 # Gating Adapter contracts
 
 The custom Adapter guidelines are executable contracts in this repository.
-The `adapter-contracts` Gate runs on every check and covers every built-in
-Adapter. Slower ESLint, dependency-cruiser, Stryker, and Vitest fixtures then
-prove the same behavior against the real tools.
+The `adapter-contracts` Gate runs on every check. Slower ESLint,
+dependency-cruiser, Stryker, and Vitest fixtures then prove the same behavior
+against the real tools.
+
+The Gate covers construction, refusal, purity, capability, and evidence
+selection. It reaches each contract at the level that is cheap to reach in
+about one second. Construction, refusal, and capability run through the
+Adapter. Evidence selection runs through the pure evidence models, not through
+a real tool run. So the Gate does not prove that an Adapter passes the right
+Rule to its evidence model. The fixtures and the full test suite cover that.
 
 This page is a worked example of the reusable **[Contract-to-Gate method](contract-to-gate.md)**.
 
@@ -16,13 +23,13 @@ still holds at the actual tool boundary. Neither replaces the other.
 Not every guideline applies to every Adapter in the same way. The Gate records
 the differences explicitly instead of forcing fake abstractions.
 
-| Contract | ESLint | dependency-cruiser | Stryker | testing |
-| --- | --- | --- | --- | --- |
-| Invalid options throw during construction | yes | yes | yes | yes |
-| Unavailable execution becomes REFUSE | caught around the programmatic API | caught around the programmatic API | caught around the programmatic API | runner union plus Adapter mapping |
-| Parsers and evidence models are pure | ESLint evidence model | violation model | result and baseline models | report parsers and test model |
-| Report capabilities reject unsupported Rules | not applicable | not applicable | not applicable | JUnit and Jest-compatible formats |
-| Breaches require structured evidence | lint messages | dependency violations | mutant results | normalized test cases |
+| Contract | ESLint | dependency-cruiser | Stryker | testing | Vitest | command runner |
+| --- | --- | --- | --- | --- | --- | --- |
+| Invalid options throw during construction | yes | yes | yes | yes | yes | yes |
+| Unavailable execution becomes REFUSE | caught around the programmatic API | caught around the programmatic API | caught around the programmatic API | runner union plus Adapter mapping | missing binary through the command runner | missing binary and bad arguments |
+| Parsers and evidence models are pure | ESLint evidence model | violation model | result and baseline models | report parsers and test model | shares the testing models | not applicable |
+| Report capabilities reject unsupported Rules | not applicable | not applicable | not applicable | JUnit and Jest-compatible formats | shares the testing formats | not applicable |
+| Breaches require structured evidence | lint messages | dependency violations | mutant results | normalized test cases | shares the testing models | not applicable |
 
 “Not applicable” is part of the contract. ESLint, dependency-cruiser, and
 Stryker expose programmatic results rather than a selectable report format, so

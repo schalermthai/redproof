@@ -1,7 +1,7 @@
 # Red proving Redproof
 
 Redproof runs Redproof on itself. Five Gates guard this repository. They hold
-27 Rules and 34 Proofs, and they run on every push. This page is not a guide
+27 Rules and 36 Proofs, and they run on every push. This page is not a guide
 to running them. It shows what that looks like, and it makes one point: a Gate
 can guard anything that leaves evidence. A module graph, a purity rule, the
 documentation, and the release inventory are all guarded the same way.
@@ -20,10 +20,10 @@ documentation, and the release inventory are all guarded the same way.
 
 | Gate | The promise | Built from | Rules | Proofs |
 | --- | --- | --- | --- | --- |
-| `architecture` | The structure stays intact. Imports point inward. The core stays pure. | `@redproof/dependency-cruiser` plus a TypeScript AST scan | 12 | 13 |
+| `architecture` | The structure stays intact. Imports point inward. The core stays pure. | `@redproof/dependency-cruiser` plus a TypeScript AST scan | 12 | 14 |
 | `static-contracts` | The code compiles. Every checked example in the docs compiles. Fragment debt cannot grow. | `redproof/command` with three parallel commands | 3 | 4 |
 | `test-health` | Every test ran and passed. None was skipped. | `@redproof/testing` with a JUnit report | 2 | 3 |
-| `adapter-contracts` | Every built-in Adapter keeps the five documented verdict and evidence contracts. | Five focused contract suites through `redproof/command` | 5 | 7 |
+| `adapter-contracts` | Every built-in Adapter keeps the five documented verdict and evidence contracts. | Five focused contract suites through `redproof/command` | 5 | 8 |
 | `repository-policy` | A release ships whole. Docs do not link to missing files. | A native Check over a pure policy model | 5 | 7 |
 
 `npm run self:check` runs the five Gates in isolated copies, in parallel:

@@ -8,6 +8,7 @@ import {
   report,
   runner,
   testing,
+  vitest,
   type TestRunner,
 } from '../../packages/testing/src/index.ts';
 import { withWorkspace } from '../helpers/workspace.ts';
@@ -37,6 +38,15 @@ test('runner: every Adapter maps unavailable execution to one REFUSE result', as
     assert.equal(strykerResult.verdict, 'refuse');
     if (strykerResult.verdict === 'refuse') assert.equal(strykerResult.why.code, 'stryker-unavailable');
 
+    const vitestResult = await vitest({
+      command: 'redproof-no-such-vitest',
+      rules: { testsPass: true },
+    }).check.run({ root, rules: ['testing/tests-pass'] });
+    assert.equal(vitestResult.verdict, 'refuse');
+    if (vitestResult.verdict === 'refuse') {
+      assert.equal(vitestResult.why.code, 'test-runner-unavailable');
+    }
+
     const throwingRunner: TestRunner = {
       description: 'throw from a custom runner',
       async run() {
@@ -51,6 +61,7 @@ test('runner: every Adapter maps unavailable execution to one REFUSE result', as
     assert.equal(testingResult.verdict, 'refuse');
     if (testingResult.verdict === 'refuse') {
       assert.equal(testingResult.why.code, 'test-runner-unavailable');
+      assert.equal(testingResult.why.message, 'The test runner could not complete the check.');
       assert.match(testingResult.why.detail ?? '', /runner exploded/u);
     }
 
@@ -81,6 +92,10 @@ test('runner: every Adapter maps unavailable execution to one REFUSE result', as
       assert.equal(unavailableTemp.verdict, 'refuse');
       if (unavailableTemp.verdict === 'refuse') {
         assert.equal(unavailableTemp.why.code, 'test-runner-unavailable');
+        assert.equal(
+          unavailableTemp.why.message,
+          'The testing Adapter could not prepare its report directory.',
+        );
       }
     } finally {
       if (beforeTemp === undefined) delete process.env.TMPDIR;

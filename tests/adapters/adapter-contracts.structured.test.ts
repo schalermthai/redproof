@@ -38,7 +38,10 @@ test('structured: every Adapter creates Breaches only from selected structured f
       { ruleId: 'quotes', message: 'Wrong quotes.', line: 2, column: 1 },
     ],
   }], new Map<string, Rule>([['semi', eslintRule]]));
-  assert.deepEqual(eslintFindings.map(item => item.rule), ['eslint/semi']);
+  assert.deepEqual(
+    eslintFindings.map(item => [item.rule, item.message, item.location?.line]),
+    [['eslint/semi', 'Missing semicolon.', 1]],
+  );
   assert.equal(eslintFindings[0]?.location?.file, 'src/a.ts');
 
   const dependencyFindings: DependencyCruiserViolation[] = [
@@ -49,17 +52,22 @@ test('structured: every Adapter creates Breaches only from selected structured f
     violationsToBreaches(
       dependencyFindings,
       new Map<string, Rule>([['no-cycles', dependencyRule]]),
-    ).map(item => item.rule),
-    ['dependency-cruiser/no-cycles'],
+    ).map(item => [item.rule, item.message]),
+    [['dependency-cruiser/no-cycles', 'Dependency src/a.ts -> src/b.ts violates dependency-cruiser rule no-cycles.']],
   );
 
   const mutants: StrykerMutantResult[] = [
-    { id: '1', status: 'Killed' },
-    { id: '2', status: 'Survived' },
+    { id: '1', status: 'Killed', fileName: 'src/killed.ts' },
+    { id: '2', status: 'Survived', fileName: 'src/survived.ts' },
+    { id: '3', status: 'NoCoverage', fileName: 'src/uncovered.ts' },
   ];
   assert.deepEqual(
-    undetectedMutantBreaches(mutants, strykerRule).map(item => item.rule),
-    ['stryker/mutants-detected'],
+    undetectedMutantBreaches(mutants, strykerRule)
+      .map(item => [item.rule, item.code, item.location?.file]),
+    [
+      ['stryker/mutants-detected', 'mutant-survived', 'src/survived.ts'],
+      ['stryker/mutants-detected', 'mutant-no-coverage', 'src/uncovered.ts'],
+    ],
   );
 
   assert.deepEqual(testRunBreaches({
@@ -67,7 +75,9 @@ test('structured: every Adapter creates Breaches only from selected structured f
       { name: 'passes', suite: [], file: null, status: 'passed', location: null },
       { name: 'fails', suite: [], file: null, status: 'failed', location: null },
     ],
-  }, { testsPass: testingRule }).map(item => item.rule), ['testing/tests-pass']);
+  }, { testsPass: testingRule }).map(item => [item.rule, item.code, item.message]), [
+    ['testing/tests-pass', 'test-failed', 'fails'],
+  ]);
 });
 test('structured: an unexplained nonzero exit REFUSES instead of creating a Breach', async () => {
   await withWorkspace(async root => {

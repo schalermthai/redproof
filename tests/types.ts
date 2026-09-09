@@ -336,10 +336,15 @@ runner.command({ command: 'npm', mystery: true });
 eslint({ rules: { semi: 'semi' } });
 // @ts-expect-error mystery is not an ESLint adapter option.
 eslint({ rules: { semi: 'semi' }, mystery: true });
+const eslintRuleId: 'eslint/semi' = eslint({ rules: { semi: 'semi' } }).rules.semi.id;
+void eslintRuleId;
 
 dependencyCruiser({ rules: { cycles: 'no-cycles' } });
 // @ts-expect-error mystery is not a dependency-cruiser adapter option.
 dependencyCruiser({ rules: { cycles: 'no-cycles' }, mystery: true });
+const cruiserRuleId: 'dependency-cruiser/no-cycles' =
+  dependencyCruiser({ rules: { cycles: 'no-cycles' } }).rules.cycles.id;
+void cruiserRuleId;
 
 stryker({ rules: { mutantsDetected: true } });
 // @ts-expect-error mystery is not a Stryker adapter option.

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  parseJestJson,
+  parseJunitXml,
   report,
   testing,
   type TestRunner,
@@ -42,4 +44,27 @@ test('capability: a capable report format exposes the Rules it can support', () 
   });
 
   assert.deepEqual(Object.keys(adapter.rules).sort(), ['noFlakyTests', 'noTodoTests']);
+});
+
+test('capability: a declared capability matches what the parser can still observe', () => {
+  const jestRun = parseJestJson(JSON.stringify({
+    testResults: [{
+      assertionResults: [
+        { title: 'planned', status: 'todo' },
+        { title: 'retried', status: 'passed', failureMessages: ['flaked once'] },
+      ],
+    }],
+  }));
+  assert.deepEqual(
+    jestRun.tests.map(item => [item.name, item.status, Boolean(item.failure)]),
+    [['planned', 'todo', false], ['retried', 'passed', true]],
+  );
+
+  const junitRun = parseJunitXml(
+    '<testsuite><testcase name="planned"><skipped/></testcase></testsuite>',
+  );
+  assert.deepEqual(
+    junitRun.tests.map(item => [item.name, item.status, Boolean(item.failure)]),
+    [['planned', 'skipped', false]],
+  );
 });

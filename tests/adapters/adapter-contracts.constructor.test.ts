@@ -88,3 +88,62 @@ test('constructor: values that are invalid without running are rejected immediat
     /command must not be empty/u,
   );
 });
+
+test('constructor: path options reject values that leave the Gate root behind', () => {
+  assert.throws(
+    () => eslint({ files: ['/outside/**/*.ts'], rules: { semi: 'semi' } }),
+    /ESLint files must contain non-empty relative paths/u,
+  );
+  assert.throws(
+    () => dependencyCruiser({ files: ['/outside'], rules: { cycles: 'no-cycles' } }),
+    /dependency-cruiser files must contain non-empty relative paths/u,
+  );
+  assert.throws(
+    () => dependencyCruiser({
+      knownViolationsFile: '/outside.json',
+      rules: { cycles: 'no-cycles' },
+    }),
+    /knownViolationsFile must be a relative path/u,
+  );
+  assert.throws(
+    () => stryker({ cwd: '/outside', rules: { mutantsDetected: true } }),
+    /cwd must be a relative path/u,
+  );
+  assert.throws(
+    () => stryker({
+      rules: { noNewUndetectedMutants: { acceptedMutantsFile: '/outside.json' } },
+    }),
+    /acceptedMutantsFile must be a non-empty string containing a relative path/u,
+  );
+  assert.throws(
+    () => vitest({ cwd: '/outside', rules: { testsPass: true } }),
+    /cwd must be relative/u,
+  );
+  assert.throws(
+    () => vitest({ configFile: '', rules: { testsPass: true } }),
+    /configFile must not be empty/u,
+  );
+  assert.throws(
+    () => vitest({ files: ['/outside/a.test.ts'], rules: { testsPass: true } }),
+    /files\[0\] must be relative/u,
+  );
+});
+
+test('constructor: numeric limits are rejected before a tool runs', () => {
+  assert.throws(
+    () => stryker({ rules: { mutationScore: { minimum: 500 } } }),
+    /mutationScore.minimum must be between 0 and 100/u,
+  );
+  assert.throws(
+    () => runner.command({ command: 'npm', timeoutMs: 0 }),
+    /timeoutMs/u,
+  );
+  assert.throws(
+    () => runner.command({ command: 'npm', maxOutputBytes: -1 }),
+    /maxOutputBytes/u,
+  );
+});
+
+test('constructor: every Adapter that selects Rules rejects an empty selection', () => {
+  assert.throws(() => vitest({ rules: {} }), /requires at least one Redproof rule/u);
+});
