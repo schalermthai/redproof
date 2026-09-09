@@ -94,17 +94,19 @@ function stopForwarding(): void {
   process.removeListener('exit', killLiveGroups);
 }
 
-/** A detached child has its own session, so parent signals and parent exit must be forwarded to its group. */
-export function superviseProcessTree(child: ChildProcess): void {
-  if (process.platform === 'win32') return;
+/** Supervise a detached child's group until the caller finishes all process and pipe cleanup. */
+export function superviseProcessTree(child: ChildProcess): () => void {
+  if (process.platform === 'win32') return () => {};
   liveChildren.add(child);
+  let released = false;
   const release = (): void => {
+    if (released) return;
+    released = true;
     liveChildren.delete(child);
     if (liveChildren.size === 0) stopForwarding();
   };
-  child.once('exit', release);
-  child.once('error', release);
   startForwarding();
+  return release;
 }
 
 /** Stop the complete process tree before a refused execution can return. */
