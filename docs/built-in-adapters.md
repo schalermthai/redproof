@@ -89,6 +89,13 @@ Redproof passes `--no-cache` to Vitest. Without it, Vitest writes a results
 cache under `node_modules/.vite` inside the project, and a proof run refuses
 with `workspace-not-restored`. The adapter is proven against Vitest 5.
 
+Vite's default config loader has the same effect. It writes a temporary bundle
+of the config file under the nearest `node_modules/.vite-temp` and leaves that
+directory behind. When a `node_modules` directory sits inside the Gate root, as
+in a pnpm workspace, a proof run refuses with `workspace-not-restored`. Pass
+`args: ['--configLoader', 'runner']` to load the config without that bundle.
+The flag needs Vitest 3.1 or later, and Vitest marks the loader experimental.
+
 The testing integration can expose these Rules, depending on the selected report format:
 
 - `testing/tests-pass`

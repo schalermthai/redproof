@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { lstat } from 'node:fs/promises';
+import { lstat, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { checkProject, proofEstablished, proveProject } from 'redproof';
@@ -62,6 +62,20 @@ test('Vitest adapter cleans a nested project report while proving test policies'
     ],
   );
   await assertMissing(reports);
+});
+
+test('Vitest proofs restore a workspace that has a nested node_modules directory', async () => {
+  const nested = resolve('fixtures/testing-vitest/project/node_modules');
+  await mkdir(nested, { recursive: true });
+  try {
+    const proof = await proveProject(configOf('testing-vitest'));
+    assert.deepEqual(
+      proof.outcomes.map(outcome => [outcome.status, proofEstablished(outcome)]),
+      Array.from({ length: 6 }, () => ['completed', true]),
+    );
+  } finally {
+    await rm(nested, { recursive: true, force: true });
+  }
 });
 
 test('Stryker adapter passes strong tests and proves strict, baseline, score, and refusal policies', async () => {
