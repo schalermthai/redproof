@@ -222,6 +222,48 @@ const scan = {
 
 That matters because a Check declaring `counting.supported` promises a reliable count.
 
+## Empty evidence
+
+A Gate refuses an otherwise successful Check when `scan.inspected` is `0`.
+Without a target, PASS would claim that every Rule holds without inspecting the
+scope the Gate promises to protect. The Check's report remains valid; Redproof
+changes only the Gate verdict to REFUSE with the `nothing-inspected` diagnostic.
+
+When an empty target set is intentionally valid, opt in on that Gate:
+
+```ts
+import { counting, defineAdapter, defineGate, pass } from 'redproof';
+
+const adapter = defineAdapter({
+  kind: 'optional-files',
+  rules: {
+    valid: { id: 'optional-files/valid', description: 'Optional files are valid.' },
+  },
+  check: {
+    description: 'inspect optional generated files',
+    counting: counting.supported,
+    async run() {
+      return pass({ source: 'optional-files', startedAt: '', finishedAt: '', inspected: 0 });
+    },
+  },
+});
+
+defineGate({
+  id: 'optional-generated-files',
+  adapter,
+  policies: {
+    emptyEvidence: 'allow',
+  },
+})
+```
+
+Options that change how Redproof reads a Check result belong under
+`policies`. Adapter options say how the Check collects its evidence.
+
+Use the exception narrowly. `inspected: null` means the Check cannot count its
+targets and is not treated as zero; FAIL and REFUSE results keep their original
+evidence even when their scan count is zero.
+
 ## Proofs
 
 A RED proof targets one specific Rule:

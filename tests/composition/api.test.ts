@@ -32,6 +32,7 @@ test('defineRules preserves aliases and native defineGate supplies only native a
 
   const gate = defineGate({
     id: 'source-markers',
+    policies: { emptyEvidence: 'allow' },
     rules,
     check: {
       description: 'check source markers',
@@ -43,6 +44,7 @@ test('defineRules preserves aliases and native defineGate supplies only native a
   assert.equal(gate.adapter.kind, 'native');
   assert.equal(gate.adapter.rules.noTodo, rules.noTodo);
   assert.equal(gate.adapter.rules.noFixme, rules.noFixme);
+  assert.deepEqual(gate.policies, { emptyEvidence: 'allow' });
 });
 
 test('defineCheck binds a reusable Check to an explicit Rule catalog', () => {
@@ -163,4 +165,32 @@ test('a search Scan is a value, so a Check can pass it straight to a result', as
     assert.equal(checkResult.verdict, 'fail');
     assert.equal(checkResult.scan.inspected, 1);
   });
+});
+
+test('defineGate rejects unknown Gate keys, unknown policies, and unknown policy values at run time', () => {
+  const rules = defineRules({ one: { id: 'guarded/one', description: 'Guarded rule.' } });
+  const check = defineCheck(rules, {
+    description: 'guarded check',
+    counting: counting.supported,
+    async run() { return result.pass(scan); },
+  });
+
+  assert.throws(
+    () => defineGate({ id: 'legacy', rules, check, allowEmptyInspection: true } as never),
+    /Unknown Gate option: "allowEmptyInspection"\. Known options: id, rules, check, policies\./,
+  );
+  assert.throws(
+    () => defineGate({ id: 'typo', rules, check, policies: { emptyInspection: 'allow' } } as never),
+    /Unknown policies option: "emptyInspection"\. Known options: emptyEvidence\./,
+  );
+  assert.throws(
+    () => defineGate({ id: 'value', rules, check, policies: { emptyEvidence: true } } as never),
+    /policies\.emptyEvidence must be 'refuse' or 'allow'\./,
+  );
+  const adapterGate = defineGate({ id: 'ok', rules, check, policies: { emptyEvidence: 'allow' } });
+  assert.throws(
+    () => defineGate({ id: 'legacy-adapter', adapter: adapterGate.adapter, allowEmptyInspection: true } as never),
+    /Unknown Gate option: "allowEmptyInspection"\. Known options: id, adapter, policies\./,
+  );
+  assert.deepEqual(adapterGate.policies, { emptyEvidence: 'allow' });
 });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { breach, fail, pass, proof, proofEstablished, refuse, type Scan } from 'redproof';
 import { evaluateProof } from '../packages/redproof/src/proof/core/evaluation.ts';
+import { applyInspectionPolicy } from '../packages/redproof/src/proof/core/inspection.ts';
 import type { ProofOutcome } from '../packages/redproof/src/proof/core/outcome.ts';
 import { canReuseWorkspace, verifyProofRestoration } from '../packages/redproof/src/proof/core/restoration.ts';
 
@@ -15,6 +16,33 @@ const scan: Scan = {
 const R1 = { id: 'r1', description: 'R1' } as const;
 const R2 = { id: 'r2', description: 'R2' } as const;
 const noop = { description: 'noop', async apply() { return async () => {}; } };
+
+test('a zero-inspected PASS becomes REFUSE unless the Gate explicitly allows it', () => {
+  const emptyScan: Scan = { ...scan, inspected: 0 };
+  const emptyPass = pass(emptyScan);
+
+  assert.deepEqual(applyInspectionPolicy(emptyPass, 'refuse'), refuse(emptyScan, {
+    code: 'nothing-inspected',
+    message: 'The Check inspected no targets, so the Gate cannot establish its Rules.',
+    location: null,
+    hint: "Set policies.emptyEvidence to 'allow' on the Gate only when an empty target set is intentional.",
+  }));
+  assert.equal(applyInspectionPolicy(emptyPass, 'allow'), emptyPass);
+});
+
+test('inspection policy preserves unknown counts and non-PASS evidence', () => {
+  const unknownPass = pass({ ...scan, inspected: null });
+  const emptyFailure = fail({ ...scan, inspected: 0 }, [
+    breach(R1.id, { code: 'r1', message: 'R1 failed', location: null }),
+  ]);
+  const emptyRefusal = refuse({ ...scan, inspected: 0 }, {
+    code: 'unavailable', message: 'Unavailable', location: null,
+  });
+
+  assert.equal(applyInspectionPolicy(unknownPass, 'refuse'), unknownPass);
+  assert.equal(applyInspectionPolicy(emptyFailure, 'refuse'), emptyFailure);
+  assert.equal(applyInspectionPolicy(emptyRefusal, 'refuse'), emptyRefusal);
+});
 
 test('RED proof requires its target Rule, not merely a failed Gate', () => {
   const result = fail(scan, [

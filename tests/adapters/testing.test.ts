@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { testing, report, runner, parseJestJson, parseJunitXml, testRunBreaches, vitest, type TestRunner } from '@redproof/testing';
-import { defineRule } from 'redproof';
+import { defineGate, defineRule, runGate } from 'redproof';
 import { configuredVitestReport } from '../../packages/testing/src/shell/vitest-runner.ts';
 import { withWorkspace } from '../helpers/workspace.ts';
 
@@ -403,6 +403,48 @@ test('testing adapter refuses an unexplained non-zero exit even when an empty re
   });
 });
 
+test('a valid empty Vitest-compatible report passes parsing but is refused by the Gate by default', async () => {
+  await withWorkspace(async root => {
+    const runner: TestRunner = {
+      description: 'write an empty Vitest-compatible report',
+      async run(ctx) {
+        await writeFile(ctx.reportFile, JSON.stringify({
+          success: true,
+          numTotalTests: 0,
+          numPassedTests: 0,
+          numFailedTests: 0,
+          numPendingTests: 0,
+          numTodoTests: 0,
+          testResults: [],
+        }), 'utf8');
+        return { kind: 'completed', exitCode: 0, stdout: '', stderr: '' };
+      },
+    };
+    const adapter = testing({
+      runner,
+      report: report.jestJson(),
+      rules: { testsPass: true },
+    });
+
+    const parsed = await adapter.check.run({ root, rules: [adapter.rules.testsPass.id] });
+    assert.equal(parsed.verdict, 'pass', 'an empty but internally consistent report is trustworthy');
+    assert.equal(parsed.scan.inspected, 0);
+
+    const guarded = await runGate(defineGate({ id: 'tests', adapter }), root);
+    assert.equal(guarded.verdict, 'refuse');
+    if (guarded.verdict !== 'refuse') return;
+    assert.equal(guarded.why.code, 'nothing-inspected');
+
+    const allowed = await runGate(defineGate({
+      id: 'optional-tests',
+      adapter,
+      policies: { emptyEvidence: 'allow' },
+    }), root);
+    assert.equal(allowed.verdict, 'pass');
+    assert.equal(allowed.scan.inspected, 0);
+  });
+});
+
 test('the testing adapter rejects a rule name it does not know', () => {
   assert.throws(
     () => testing({
@@ -479,6 +521,74 @@ test('a command runner refuses lexical and symbolic-link cwd escapes', async () 
     if (symbolicResult.kind === 'unavailable') {
       assert.match(symbolicResult.message, /outside the Gate root/);
     }
+  });
+});
+
+test('a command runner refuses bounded output with captured diagnostics', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({
+      command: process.execPath,
+      args: ['-e', "process.stdout.write('1234567890')"],
+      maxOutputBytes: 5,
+    });
+
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /exceeded the 5-byte output limit/);
+    assert.match(result.detail ?? '', /command-output-limit/);
+    assert.match(result.detail ?? '', /stdout:\n12345/);
+  });
+});
+
+test('a command runner timeout refuses with the supervisor code and message', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({
+      command: process.execPath,
+      args: ['-e', 'setTimeout(() => {}, 5_000)'],
+      timeoutMs: 100,
+    });
+
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /exceeded its 100ms timeout/);
+    assert.match(result.detail ?? '', /command-timeout/);
+  });
+});
+
+test('a missing test command refuses with the same wording as before', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({ command: 'redproof-no-such-binary' });
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.equal(result.message, 'Could not start test command redproof-no-such-binary.');
+    assert.match(result.detail ?? '', /command-unavailable/);
+  });
+});
+
+test('testing command limits must be positive integers', () => {
+  assert.throws(
+    () => runner.command({ command: 'test', timeoutMs: 0 }),
+    /timeoutMs must be a positive integer/,
+  );
+  assert.throws(
+    () => vitest({ maxOutputBytes: -1, rules: { testsPass: true } }),
+    /maxOutputBytes must be a positive integer/,
+  );
+});
+
+test('an invalid test command refuses instead of throwing from the runner', async () => {
+  await withWorkspace(async root => {
+    const built = runner.command({ command: '' });
+    const result = await built.run({ root, reportFile: join(root, 'report.json') });
+
+    assert.equal(result.kind, 'unavailable');
+    if (result.kind !== 'unavailable') return;
+    assert.match(result.message, /Could not start test command/);
+    assert.match(result.detail ?? '', /command must not be empty/);
   });
 });
 

@@ -23,6 +23,8 @@ const adapter = vitest({
   cwd: 'packages/app',
   configFile: 'vitest.config.js',
   reportFile: 'test-results.json',
+  timeoutMs: 120_000,
+  maxOutputBytes: 20 * 1024 * 1024,
   rules: {
     testsPass: true,
     noFlakyTests: true,
@@ -41,6 +43,10 @@ same file as the config `outputFile`. Redproof restores any pre-existing report
 afterward. The report's parent directory may be absent when Vitest creates it
 during the run; Redproof removes newly created report directories that remain
 empty. Omit `reportFile` to use Redproof's private temporary report.
+
+`timeoutMs` bounds the complete run. `maxOutputBytes` bounds combined stdout
+and stderr capture and defaults to 10 MiB. Exceeding either limit REFUSES the
+Gate and stops the process group before returning.
 
 `noFlakyTests` is available for Jest-compatible JSON reports. It breaches when
 a test passes only after a retry. Vitest keeps the earlier failure messages in

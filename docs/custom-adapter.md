@@ -209,6 +209,11 @@ cannot evaluate reliably  → Diagnostic → REFUSE
 bad option                → throw before any Check exists
 ```
 
+The Gate boundary also protects every Adapter from a vacuous success: a PASS
+with `scan.inspected === 0` becomes `nothing-inspected` REFUSE by default. Keep
+valid empty reports parseable, and use `policies: { emptyEvidence: 'allow' }` on the Gate
+only when an empty target set is part of that Gate's declared policy.
+
 ## Guidelines
 
 ### 1. Validate options in the constructor and throw
@@ -374,8 +379,9 @@ export const adapter = testing({
 });
 ```
 
-The built-in `runner.command` already confines `cwd` inside the Gate root and
-reports what it will run. Prefer it when the tool is a command line.
+The built-in `runner.command` already confines `cwd` inside the Gate root,
+reports what it will run, bounds captured output, and stops the whole process
+group on `timeoutMs`. Prefer it when the tool is a command line.
 
 ## Prove it
 

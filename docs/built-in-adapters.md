@@ -4,6 +4,8 @@ Redproof integrations translate an existing tool or result format into Redproof 
 
 The external tool remains responsible for doing the real analysis. Redproof adds the Rule model and proofs around it.
 
+Every Adapter reports how many targets it inspected. A PASS over zero targets is refused as `nothing-inspected` unless the Gate sets `policies: { emptyEvidence: 'allow' }`. See [Empty evidence](composition.md#empty-evidence).
+
 ## Testing
 
 Package:
@@ -58,6 +60,8 @@ const adapter = vitest({
   cwd: 'packages/app',
   configFile: 'vitest.config.ts',
   reportFile: 'test-results.json',
+  timeoutMs: 120_000,
+  maxOutputBytes: 20 * 1024 * 1024,
   rules: { testsPass: true },
 });
 ```
@@ -74,9 +78,23 @@ The report's parent directory may be absent before the run when Vitest creates
 it while writing the report. Redproof removes newly created report directories
 afterward when they remain empty.
 
+`timeoutMs` bounds the complete Vitest invocation. `maxOutputBytes` bounds
+combined stdout and stderr capture and defaults to 10 MiB. Exceeding either
+limit REFUSES the Gate and stops the Vitest process group before returning.
+Workers and test-created child processes in that group stop with it. A process
+that starts its own session is outside the group. The run is stopped, not
+truncated, so a Gate above the limit refuses instead of reading a partial report.
+
 Redproof passes `--no-cache` to Vitest. Without it, Vitest writes a results
 cache under `node_modules/.vite` inside the project, and a proof run refuses
 with `workspace-not-restored`. The adapter is proven against Vitest 5.
+
+Vite's default config loader has the same effect. It writes a temporary bundle
+of the config file under the nearest `node_modules/.vite-temp` and leaves that
+directory behind. When a `node_modules` directory sits inside the Gate root, as
+in a pnpm workspace, a proof run refuses with `workspace-not-restored`. Pass
+`args: ['--configLoader', 'runner']` to load the config without that bundle.
+The flag needs Vitest 3.1 or later, and Vitest marks the loader experimental.
 
 The testing integration can expose these Rules, depending on the selected report format:
 
@@ -108,6 +126,8 @@ import { report, runner, testing } from '@redproof/testing';
 const adapter = testing({
   runner: runner.command({
     command: 'pytest',
+    timeoutMs: 120_000,
+    maxOutputBytes: 10 * 1024 * 1024,
     args: ({ reportFile }) => [
       '-q',
       `--junitxml=${reportFile}`,
@@ -158,6 +178,10 @@ reads the same on every machine, even when `command` is an absolute path. Set
 
 Set `cwd` to run a generic test command below the Gate root. Redproof rejects
 both `..` escapes and symbolic links that resolve outside the root.
+The generic runner accepts the same `timeoutMs` and `maxOutputBytes` process
+limits as `vitest()` and uses the shared `redproof/command` process supervisor.
+Spawn failures, signals, and exceeded limits are reported as unavailable test
+evidence, so the Gate REFUSES rather than guessing.
 
 A Check built from `redproof/command` reports itself the same way. See
 **[Command Checks](commands.md#what-a-check-says-about-itself)**.

@@ -41,7 +41,10 @@ redproof check --reporter=json --outputFile=out.json
 Every Check result carries a `scan` with an `inspected` count. The ESLint
 adapter sets it to the number of linted files, at
 `packages/eslint/src/index.ts`. An `inspected` value of zero is the answer. The
-check is blind, and no break is needed.
+check is blind, and no break is needed. Redproof refuses that PASS on its own
+with the `nothing-inspected` diagnostic. A Gate that sets
+`policies: { emptyEvidence: 'allow' }` keeps the PASS, so read that policy as a claim to
+verify.
 
 Other tools expose the same thing under other names. A test count, a file count,
 a duration. When the number is zero, stop and fix the check.

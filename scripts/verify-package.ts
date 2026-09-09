@@ -152,9 +152,10 @@ try {
 
   await writeFile(
     join(consumer, 'probe-command.mjs'),
-    "import { command, commands } from 'redproof/command';\n"
+    "import { command, commands, executeCommand } from 'redproof/command';\n"
     + "if (typeof command !== 'function') throw new Error('missing command export');\n"
-    + "if (typeof commands !== 'function') throw new Error('missing commands export');\n",
+    + "if (typeof commands !== 'function') throw new Error('missing commands export');\n"
+    + "if (typeof executeCommand !== 'function') throw new Error('missing executeCommand export');\n",
   );
   const commandImport = tryRun('node', ['probe-command.mjs'], consumer);
   report(commandImport.ok, 'redproof/command imports at run time', commandImport.ok ? '' : commandImport.output.slice(0, 300));
@@ -234,24 +235,33 @@ try {
   const tsc = join(REPO, 'node_modules', '.bin', 'tsc');
 
   const green = "import { defineGate, defineRule } from 'redproof';\n"
-    + "import { command, commands } from 'redproof/command';\n"
+    + "import { command, commands, executeCommand } from 'redproof/command';\n"
     + "import { stryker } from '@redproof/stryker';\n"
     + "import { vitest } from '@redproof/testing';\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
     + "export const check = command({ rule, command: 'node' });\n"
     + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
+    + "export const execution = executeCommand({ command: 'node', cwd: '/project', timeoutMs: 1_000 });\n"
     + "export const mutation = stryker({ cwd: 'packages/parser', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } });\n"
-    + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', rules: { testsPass: true, noFlakyTests: true } });\n"
+    + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', timeoutMs: 60_000, maxOutputBytes: 5_000_000, rules: { testsPass: true, noFlakyTests: true } });\n"
+    + "export const optional = defineGate({ id: 'optional', rules: { command: rule }, check, policies: { emptyEvidence: 'allow' } });\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
   report(typesOk.ok, 'valid consumer code type-checks', typesOk.ok ? '' : typesOk.output.slice(0, 400));
 
   console.log('\n7. Red-proof: the type check must reject bad code');
-  const red = "import { thisExportDoesNotExist } from 'redproof';\nvoid thisExportDoesNotExist;\n";
+  const red = "import { counting, defineGate, pass } from 'redproof';\n"
+    + "const rule = { id: 'consumer/rule', description: 'rule' } as const;\n"
+    + "defineGate({ id: 'bad', rules: { rule }, check: { description: 'check', counting: counting.supported, async run() { return pass({ source: 'consumer', startedAt: '', finishedAt: '', inspected: 0 }); } }, policies: { emptyEvidence: 'yes' } });\n";
   await writeFile(join(consumer, 'consumer.ts'), red);
   const typesRed = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
-  report(!typesRed.ok, 'invalid consumer code is rejected', typesRed.ok ? 'type check passed when it should have failed' : '');
+  const redNamesPolicy = typesRed.output.includes("not assignable to type 'EmptyEvidencePolicy");
+  report(
+    !typesRed.ok && redNamesPolicy,
+    'invalid consumer code is rejected for the planted reason',
+    typesRed.ok ? 'type check passed when it should have failed' : redNamesPolicy ? '' : typesRed.output.slice(0, 400),
+  );
 
   console.log('\n8. Check every package carries the same version');
   const versions = new Set<string>();

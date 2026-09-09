@@ -5,6 +5,7 @@ const adapter = vitest({
   cwd: 'project',
   configFile: 'vitest.config.js',
   reportFile: 'reports/results.json',
+  args: ['--configLoader', 'runner'],
   rules: {
     testsPass: true,
     noFlakyTests: true,

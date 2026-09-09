@@ -245,6 +245,11 @@ FAIL     one or more Rules were breached
 REFUSE   the Check could not decide safely
 ```
 
+A PASS that inspected zero targets becomes REFUSE by default, because it cannot
+establish the Gate's Rules. A Gate whose empty evidence is intentionally valid can
+set `policies: { emptyEvidence: 'allow' }`; unknown counts (`inspected: null`)
+are not treated as zero.
+
 ## Built-in Adapters
 
 You do not need to build every Gate yourself.
@@ -276,7 +281,7 @@ const gate = defineGate({
 });
 ```
 
-Completed failure exits breach the selected Rule. Missing executables, timeouts, signals, output overflow, and explicitly unclassified exits produce **REFUSE**. Use `commands()` from the same subpath for deterministic sequential or bounded-parallel command groups.
+Completed failure exits breach the selected Rule. Missing executables, timeouts, signals, output overflow, and explicitly unclassified exits produce **REFUSE**. Each command runs in its own process group. Timeouts, output overflow, and an interrupted Redproof process stop that group. Use `commands()` from the same subpath for deterministic sequential or bounded-parallel command groups.
 
 See **[Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/commands.md)** for exit-code policy,
 command groups, and what a Check reports about itself.

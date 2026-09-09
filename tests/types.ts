@@ -1,7 +1,7 @@
 import { testing, vitest, report, runner } from '@redproof/testing';
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
 import { stryker } from '@redproof/stryker';
-import { command, commands } from 'redproof/command';
+import { command, commands, executeCommand, type CommandExecutionOptions } from 'redproof/command';
 import {
   counting,
   defineAdapter,
@@ -38,6 +38,13 @@ const scan: Scan = {
   finishedAt: '',
   inspected: 1,
 };
+
+const executionOptions: CommandExecutionOptions = {
+  command: 'node',
+  cwd: '/project',
+  timeoutMs: 1_000,
+};
+void executeCommand(executionOptions);
 
 const R1 = defineRule({ id: 'r1', description: 'R1' });
 const R2 = defineRule({ id: 'r2', description: 'R2' });
@@ -139,6 +146,16 @@ const adapter = defineAdapter({
   },
 });
 const gate = defineGate({ id: 'g', adapter });
+defineGate({ id: 'optional', adapter, policies: { emptyEvidence: 'allow' } });
+
+// @ts-expect-error empty-evidence policy accepts only refuse or allow.
+defineGate({ id: 'bad-policy', adapter, policies: { emptyEvidence: 'yes' } });
+
+// @ts-expect-error unknown Gate policies are rejected.
+defineGate({ id: 'unknown-policy', adapter, policies: { emptyInspection: 'allow' } });
+
+// @ts-expect-error the former top-level boolean is not part of the Gate contract.
+defineGate({ id: 'legacy-policy', adapter, allowEmptyInspection: true });
 
 defineProofs(gate, [proof.green('green')]);
 
@@ -153,6 +170,7 @@ const composedRules = defineRules({
 
 const nativeGate = defineGate({
   id: 'native-composed',
+  policies: { emptyEvidence: 'refuse' },
   rules: composedRules,
   check: defineCheck(composedRules, {
     description: 'native composed check',
@@ -269,6 +287,11 @@ vitest({
 vitest({ cwd: 1, rules: { testsPass: true } });
 // @ts-expect-error reportFile must be a path string.
 vitest({ reportFile: 1, rules: { testsPass: true } });
+vitest({ timeoutMs: 60_000, maxOutputBytes: 5_000_000, rules: { testsPass: true } });
+// @ts-expect-error timeoutMs must be a number.
+vitest({ timeoutMs: 'slow', rules: { testsPass: true } });
+// @ts-expect-error maxOutputBytes must be a number.
+vitest({ maxOutputBytes: 'large', rules: { testsPass: true } });
 
 // An unknown option name must be rejected, not accepted and then ignored.
 
@@ -285,7 +308,13 @@ vitest({ rules: { testsPass: true, noPurpleTests: true } });
 vitest({ rules: { noPurpleTests: true } });
 
 testing({
-  runner: runner.command({ command: 'npm', cwd: 'packages/app', args: () => ['test'] }),
+  runner: runner.command({
+    command: 'npm',
+    cwd: 'packages/app',
+    args: () => ['test'],
+    timeoutMs: 60_000,
+    maxOutputBytes: 5_000_000,
+  }),
   report: report.junitXml(),
   // @ts-expect-error noPurpleTests is not a testing Rule.
   rules: { testsPass: true, noPurpleTests: true },

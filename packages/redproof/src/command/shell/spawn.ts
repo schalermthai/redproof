@@ -1,23 +1,28 @@
 import { spawn } from 'node:child_process';
-import type { RuleRef } from '../../domain/index.ts';
-import type { CommandCheckOptions } from '../core/options.ts';
+import {
+  DEFAULT_MAX_OUTPUT_BYTES,
+  validateCommandExecutionOptions,
+  type CommandExecutionOptions,
+} from '../core/options.ts';
 import { outputDetail, type CommandExecution } from '../core/outcome.ts';
+import { superviseProcessTree, terminateProcessTree } from './process-tree.ts';
 
-const FORCE_KILL_AFTER_MS = 250;
+/** After a normal exit, how long the pipes may stay open before the rest of the group is stopped. */
+const PIPE_RELEASE_GRACE_MS = 250;
 
-export function executeCommand(
-  options: CommandCheckOptions<RuleRef>,
-  cwd: string,
-  maxOutputBytes: number,
-): Promise<CommandExecution> {
+export function executeCommand(options: CommandExecutionOptions): Promise<CommandExecution> {
+  validateCommandExecutionOptions(options);
+  const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+
   return new Promise(resolveExecution => {
     let child: ReturnType<typeof spawn>;
     try {
       child = spawn(options.command, options.args ?? [], {
-        cwd,
+        cwd: options.cwd,
         env: { ...process.env, ...options.env },
         shell: false,
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
       });
     } catch (error) {
       resolveExecution({
@@ -28,6 +33,7 @@ export function executeCommand(
       });
       return;
     }
+    superviseProcessTree(child);
 
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
@@ -35,7 +41,7 @@ export function executeCommand(
     let settled = false;
     let interruption: 'timeout' | 'output-limit' | undefined;
     let timeout: NodeJS.Timeout | undefined;
-    let forceKill: NodeJS.Timeout | undefined;
+    let termination: Promise<void> | undefined;
 
     const captured = () => ({
       stdout: Buffer.concat(stdout).toString('utf8'),
@@ -46,16 +52,21 @@ export function executeCommand(
       if (settled) return;
       settled = true;
       if (timeout) clearTimeout(timeout);
-      if (forceKill) clearTimeout(forceKill);
       resolveExecution(outcome);
     };
 
+    const releasePipes = (): void => {
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    };
+
+    const terminate = (): Promise<void> =>
+      terminateProcessTree(child).then(releasePipes, releasePipes);
+
     const interrupt = (reason: 'timeout' | 'output-limit'): void => {
-      if (interruption) return;
+      if (interruption || termination) return;
       interruption = reason;
-      child.kill();
-      forceKill = setTimeout(() => child.kill('SIGKILL'), FORCE_KILL_AFTER_MS);
-      forceKill.unref();
+      termination = terminate();
     };
 
     const capture = (target: Buffer[], chunk: Buffer | string): void => {
@@ -71,7 +82,7 @@ export function executeCommand(
     child.stderr?.on('data', chunk => capture(stderr, chunk));
 
     child.once('error', error => {
-      if (interruption) return;
+      if (interruption || termination) return;
       settle({
         kind: 'refused',
         code: 'command-unavailable',
@@ -80,8 +91,20 @@ export function executeCommand(
       });
     });
 
-    child.once('close', (code, signal) => {
+    child.once('exit', (_, signal) => {
+      if (interruption) return;
+      if (signal) {
+        termination ??= terminate();
+        return;
+      }
+      const grace = setTimeout(() => { termination ??= terminate(); }, PIPE_RELEASE_GRACE_MS);
+      grace.unref();
+      child.once('close', () => clearTimeout(grace));
+    });
+
+    child.once('close', async (code, signal) => {
       const output = captured();
+      if (termination) await termination;
       if (interruption === 'timeout') {
         const detail = outputDetail(output.stdout, output.stderr);
         settle({

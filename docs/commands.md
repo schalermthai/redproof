@@ -10,6 +10,7 @@ when you are not sure which one you need.
 - [One command](#one-command)
 - [Exit codes decide the verdict](#exit-codes-decide-the-verdict)
 - [When a command REFUSES](#when-a-command-refuses)
+- [Reuse process execution](#reuse-process-execution)
 - [Several commands](#several-commands)
 - [Order and precedence](#order-and-precedence)
 - [What a Check says about itself](#what-a-check-says-about-itself)
@@ -32,7 +33,13 @@ const check = command({
 
 Relative `cwd` values resolve inside the Gate workspace and cannot escape it.
 Child output is captured for diagnostics. It is never inherited by reporter
-output, so a machine-readable report stays clean.
+output, so a machine-readable report stays clean. Each command runs in its own
+process group with no terminal, so it cannot prompt. A timeout or output
+overflow stops that group before the Check returns. A process that starts its
+own session is outside the group. Such a process can keep the output pipes
+open after the command has exited. The Check then stops what is left of the
+group and releases the pipes instead of waiting for that process. Bad options
+throw at once, before any process starts.
 
 ## Exit codes decide the verdict
 
@@ -67,6 +74,38 @@ pass, and it is never a rule breach. These five cases produce it.
 - The process is terminated by a signal.
 - Combined stdout and stderr exceed `maxOutputBytes`, which defaults to 10 MiB.
 - The process returns an exit code that no explicit policy covers.
+
+## Reuse process execution
+
+An Adapter that needs to parse structured output can reuse the same supervised
+process shell without adopting the command Check's exit-code policy:
+
+```ts
+import { executeCommand } from 'redproof/command';
+
+declare const root: string;
+
+const execution = await executeCommand({
+  command: process.execPath,
+  args: ['tool.mjs', '--json'],
+  cwd: root,
+  timeoutMs: 60_000,
+  maxOutputBytes: 10 * 1024 * 1024,
+});
+
+if (execution.kind === 'completed') {
+  console.log(execution.exitCode, execution.stdout, execution.stderr);
+} else {
+  console.error(execution.code, execution.message, execution.detail);
+}
+```
+
+`executeCommand()` owns spawning, bounded capture, timeout, and process-group
+termination. It forwards SIGINT, SIGTERM, and SIGHUP from its own process to
+the group, and it kills the group when its own process exits. It does not
+decide PASS, FAIL, or which Rule an exit code breaches. The caller owns that
+policy and must supply an absolute `cwd` that it has already confined, such as
+the Gate root.
 
 ## Several commands
 
