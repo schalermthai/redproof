@@ -1,7 +1,7 @@
 # Red proving Redproof
 
-Redproof runs Redproof on itself. Four Gates guard this repository. They hold
-22 Rules and 27 Proofs, and they run on every push. This page is not a guide
+Redproof runs Redproof on itself. Five Gates guard this repository. They hold
+27 Rules and 36 Proofs, and they run on every push. This page is not a guide
 to running them. It shows what that looks like, and it makes one point: a Gate
 can guard anything that leaves evidence. A module graph, a purity rule, the
 documentation, and the release inventory are all guarded the same way.
@@ -12,28 +12,31 @@ documentation, and the release inventory are all guarded the same way.
 - [Gate 2: static-contracts](#gate-2-static-contracts)
 - [How a proof drives tidy-up](#how-a-proof-drives-tidy-up)
 - [Gate 3: test-health](#gate-3-test-health)
-- [Gate 4: repository-policy](#gate-4-repository-policy)
+- [Gate 4: adapter-contracts](#gate-4-adapter-contracts)
+- [Gate 5: repository-policy](#gate-5-repository-policy)
 - [What this shows](#what-this-shows)
 
 ## The suite at a glance
 
 | Gate | The promise | Built from | Rules | Proofs |
 | --- | --- | --- | --- | --- |
-| `architecture` | The structure stays intact. Imports point inward. The core stays pure. | `@redproof/dependency-cruiser` plus a TypeScript AST scan | 12 | 13 |
+| `architecture` | The structure stays intact. Imports point inward. The core stays pure. | `@redproof/dependency-cruiser` plus a TypeScript AST scan | 12 | 14 |
 | `static-contracts` | The code compiles. Every checked example in the docs compiles. Fragment debt cannot grow. | `redproof/command` with three parallel commands | 3 | 4 |
 | `test-health` | Every test ran and passed. None was skipped. | `@redproof/testing` with a JUnit report | 2 | 3 |
+| `adapter-contracts` | Every built-in Adapter keeps the five documented verdict and evidence contracts. | Five original suites plus five package-owned TCK lanes through `redproof/command` | 5 | 8 |
 | `repository-policy` | A release ships whole. Docs do not link to missing files. | A native Check over a pure policy model | 5 | 7 |
 
-`npm run self:check` runs the four Gates in isolated copies, in parallel:
+`npm run self:check` runs the five Gates in isolated copies, in parallel:
 
 ```text
  ✓ gates/architecture.ts (12 rules) 7.79s
+ ✓ gates/adapter-contracts.ts (5 rules) 1.63s
  ✓ gates/repository-policy.ts (5 rules) 469ms
  ✓ gates/static-contracts.ts (3 rules) 12.52s
  ✓ gates/test-health.ts (2 rules) 44.83s
 
- Gates      4 passed (4)
- Rules      22 held (22)
+ Gates      5 passed (5)
+ Rules      27 held (27)
 ```
 
 `npm run self:prove` then breaks each Rule on purpose, one defect at a time,
@@ -83,7 +86,7 @@ Proof GREEN:
 
 A reviewer can read this without opening the code. Each Rule is a sentence.
 Each Proof names the defect it plants and the verdict it expects. Run
-`npm run self:describe` to print all four Gates.
+`npm run self:describe` to print all five Gates.
 
 ## Gate 1: architecture
 
@@ -104,7 +107,7 @@ Source: [`gates/architecture.ts`](../gates/architecture.ts).
 
   entrypoints   index.ts, cli.ts        reach a context only through its index.ts
        │
-  shell         <context>/shell/**      the 21 approved effect boundaries live here
+  shell         <context>/shell/**      most of the 23 approved effect boundaries live here
        │
   core          <context>/core/**       pure: no fs, process, clock, subprocess, shell
        │
@@ -146,7 +149,7 @@ enforce this with a TypeScript AST scan in
 - `core-no-ambient-inputs`: a core module cannot read `process.cwd()` or
   `process.env`. The shell reads them and passes values in.
 - `effects-allowlisted-boundaries`: filesystem, process, clock, randomness,
-  timer, and subprocess effects may appear only in the 21 files listed in
+  timer, and subprocess effects may appear only in the 23 files listed in
   [`gates/support/effects-model.ts`](../gates/support/effects-model.ts).
 - `core-tests-no-io-helpers`: a core test cannot import a filesystem,
   subprocess, or workspace fixture helper.
@@ -255,9 +258,33 @@ a finding, not an escape.
 **The proofs.** One creates a test file with one failing test. One creates a
 test file with one skipped test. Each expects FAIL.
 
-## Gate 4: repository-policy
+## Gate 4: adapter-contracts
 
-**The promise.** Five packages ship together. They share one version. Every
+**The promise.** Every built-in Adapter validates options before execution,
+REFUSES unavailable runs, keeps parsers and evidence models pure, declares
+report capabilities where they apply, and creates Breaches only from selected
+structured evidence.
+
+Source: [`gates/adapter-contracts.ts`](../gates/adapter-contracts.ts).
+
+Ten small contract commands run in parallel: one legacy suite and one
+package-owned TCK lane per Rule. Each RED proof makes one precise promise
+false: it removes constructor validation, corrupts runner mapping, introduces
+I/O into a pure model, reads ambient process state, overstates JUnit
+capabilities, or drops a selected ESLint finding. A flooded output budget
+supplies the REFUSE proof.
+
+The command timeout is 60 seconds. It is a safety net, not a speed budget. The
+suites finish much sooner, but a shared machine can be many times slower. A
+tight timeout turns a slow machine into a false refusal, which reads like a
+broken contract.
+
+See **[Gating Adapter contracts](adapter-contract-gates.md)** for the contract
+matrix and the RED-first sequence used to build it.
+
+## Gate 5: repository-policy
+
+**The promise.** Six packages ship together. They share one version. Every
 one of them is in every build and release step. The public surfaces are
 declared and backed by source. CI keeps its verification steps. No document
 links to a missing file.
@@ -271,7 +298,7 @@ the five Rules over those values. The Check is composed with the
 what was inspected, maps findings to breaches, and REFUSES when an input
 cannot be read.
 
-**Examples.** Someone adds a sixth package and forgets the version setter:
+**Examples.** Someone adds a seventh package and forgets the version setter:
 `repository/packages-inventory-is-consistent` breaches. Someone bumps one
 package to a new version and forgets the others:
 `repository/package-versions-and-internal-pins-align` breaches. A document

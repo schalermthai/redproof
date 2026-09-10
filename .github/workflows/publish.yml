@@ -96,6 +96,7 @@ jobs:
           mkdir -p artifacts
           npm pack \
             -w redproof \
+            -w @redproof/adapter-tck \
             -w @redproof/eslint \
             -w @redproof/dependency-cruiser \
             -w @redproof/stryker \
@@ -113,7 +114,7 @@ jobs:
       - name: Publish to npm
         if: github.event_name == 'release' || github.event.inputs.dry-run == 'false'
         run: |
-          for PKG in redproof @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing; do
+          for PKG in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing; do
             echo "Publishing $PKG"
             npm publish -w "$PKG" --tag "${{ steps.version.outputs.npm-tag }}" --provenance
           done

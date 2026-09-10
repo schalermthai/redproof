@@ -1,6 +1,6 @@
 import { Stryker } from '@stryker-mutator/core';
 import { readFile, realpath } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import {
   counting,
   defineAdapter,
@@ -132,9 +132,12 @@ const STRYKER_RULE_NAMES = [
   'mutationScore',
 ] as const;
 
-export function stryker<const O extends StrykerRuleOptions>(
-  options: StrykerAdapterOptions<O> & { readonly rules: NoUnknownKeys<O, StrykerRuleOptions> },
-): Adapter<StrykerRuleCatalog<O>> {
+export function stryker<const O extends StrykerAdapterOptions<StrykerRuleOptions>>(
+  options: O
+    & NoUnknownKeys<O, StrykerAdapterOptions<StrykerRuleOptions>>
+    & { readonly rules: NoUnknownKeys<O['rules'], StrykerRuleOptions> },
+): Adapter<StrykerRuleCatalog<O['rules']>> {
+  rejectUnknownKeys(options, ['cwd', 'configFile', 'rules'], 'Stryker adapter');
   rejectUnknownKeys(options.rules, STRYKER_RULE_NAMES, 'Stryker rule');
 
   if (!options.rules.mutantsDetected
@@ -144,15 +147,31 @@ export function stryker<const O extends StrykerRuleOptions>(
   }
 
   if (options.rules.mutationScore) {
+    rejectUnknownKeys(options.rules.mutationScore, ['minimum'], 'Stryker mutationScore');
     const minimum = options.rules.mutationScore.minimum;
     if (!Number.isFinite(minimum) || minimum < 0 || minimum > 100) {
       throw new Error('Stryker mutationScore.minimum must be between 0 and 100.');
     }
   }
   if (options.rules.noNewUndetectedMutants) {
+    rejectUnknownKeys(
+      options.rules.noNewUndetectedMutants,
+      ['acceptedMutantsFile'],
+      'Stryker noNewUndetectedMutants',
+    );
     const baselineFile = options.rules.noNewUndetectedMutants.acceptedMutantsFile;
-    if (typeof baselineFile !== 'string' || baselineFile.trim() === '') {
-      throw new Error('Stryker noNewUndetectedMutants.acceptedMutantsFile must be a non-empty string.');
+    if (typeof baselineFile !== 'string' || baselineFile.trim() === '' || isAbsolute(baselineFile)) {
+      throw new Error(
+        'Stryker noNewUndetectedMutants.acceptedMutantsFile must be a non-empty string containing a relative path.',
+      );
+    }
+  }
+  for (const [name, path] of [
+    ['cwd', options.cwd],
+    ['configFile', options.configFile],
+  ] as const) {
+    if (path !== undefined && (!path.trim() || isAbsolute(path))) {
+      throw new Error(`Stryker ${name} must be a relative path.`);
     }
   }
 
@@ -176,8 +195,8 @@ export function stryker<const O extends StrykerRuleOptions>(
     };
   }
 
-  const rules = defineRules(catalog as StrykerRuleCatalog<O>);
-  type Ref = RuleRefOfCatalog<StrykerRuleCatalog<O>>;
+  const rules = defineRules(catalog as StrykerRuleCatalog<O['rules']>);
+  type Ref = RuleRefOfCatalog<StrykerRuleCatalog<O['rules']>>;
   const rulesByAlias = rules as unknown as Readonly<Record<string, Rule<Ref>>>;
   const cwd = options.cwd ?? '.';
   const configFile = options.configFile;

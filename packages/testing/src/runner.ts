@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { rejectUnknownKeys, type NoUnknownKeys } from 'redproof';
 import { executeCommand, type CommandExecution } from 'redproof/command';
 import type { CommandPlan, TestRunner, TestRunnerContext, TestRunnerResult } from './model.ts';
 import { confineCanonicalTestingPath, resolveTestingPath } from './core/paths.ts';
@@ -41,7 +42,15 @@ function describePlan(plan: CommandPlan): string {
   return plan.args?.length ? `run ${name} ${plan.args.join(' ')}` : `run ${name}`;
 }
 
-export function command(options: CommandRunnerOptions): TestRunner {
+export function command<const O extends CommandRunnerOptions>(
+  options: O & NoUnknownKeys<O, CommandRunnerOptions>,
+): TestRunner {
+  rejectUnknownKeys(
+    options,
+    ['command', 'args', 'cwd', 'env', 'description', 'timeoutMs', 'maxOutputBytes'],
+    'testing command runner',
+  );
+  if (!options.command.trim()) throw new Error('command must not be empty.');
   validatePositiveInteger('timeoutMs', options.timeoutMs);
   validatePositiveInteger('maxOutputBytes', options.maxOutputBytes);
   const plan = planFor(options);
@@ -52,7 +61,21 @@ export function command(options: CommandRunnerOptions): TestRunner {
     argsFor: ctx => argsFor(options.args, ctx),
 
     async run(ctx): Promise<TestRunnerResult> {
-      const args = argsFor(options.args, ctx);
+      const computedArgs = (() => {
+        try {
+          return argsFor(options.args, ctx);
+        } catch (error) {
+          return error instanceof Error ? error : new Error(String(error));
+        }
+      })();
+      if (computedArgs instanceof Error) {
+        return {
+          kind: 'unavailable',
+          message: `Could not prepare test command ${options.command}.`,
+          detail: computedArgs.message,
+        };
+      }
+      const args = computedArgs;
       const cwd = resolveTestingPath(ctx.root, options.cwd ?? '.');
       if (cwd.kind === 'outside') {
         return {

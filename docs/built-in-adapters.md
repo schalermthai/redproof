@@ -74,6 +74,11 @@ refuses because the report is not found. A keyed `outputFile` works when
 `reportFile` matches its `json` entry. When `reportFile` is absent, Redproof
 continues to direct Vitest to a private temporary JSON report.
 Empty or absolute `reportFile` values are rejected before Vitest starts.
+
+Every Vitest path option must be a non-empty relative path. That covers `cwd`,
+`configFile`, `reportFile`, and each entry of `files`. An empty value or an
+absolute value throws when the Gate file loads. The raw `args` list is not
+checked, so it can still carry an absolute path.
 The report's parent directory may be absent before the run when Vitest creates
 it while writing the report. Redproof removes newly created report directories
 afterward when they remain empty.
@@ -332,6 +337,26 @@ or escaping entry refuses. An accepted mutant that the tests now detect
 refuses; remove it from the baseline.
 
 For a useful RED proof, weaken the test suite and confirm Stryker notices the loss of test strength.
+
+## Path rules
+
+Adapter path options must be non-empty relative paths. The check runs when the
+Gate file loads, not when the tool runs.
+
+| Adapter | Options that must be relative |
+| --- | --- |
+| ESLint | each entry of `files` |
+| dependency-cruiser | `configFile`, `knownViolationsFile`, each entry of `files` |
+| Stryker | `cwd`, `configFile`, `rules.noNewUndetectedMutants.acceptedMutantsFile` |
+| Vitest | `cwd`, `configFile`, `reportFile`, each entry of `files` |
+
+The `command` option of a test command runner is not a path option. An absolute
+command is still allowed.
+
+These rules reject an absolute path. They do not reject a `..` segment, so they
+are not a containment boundary. Stryker `cwd` and the Vitest paths are confined
+to the Gate root at run time. The ESLint and dependency-cruiser `files` lists
+are not confined.
 
 ## Next
 

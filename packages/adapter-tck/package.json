@@ -1,7 +1,7 @@
 {
-  "name": "@redproof/dependency-cruiser",
+  "name": "@redproof/adapter-tck",
   "version": "0.10.0",
-  "description": "Redproof adapter for dependency-cruiser architecture rules.",
+  "description": "Technology compatibility kit for Redproof adapters.",
   "type": "module",
   "exports": {
     ".": {
@@ -17,18 +17,15 @@
     "node": ">=24"
   },
   "dependencies": {
-    "redproof": "0.10.0"
-  },
-  "devDependencies": {
-    "@redproof/adapter-tck": "0.10.0"
+    "typescript": "^5.9.0"
   },
   "peerDependencies": {
-    "dependency-cruiser": ">=18"
+    "redproof": "0.10.0"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/schalermthai/redproof.git",
-    "directory": "packages/dependency-cruiser"
+    "directory": "packages/adapter-tck"
   },
   "publishConfig": {
     "access": "public"

@@ -12,6 +12,7 @@ const REPO = resolve(import.meta.dirname, '..');
 
 const PACKAGES = [
   { name: 'redproof', tarballPrefix: 'redproof-', probe: 'defineGate' },
+  { name: '@redproof/adapter-tck', tarballPrefix: 'redproof-adapter-tck-', probe: 'runAdapterTck' },
   { name: '@redproof/eslint', tarballPrefix: 'redproof-eslint-', probe: 'eslint' },
   { name: '@redproof/dependency-cruiser', tarballPrefix: 'redproof-dependency-cruiser-', probe: 'dependencyCruiser' },
   { name: '@redproof/stryker', tarballPrefix: 'redproof-stryker-', probe: 'stryker' },
@@ -236,6 +237,7 @@ try {
 
   const green = "import { defineGate, defineRule } from 'redproof';\n"
     + "import { command, commands, executeCommand } from 'redproof/command';\n"
+    + "import { adapterTckCases, type AdapterTckSpec } from '@redproof/adapter-tck';\n"
     + "import { stryker } from '@redproof/stryker';\n"
     + "import { vitest } from '@redproof/testing';\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
@@ -245,6 +247,7 @@ try {
     + "export const mutation = stryker({ cwd: 'packages/parser', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } });\n"
     + "export const tests = vitest({ cwd: 'packages/parser', reportFile: 'results.json', timeoutMs: 60_000, maxOutputBytes: 5_000_000, rules: { testsPass: true, noFlakyTests: true } });\n"
     + "export const optional = defineGate({ id: 'optional', rules: { command: rule }, check, policies: { emptyEvidence: 'allow' } });\n"
+    + "export const tck = [adapterTckCases, undefined as unknown as AdapterTckSpec];\n"
     + "export const gate = defineGate;\n";
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
@@ -270,13 +273,26 @@ try {
     const dir = pkg.name === 'redproof' ? 'redproof' : pkg.name.replace('@redproof/', '');
     const manifest = JSON.parse(
       await readFile(join(REPO, 'packages', dir, 'package.json'), 'utf8'),
-    ) as { version?: string; dependencies?: Record<string, string> };
+    ) as {
+      version?: string;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      peerDependencies?: Record<string, string>;
+    };
 
     versions.add(manifest.version ?? 'missing');
 
-    const internal = manifest.dependencies?.redproof;
-    if (internal !== undefined) {
-      report(internal === manifest.version, `${pkg.name}: depends on redproof@${manifest.version}`, `found ${internal}`);
+    for (const section of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
+      for (const dependency of ['redproof', '@redproof/adapter-tck'] as const) {
+        const internal = manifest[section]?.[dependency];
+        if (internal !== undefined) {
+          report(
+            internal === manifest.version,
+            `${pkg.name}: pins ${dependency}@${manifest.version} in ${section}`,
+            `found ${internal}`,
+          );
+        }
+      }
     }
   }
 

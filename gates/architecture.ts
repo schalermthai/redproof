@@ -5,6 +5,7 @@ import { effectBoundaries } from './checks/effect-boundaries.ts';
 const dependencies = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
   files: [
+    'packages/adapter-tck/src',
     'packages/redproof/src',
     'packages/eslint/src',
     'packages/dependency-cruiser/src',

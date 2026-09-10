@@ -289,6 +289,8 @@ command groups, and what a Check reports about itself.
 See **[Composing Redproof](https://github.com/schalermthai/redproof/blob/main/docs/composition.md)** to create your own Gates, Rules, Checks, Proofs, and Mutations.
 
 See **[Custom Adapter](https://github.com/schalermthai/redproof/blob/main/docs/custom-adapter.md)** when a tool brings its own policy model, and for the guidelines that keep an Adapter's verdicts honest.
+Adapter authors can run those guidelines as executable contracts with
+**[`@redproof/adapter-tck`](https://github.com/schalermthai/redproof/tree/main/packages/adapter-tck)**.
 
 For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**.
 
@@ -307,6 +309,7 @@ npm install --save-dev @redproof/testing
 npm install --save-dev @redproof/eslint
 npm install --save-dev @redproof/dependency-cruiser
 npm install --save-dev @redproof/stryker
+npm install --save-dev @redproof/adapter-tck
 ```
 
 Create `redproof.config.ts`:

@@ -1,5 +1,6 @@
 import { testing, vitest, report, runner } from '@redproof/testing';
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
+import { eslint } from '@redproof/eslint';
 import { stryker } from '@redproof/stryker';
 import { command, commands, executeCommand, type CommandExecutionOptions } from 'redproof/command';
 import {
@@ -306,6 +307,8 @@ defineConfig({ execution: { mode: 'copies', maxAtOne: 4 } });
 vitest({ rules: { testsPass: true, noPurpleTests: true } });
 // @ts-expect-error noPurpleTests is not a testing Rule.
 vitest({ rules: { noPurpleTests: true } });
+// @ts-expect-error mystery is not a Vitest adapter option.
+vitest({ rules: { testsPass: true }, mystery: true });
 
 testing({
   runner: runner.command({
@@ -319,8 +322,33 @@ testing({
   // @ts-expect-error noPurpleTests is not a testing Rule.
   rules: { testsPass: true, noPurpleTests: true },
 });
+testing({
+  runner: runner.command({ command: 'npm' }),
+  report: report.junitXml(),
+  rules: { testsPass: true },
+  // @ts-expect-error mystery is not a testing adapter option.
+  mystery: true,
+});
+
+// @ts-expect-error mystery is not a testing command-runner option.
+runner.command({ command: 'npm', mystery: true });
+
+eslint({ rules: { semi: 'semi' } });
+// @ts-expect-error mystery is not an ESLint adapter option.
+eslint({ rules: { semi: 'semi' }, mystery: true });
+const eslintRuleId: 'eslint/semi' = eslint({ rules: { semi: 'semi' } }).rules.semi.id;
+void eslintRuleId;
+
+dependencyCruiser({ rules: { cycles: 'no-cycles' } });
+// @ts-expect-error mystery is not a dependency-cruiser adapter option.
+dependencyCruiser({ rules: { cycles: 'no-cycles' }, mystery: true });
+const cruiserRuleId: 'dependency-cruiser/no-cycles' =
+  dependencyCruiser({ rules: { cycles: 'no-cycles' } }).rules.cycles.id;
+void cruiserRuleId;
 
 stryker({ rules: { mutantsDetected: true } });
+// @ts-expect-error mystery is not a Stryker adapter option.
+stryker({ rules: { mutantsDetected: true }, mystery: true });
 // @ts-expect-error cwd must be a path string.
 stryker({ cwd: 1, rules: { mutantsDetected: true } });
 // @ts-expect-error acceptedMutantsFile must be a path string.

@@ -428,14 +428,14 @@ test('a test command that cannot start refuses as unavailable and names the comm
       assert.equal(missing.message, 'Could not start test command redproof-no-such-binary.');
       assert.match(missing.detail ?? '', /command-unavailable/);
     }
-
-    const empty = await runner.command({ command: '' }).run({ root, reportFile: join(root, 'report.json') });
-    assert.equal(empty.kind, 'unavailable');
-    if (empty.kind === 'unavailable') {
-      assert.match(empty.message, /Could not start test command/);
-      assert.match(empty.detail ?? '', /command must not be empty/);
-    }
   });
+});
+
+test('an invalid test command is rejected before a runner exists', () => {
+  assert.throws(
+    () => runner.command({ command: '' }),
+    /command must not be empty/u,
+  );
 });
 
 test('a private report is requested from Vitest when no configured report file is named', async () => {

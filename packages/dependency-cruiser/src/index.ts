@@ -1,13 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import {
   counting,
   defineAdapter,
   defineRules,
   result,
   type Adapter,
+  type NoUnknownKeys,
   type Rule,
+  rejectUnknownKeys,
 } from 'redproof';
 import {
   violationsToBreaches,
@@ -161,14 +163,48 @@ async function readKnownViolations(path: string): Promise<KnownViolations | Erro
   return parsed as KnownViolations;
 }
 
-export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
-  options: DependencyCruiserAdapterOptions<M>,
-): Adapter<DependencyCruiserRuleCatalog<M>> {
+export function dependencyCruiser<
+  const O extends DependencyCruiserAdapterOptions<DependencyCruiserRuleInput>,
+>(
+  options: O
+    & NoUnknownKeys<O, DependencyCruiserAdapterOptions<DependencyCruiserRuleInput>>,
+): Adapter<DependencyCruiserRuleCatalog<O['rules']>> {
+  type M = O['rules'];
   type Catalog = DependencyCruiserRuleCatalog<M>;
   type Ref = Catalog[keyof Catalog]['id'];
 
+  rejectUnknownKeys(
+    options,
+    ['files', 'configFile', 'knownViolationsFile', 'rules'],
+    'dependency-cruiser adapter',
+  );
+  const configuredRules = Object.entries(options.rules);
+  if (configuredRules.length === 0) {
+    throw new Error('dependency-cruiser adapter requires at least one Redproof rule.');
+  }
+  for (const [alias, foreignName] of configuredRules) {
+    if (!alias.trim() || !foreignName.trim()) {
+      throw new Error(
+        `dependency-cruiser rule ${JSON.stringify(alias)} must name a non-empty rule.`,
+      );
+    }
+  }
+  for (const [name, path] of [
+    ['configFile', options.configFile],
+    ['knownViolationsFile', options.knownViolationsFile],
+  ] as const) {
+    if (path !== undefined && (!path.trim() || isAbsolute(path))) {
+      throw new Error(`dependency-cruiser ${name} must be a relative path.`);
+    }
+  }
+  for (const file of options.files ?? []) {
+    if (!file.trim() || isAbsolute(file)) {
+      throw new Error('dependency-cruiser files must contain non-empty relative paths.');
+    }
+  }
+
   const rules = defineRules(Object.fromEntries(
-    Object.entries(options.rules).map(([alias, foreignName]) => [
+    configuredRules.map(([alias, foreignName]) => [
       alias,
       {
         id: `dependency-cruiser/${foreignName}`,
@@ -178,7 +214,7 @@ export function dependencyCruiser<const M extends DependencyCruiserRuleInput>(
   ) as Catalog);
 
   const byForeignRule = new Map<string, Rule<Ref>>();
-  for (const [alias, foreignName] of Object.entries(options.rules)) {
+  for (const [alias, foreignName] of configuredRules) {
     byForeignRule.set(foreignName, rules[alias as keyof M] as Rule<Ref>);
   }
 

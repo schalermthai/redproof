@@ -7,13 +7,17 @@ import { resolve } from 'node:path';
 
 const PACKAGE_DIRS = [
   'packages/redproof',
+  'packages/adapter-tck',
   'packages/eslint',
   'packages/dependency-cruiser',
   'packages/stryker',
   'packages/testing',
 ] as const;
 
-const INTERNAL_DEPENDENCY = 'redproof';
+const INTERNAL_DEPENDENCIES = new Set([
+  'redproof',
+  '@redproof/adapter-tck',
+]);
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
@@ -21,6 +25,8 @@ type Manifest = {
   name?: string;
   version?: string;
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
 };
 
 function readVersionArgument(argv: readonly string[]): string {
@@ -45,8 +51,10 @@ async function setVersion(dir: string, version: string): Promise<void> {
 
   manifest.version = version;
 
-  if (manifest.dependencies?.[INTERNAL_DEPENDENCY] !== undefined) {
-    manifest.dependencies[INTERNAL_DEPENDENCY] = version;
+  for (const section of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
+    for (const dependency of Object.keys(manifest[section] ?? {})) {
+      if (INTERNAL_DEPENDENCIES.has(dependency)) manifest[section]![dependency] = version;
+    }
   }
 
   await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`);

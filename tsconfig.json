@@ -19,6 +19,9 @@
       "redproof/command": [
         "packages/redproof/src/command/index.ts"
       ],
+      "@redproof/adapter-tck": [
+        "packages/adapter-tck/src/index.ts"
+      ],
       "@redproof/eslint": [
         "packages/eslint/src/index.ts"
       ],
