@@ -113,10 +113,20 @@ jobs:
 
       - name: Publish to npm
         if: github.event_name == 'release' || github.event.inputs.dry-run == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NPM_TAG: ${{ steps.version.outputs.npm-tag }}
         run: |
+          set -euo pipefail
+
           for PKG in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing; do
+            if npm view "${PKG}@${VERSION}" version --json >/dev/null 2>&1; then
+              echo "Skipping ${PKG}@${VERSION}: already published"
+              continue
+            fi
+
             echo "Publishing $PKG"
-            npm publish -w "$PKG" --tag "${{ steps.version.outputs.npm-tag }}" --provenance
+            npm publish -w "$PKG" --tag "$NPM_TAG" --provenance
           done
 
       - name: Report a dry run
