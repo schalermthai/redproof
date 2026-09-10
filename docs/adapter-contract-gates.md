@@ -60,7 +60,7 @@ inventing report capabilities for them would make the design less honest.
    evidence from the wrapped external tool.
 5. Prove the Gate causally. Each Rule has a RED proof that removes or corrupts
    the behavior it protects. The suite also has a GREEN proof and a REFUSE proof
-   that terminates one wrapped contract process by signal.
+   that makes one wrapped contract process exceed its output budget.
 6. Keep compile-time and runtime validation together. Public type probes reject
    unknown option keys for TypeScript consumers, while constructor probes cover
    JavaScript and type-stripped Gate loading.
@@ -111,15 +111,22 @@ public behavior they protect.
 
 The `runAdapterTck()` helper owns every assertion. A registration must provide
 a valid construction, bad-option probes, an unavailable execution, selected,
-clean, and unselected structured evidence, a purity profile, and an explicit
-report-capability profile. ESLint, dependency-cruiser, Stryker, the generic
-testing Adapter, and the Vitest convenience Adapter are registered.
+clean, and unselected structured evidence with the exact expected Breach
+identities, a purity profile, and an explicit report-capability profile. ESLint,
+dependency-cruiser, Stryker, the generic testing Adapter, and the Vitest
+convenience Adapter are registered.
 
 The TCK emits contract-tagged Node test cases. The existing Gate selects one
 tag per command, so a failure still breaches the precise Redproof Rule rather
 than a vague “Adapter incompatible” Rule. Adding another registration therefore
 places the new Adapter under every applicable contract without editing five
 assertion suites.
+
+The registration remains trusted test code. The TCK can reject malformed or
+inconsistent observations, but no test kit can prove that a deliberately fake
+callback exercised the real Adapter. Adapter-owned probes should call the
+public behavior they claim to observe; real-tool fixtures close that final
+boundary.
 
 The dependency direction is deliberate:
 

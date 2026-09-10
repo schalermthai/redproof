@@ -164,6 +164,7 @@ test('effectBoundaries REFUSES when a source it must scan cannot be read', async
 const policyRules = {
   packageInventory: defineRule({ id: 'probe/inventory', description: 'Inventory is consistent.' }),
   versionAlignment: defineRule({ id: 'probe/versions', description: 'Versions align.' }),
+  packageBoundaries: defineRule({ id: 'probe/package-boundaries', description: 'Package boundaries hold.' }),
   publicFiles: defineRule({ id: 'probe/public-files', description: 'Public files are declared.' }),
   automationVerification: defineRule({ id: 'probe/automation', description: 'Automation verifies.' }),
   docsLinks: defineRule({ id: 'probe/docs-links', description: 'Links resolve.' }),

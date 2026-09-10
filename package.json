@@ -52,7 +52,7 @@
     "demo:composition:json": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-fixture.ts composition-json",
     "demo:composition:json:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-proof-fixture.ts composition-json",
     "test:adapters": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test 'tests/adapters/**/*.test.ts' 'tests/fixtures/**/*.test.ts' 'packages/*/test/adapter.tck.test.ts'",
-    "test:adapter-tck": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test 'packages/adapter-tck/test/**/*.test.ts' 'packages/*/test/adapter.tck.test.ts'",
+    "test:adapter-tck": "npm run build && node --disable-warning=ExperimentalWarning --experimental-strip-types --test 'packages/adapter-tck/test/**/*.test.ts' 'packages/*/test/adapter.tck.test.ts'",
     "demo:dependency-cruiser": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-fixture.ts dependency-cruiser-project",
     "demo:dependency-cruiser:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-proof-fixture.ts dependency-cruiser-project",
     "demo:stryker": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-fixture.ts stryker-project",

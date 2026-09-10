@@ -28,6 +28,30 @@ function isPropertyName(node: ts.Identifier): boolean {
     || (ts.isMethodDeclaration(parent) && parent.name === node);
 }
 
+function expressionPath(node: ts.Expression): readonly string[] | undefined {
+  if (ts.isIdentifier(node)) return [node.text];
+  if (!ts.isPropertyAccessExpression(node)) return undefined;
+  const owner = expressionPath(node.expression);
+  return owner ? [...owner, node.name.text] : undefined;
+}
+
+function globalPath(node: ts.Expression): {
+  readonly path: readonly string[];
+  readonly qualified: boolean;
+} | undefined {
+  const path = expressionPath(node);
+  if (!path?.length) return undefined;
+  const qualified = path[0] === 'globalThis' || path[0] === 'global';
+  return { path: qualified ? path.slice(1) : path, qualified };
+}
+
+function isConsumedExpression(node: ts.Expression): boolean {
+  const parent = node.parent;
+  return (ts.isPropertyAccessExpression(parent) && parent.expression === node)
+    || (ts.isCallExpression(parent) && parent.expression === node)
+    || (ts.isNewExpression(parent) && parent.expression === node);
+}
+
 function importedEffect(node: ts.Node): string | undefined {
   if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
     const specifier = node.moduleSpecifier;
@@ -63,25 +87,31 @@ function ambientEffect(node: ts.Node): string | undefined {
     return 'process';
   }
 
-  if (ts.isNewExpression(node)
-      && ts.isIdentifier(node.expression)
-      && node.expression.text === 'Date'
-      && (node.arguments?.length ?? 0) === 0) {
-    return 'new Date';
+  if (ts.isPropertyAccessExpression(node) && !isConsumedExpression(node)) {
+    const expression = globalPath(node);
+    if (expression?.qualified && expression.path[0] === 'process') return 'process';
+  }
+
+  if (ts.isNewExpression(node) && (node.arguments?.length ?? 0) === 0) {
+    const expression = globalPath(node.expression);
+    if (expression?.path.length === 1 && expression.path[0] === 'Date') return 'new Date';
   }
 
   if (ts.isCallExpression(node)) {
-    if (ts.isIdentifier(node.expression)
-        && ['setTimeout', 'setInterval', 'setImmediate'].includes(node.expression.text)) {
-      return node.expression.text;
+    const expression = globalPath(node.expression);
+    const path = expression?.path ?? [];
+    if (path.length === 1
+        && ['fetch', 'setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask'].includes(path[0]!)) {
+      return path[0];
     }
-
-    if (ts.isPropertyAccessExpression(node.expression)) {
-      const owner = node.expression.expression;
-      const member = node.expression.name.text;
-      if (ts.isIdentifier(owner) && owner.text === 'Date' && member === 'now') return 'Date.now';
-      if (ts.isIdentifier(owner) && owner.text === 'Math' && member === 'random') return 'Math.random';
-      if (ts.isIdentifier(owner) && owner.text === 'performance') return `performance.${member}`;
+    if (expression?.qualified && path[0] === 'process') return 'process';
+    if (path.length === 2 && path[0] === 'Date' && path[1] === 'now') return 'Date.now';
+    if (path.length === 2 && path[0] === 'Math' && path[1] === 'random') return 'Math.random';
+    if (path.length === 2 && path[0] === 'performance') return `performance.${path[1]}`;
+    if (path.length === 2
+        && path[0] === 'crypto'
+        && ['getRandomValues', 'randomUUID'].includes(path[1]!)) {
+      return `crypto.${path[1]}`;
     }
   }
 

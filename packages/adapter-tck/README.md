@@ -48,6 +48,7 @@ const spec = {
   }],
   evidence: [{
     rule: 'example/valid',
+    expectedBreaches: [{ code: 'example-invalid', message: 'bad example' }],
     violating: () => ({ kind: 'translated', breaches: exampleBreaches(['bad']) }),
     clean: () => ({ kind: 'translated', breaches: exampleBreaches([]) }),
     unselected: () => ({ kind: 'translated', breaches: [] }),
@@ -70,6 +71,12 @@ The TCK covers construction, unavailable execution, functional-core purity,
 report capabilities, and structured evidence. When one implementation surface
 delegates its evidence model to another, register both specs in the same call
 and use `{ kind: 'delegated', to: 'other-name' }`.
+
+The registration is trusted test code. The TCK validates the shape and
+consistency of the observations it receives—including exact expected Breach
+identities—but it cannot prove that an intentionally fabricated callback called
+the real Adapter. Keep the probes close to the Adapter's public API and use a
+real-tool integration fixture to verify the external-tool boundary.
 
 The package is test infrastructure. Adapter production source must not import
 it; list it only in `devDependencies`.

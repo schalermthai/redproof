@@ -52,6 +52,7 @@ const spec = {
   }],
   evidence: [{
     rule: 'stryker/mutants-detected',
+    expectedBreaches: [{ code: 'mutant-survived' }],
     violating: () => evidence('Survived'),
     clean: () => evidence(null),
     unselected: () => evidence('Killed'),

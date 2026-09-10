@@ -163,6 +163,11 @@ export const proofs = defineProofs(gate, [
     mutate.appendText('packages/stryker/src/model.ts', '\nvoid process.cwd();\n'),
   ),
   proof.red(
+    rules.pureParsers,
+    'detects qualified ambient state inside a pure evidence model',
+    mutate.appendText('packages/eslint/src/model.ts', '\nvoid globalThis.Date.now();\n'),
+  ),
+  proof.red(
     rules.reportCapabilities,
     'detects a report format that overstates what it can observe',
     mutate.replaceText(
