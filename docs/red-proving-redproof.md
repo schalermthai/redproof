@@ -122,9 +122,11 @@ contract side by side:
   [`@redproof/adapter-tck`](../packages/adapter-tck/README.md).
 
 The TCK owns the reusable assertions, while each Adapter owns the scenarios
-that exercise its public behavior. The TCK also runs deliberately broken
-specimens against itself. That proves it rejects invalid Adapters rather than
-merely confirming that the current built-ins happen to pass.
+that exercise its public behavior. Its self-tests deliberately feed it
+malformed and inconsistent observations, proving those contract checks reject
+bad evidence rather than merely confirming that current registrations pass.
+The Adapter-owned callbacks are still trusted test code; real-tool fixtures
+verify that they cross the actual Adapter boundary.
 
 Real-tool fixtures add the final layer. They run ESLint, dependency-cruiser,
 Stryker, and Vitest against representative projects and prove their actual
@@ -150,18 +152,19 @@ install.
 
 The repository-policy Gate reads the six package manifests, public exports,
 source inventory, automation workflows, and documentation links. It checks
-that packages share a version, internal dependency pins match, public runtime
-and type surfaces are backed by source, and CI cannot silently drop required
-verification.
+that packages share a version, internal dependency pins match, package edges
+follow the core–TCK–Adapter layers, public runtime and type surfaces are backed
+by source, and CI cannot silently drop required verification.
 
 The release workflow then packs all six packages and installs them into a clean
 consumer. It verifies runtime imports, published types, CLI behavior, package
 contents, and exact internal links before npm publishing is allowed.
 
 The proofs cover this boundary too. A deliberately omitted package must breach
-the inventory Rule. A divergent version must breach alignment. A removed CI
-verification step must breach automation policy. An unreadable policy input
-must REFUSE rather than let an incomplete release inspection pass.
+the inventory Rule. A divergent version must breach alignment. A forbidden
+runtime dependency from core to the TCK must breach package boundaries. A
+removed CI verification step must breach automation policy. An unreadable
+policy input must REFUSE rather than let an incomplete release inspection pass.
 
 See the live [CI workflow](../.github/workflows/ci.yml) and
 [publish workflow](../.github/workflows/publish.yml).

@@ -39,6 +39,7 @@ export type RepositorySnapshot = {
 export type RepositoryPolicyRule =
   | 'packageInventory'
   | 'versionAlignment'
+  | 'packageBoundaries'
   | 'publicFiles'
   | 'automationVerification'
   | 'docsLinks';
@@ -132,6 +133,44 @@ function versionAlignment(snapshot: RepositorySnapshot): RepositoryPolicyFinding
       }
     }
   }
+  return findings;
+}
+
+function packageBoundaries(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
+  const findings: RepositoryPolicyFinding[] = [];
+  const internalNames = new Set(snapshot.manifests.map(pkg => pkg.name));
+  const tck = '@redproof/adapter-tck';
+
+  for (const pkg of snapshot.manifests) {
+    for (const section of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
+      for (const dependency of Object.keys(pkg.manifest[section] ?? {})) {
+        if (!internalNames.has(dependency)) continue;
+
+        const allowed = pkg.name === 'redproof'
+          ? false
+          : pkg.name === tck
+            ? dependency === 'redproof' && section === 'peerDependencies'
+            : (dependency === 'redproof' && section === 'dependencies')
+              || (dependency === tck && section === 'devDependencies');
+        if (allowed) continue;
+
+        const message = pkg.name === 'redproof'
+          ? `redproof must not depend on ${dependency} through ${section}.`
+          : dependency === tck
+            ? `${pkg.name} may use ${tck} only through devDependencies.`
+            : dependency === 'redproof'
+              ? `${pkg.name} may use redproof only through dependencies.`
+              : `${pkg.name} must not depend on ${dependency} through ${section}.`;
+        findings.push({
+          rule: 'packageBoundaries',
+          code: 'internal-package-boundary-violated',
+          message,
+          file: pkg.file,
+        });
+      }
+    }
+  }
+
   return findings;
 }
 
@@ -283,6 +322,7 @@ export function evaluateRepositoryPolicy(snapshot: RepositorySnapshot): Reposito
   return [
     ...packageInventory(snapshot),
     ...versionAlignment(snapshot),
+    ...packageBoundaries(snapshot),
     ...publicFiles(snapshot),
     ...automationVerification(snapshot),
     ...docsLinks(snapshot),

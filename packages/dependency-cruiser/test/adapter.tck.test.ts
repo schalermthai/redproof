@@ -60,6 +60,7 @@ const spec = {
   }],
   evidence: [{
     rule: 'dependency-cruiser/no-cycles',
+    expectedBreaches: [{ code: 'no-cycles' }],
     violating: () => evidence('no-cycles'),
     clean: () => evidence(null),
     unselected: () => evidence('not-selected'),

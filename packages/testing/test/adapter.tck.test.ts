@@ -93,6 +93,7 @@ const testingSpec = {
   }],
   evidence: [{
     rule: 'testing/tests-pass',
+    expectedBreaches: [{ code: 'test-failed', message: 'example' }],
     violating: () => evidence('failed'),
     clean: () => evidence('passed'),
     unselected: () => evidence('skipped'),
@@ -193,6 +194,7 @@ const vitestSpec = {
   }],
   evidence: [{
     rule: 'testing/tests-pass',
+    expectedBreaches: [{ code: 'test-failed' }],
     violating: () => checked(failingReport, { testsPass: true }),
     clean: () => checked(passingReport, { testsPass: true }),
     unselected: () => checked(failingReport, { noSkippedTests: true }),

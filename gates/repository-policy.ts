@@ -10,6 +10,10 @@ const rules = defineRules({
     id: 'repository/package-versions-and-internal-pins-align',
     description: 'All packages share one version and internal Redproof dependencies use it exactly.',
   },
+  packageBoundaries: {
+    id: 'repository/internal-package-boundaries-hold',
+    description: 'Internal package dependencies follow the core, TCK, and Adapter layers.',
+  },
   publicFiles: {
     id: 'repository/public-files-are-declared',
     description: 'Public runtime, type, binary, subpath, and schema surfaces are source-backed and declared.',
@@ -59,6 +63,14 @@ export const proofs = defineProofs(gate, [
     mutate.replaceText(
       locate.text({ files: 'packages/testing/package.json', find: '"version": "0.10.0"' }),
       '"version": "0.6.1"',
+    ),
+  ),
+  proof.red(
+    rules.packageBoundaries,
+    'detects a runtime dependency from Redproof core to the Adapter TCK',
+    mutate.replaceText(
+      locate.text({ files: 'packages/redproof/package.json', find: '  "repository": {' }),
+      '  "dependencies": { "@redproof/adapter-tck": "0.10.0" },\n  "repository": {',
     ),
   ),
   proof.red(

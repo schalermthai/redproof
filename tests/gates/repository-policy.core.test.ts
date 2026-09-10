@@ -135,6 +135,41 @@ test('development and peer links between publishable packages must pin the share
   );
 });
 
+test('internal package dependencies must follow the declared package layers', () => {
+  const clean = snapshot();
+  const findings = evaluateRepositoryPolicy({
+    ...clean,
+    manifests: [
+      manifest('redproof', 'packages/redproof', '1.0.0', {
+        dependencies: { '@redproof/adapter-tck': '1.0.0' },
+      }),
+      manifest('@redproof/adapter-tck', 'packages/adapter-tck', '1.0.0', {
+        peerDependencies: { redproof: '1.0.0' },
+      }),
+      manifest('@redproof/example', 'packages/example', '1.0.0', {
+        dependencies: { redproof: '1.0.0', '@redproof/adapter-tck': '1.0.0' },
+        devDependencies: { '@redproof/adapter-tck': '1.0.0' },
+      }),
+    ],
+  });
+
+  assert.deepEqual(
+    findings
+      .filter(item => item.code === 'internal-package-boundary-violated')
+      .map(item => [item.file, item.message]),
+    [
+      [
+        'packages/redproof/package.json',
+        'redproof must not depend on @redproof/adapter-tck through dependencies.',
+      ],
+      [
+        'packages/example/package.json',
+        '@redproof/example may use @redproof/adapter-tck only through devDependencies.',
+      ],
+    ],
+  );
+});
+
 test('a package entrypoint must match on types, runtime, files, and source', () => {
   const broken = (extra: Partial<ManifestSnapshot['manifest']>) =>
     codes(evaluateRepositoryPolicy(snapshot({ manifests: [manifest('redproof', 'packages/redproof', '1.0.0', extra)] })));

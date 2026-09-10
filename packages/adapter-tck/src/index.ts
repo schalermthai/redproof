@@ -28,8 +28,14 @@ export type EvidenceObservation =
   | { readonly kind: 'translated'; readonly breaches: readonly AnyBreach[] }
   | { readonly kind: 'checked'; readonly result: AnyCheckResult };
 
+export type BreachExpectation = {
+  readonly code: string;
+  readonly message?: string | RegExp;
+};
+
 export type EvidenceProbe = {
   readonly rule: string;
+  readonly expectedBreaches: NonEmpty<BreachExpectation>;
   readonly violating: () => MaybePromise<EvidenceObservation>;
   readonly clean: () => MaybePromise<EvidenceObservation>;
   readonly unselected: () => MaybePromise<EvidenceObservation>;
@@ -92,6 +98,34 @@ function assertAdapter(adapter: AnyAdapter, spec: AdapterTckSpec): void {
   assert.equal(new Set(rules.map(rule => rule.id)).size, rules.length, 'Rule ids must be unique');
 }
 
+function assertEvidenceRules(adapter: AnyAdapter, spec: AdapterTckSpec): void {
+  const ruleIds = new Set(Object.values(adapter.rules as Readonly<Record<string, Rule>>).map(rule => rule.id));
+  for (const probe of spec.evidence) {
+    assert.ok(
+      ruleIds.has(probe.rule),
+      `${spec.name} does not expose evidence Rule ${probe.rule}`,
+    );
+  }
+}
+
+function assertCheckResultShape(result: AnyCheckResult): void {
+  const expected = result.verdict === 'pass'
+    ? ['scan', 'verdict']
+    : result.verdict === 'fail'
+      ? ['breaches', 'scan', 'verdict']
+      : ['scan', 'verdict', 'why'];
+  const description = result.verdict === 'pass'
+    ? 'verdict and scan'
+    : result.verdict === 'fail'
+      ? 'verdict, scan, and breaches'
+      : 'verdict, scan, and why';
+  assert.deepEqual(
+    Object.keys(result).sort(),
+    expected,
+    `${result.verdict.toUpperCase()} result must contain only ${description}`,
+  );
+}
+
 async function expectThrow(probe: ThrowProbe): Promise<void> {
   await assert.rejects(Promise.resolve().then(probe.run), probe.message);
 }
@@ -101,6 +135,8 @@ function breachesOf(
   expected: 'violation' | 'none',
 ): readonly AnyBreach[] {
   if (observation.kind === 'translated') return observation.breaches;
+
+  assertCheckResultShape(observation.result);
 
   if (expected === 'violation') {
     assert.equal(observation.result.verdict, 'fail');
@@ -112,10 +148,20 @@ function breachesOf(
   return [];
 }
 
-function assertStructuredBreach(breach: AnyBreach, rule: string): void {
+function assertStructuredBreach(
+  breach: AnyBreach,
+  rule: string,
+  expected: BreachExpectation,
+): void {
   assert.equal(breach.rule, rule);
-  assert.ok(breach.code.trim(), 'a Breach must have a diagnostic code');
-  assert.ok(breach.message.trim(), 'a Breach must have a diagnostic message');
+  assert.equal(breach.code, expected.code);
+  if (expected.message instanceof RegExp) {
+    assert.match(breach.message, expected.message);
+  } else if (expected.message !== undefined) {
+    assert.equal(breach.message, expected.message);
+  } else {
+    assert.ok(breach.message.trim(), 'a Breach must have a diagnostic message');
+  }
 }
 
 function repositoryPath(file: string, specifier: string): string {
@@ -173,7 +219,9 @@ function constructorCases(spec: AdapterTckSpec): AdapterTckCase[] {
       contract: 'constructor-options',
       name: 'accepts a valid configuration',
       run() {
-        assertAdapter(spec.construction.valid(), spec);
+        const adapter = spec.construction.valid();
+        assertAdapter(adapter, spec);
+        assertEvidenceRules(adapter, spec);
       },
     },
     ...probes.map((probe): AdapterTckCase => ({
@@ -192,6 +240,7 @@ function unavailableCases(spec: AdapterTckSpec): AdapterTckCase[] {
     name: probe.name,
     async run() {
       const result = await probe.run();
+      assertCheckResultShape(result);
       assert.equal(result.verdict, 'refuse');
       if (result.verdict === 'refuse') {
         assert.equal(
@@ -213,8 +262,13 @@ function evidenceCases(spec: AdapterTckSpec): AdapterTckCase[] {
       name: `${probe.rule} breaches for selected structured evidence`,
       async run() {
         const breaches = breachesOf(await probe.violating(), 'violation');
-        assert.ok(breaches.length > 0, 'selected violating evidence must create a Breach');
-        for (const breach of breaches) assertStructuredBreach(breach, probe.rule);
+        assert.equal(
+          breaches.length,
+          probe.expectedBreaches.length,
+          `selected evidence must preserve ${probe.expectedBreaches.length} expected ${probe.expectedBreaches.length === 1 ? 'Breach' : 'Breaches'}`,
+        );
+        breaches.forEach((breach, index) =>
+          assertStructuredBreach(breach, probe.rule, probe.expectedBreaches[index]!));
       },
     },
     {

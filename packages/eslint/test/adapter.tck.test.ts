@@ -52,6 +52,7 @@ const spec = {
   }],
   evidence: [{
     rule: 'eslint/semi',
+    expectedBreaches: [{ code: 'semi', message: 'lint finding' }],
     violating: () => evidence('semi'),
     clean: () => evidence(null),
     unselected: () => evidence('quotes'),
