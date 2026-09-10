@@ -400,6 +400,15 @@ matrix, the RED-first implementation sequence, and the split between fast
 behavioral probes and slower real-tool fixtures.
 The general reusable workflow is **[Contract-to-Gate](contract-to-gate.md)**.
 
+Adapter authors can reuse the same executable contracts with
+`@redproof/adapter-tck`. Keep one registration beside the Adapter tests and
+call `runAdapterTck([spec])`; the package emits separately tagged tests for
+construction, unavailable execution, purity, capabilities, and structured
+evidence. The Adapter package lists the TCK only in `devDependencies`; its
+production source continues to depend only on Redproof.
+See the **[Adapter TCK package](../packages/adapter-tck/README.md)** for a
+complete registration shape.
+
 ## Next
 
 - **[Composing Redproof](composition.md)** for Rules, Checks, Proofs, and Mutations.

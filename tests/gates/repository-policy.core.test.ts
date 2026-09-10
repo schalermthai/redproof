@@ -92,7 +92,7 @@ test('a second package is accepted once every release stage names it', () => {
   assert.deepEqual(findings, []);
 });
 
-test('publishable packages must share one version, and internal dependencies must pin it', () => {
+test('publishable packages must share one version, and every internal dependency section must pin it', () => {
   const clean = snapshot();
   const findings = evaluateRepositoryPolicy({
     ...clean,
@@ -106,7 +106,31 @@ test('publishable packages must share one version, and internal dependencies mus
     findings.filter(item => item.rule === 'versionAlignment').map(item => [item.code, item.file, item.detail ?? item.message]),
     [
       ['package-versions-diverge', 'packages', '1.0.0, 2.0.0'],
-      ['internal-version-diverges', 'packages/extra/package.json', '@redproof/extra depends on redproof@2.0.0 instead of 1.0.0.'],
+      ['internal-version-diverges', 'packages/extra/package.json', '@redproof/extra pins redproof@2.0.0 in dependencies instead of 1.0.0.'],
+    ],
+  );
+});
+
+test('development and peer links between publishable packages must pin the shared version', () => {
+  const clean = snapshot();
+  const findings = evaluateRepositoryPolicy({
+    ...clean,
+    manifests: [
+      manifest('redproof', 'packages/redproof'),
+      manifest('@redproof/adapter-tck', 'packages/adapter-tck', '1.0.0', {
+        peerDependencies: { redproof: '0.9.0' },
+      }),
+      manifest('@redproof/extra', 'packages/extra', '1.0.0', {
+        devDependencies: { '@redproof/adapter-tck': '0.9.0' },
+      }),
+    ],
+  });
+
+  assert.deepEqual(
+    findings.filter(item => item.rule === 'versionAlignment').map(item => item.message),
+    [
+      '@redproof/adapter-tck pins redproof@0.9.0 in peerDependencies instead of 1.0.0.',
+      '@redproof/extra pins @redproof/adapter-tck@0.9.0 in devDependencies instead of 1.0.0.',
     ],
   );
 });

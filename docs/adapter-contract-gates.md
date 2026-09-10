@@ -12,6 +12,13 @@ Adapter. Evidence selection runs through the pure evidence models, not through
 a real tool run. So the Gate does not prove that an Adapter passes the right
 Rule to its evidence model. The fixtures and the full test suite cover that.
 
+The reusable `@redproof/adapter-tck` package owns the shared assertions. Each
+built-in Adapter keeps its declarative registration beside its own package
+tests: construction, unavailable execution, structured evidence, purity, and
+capability scenarios. The root Gate only orchestrates those package-owned
+suites in five contract-filtered lanes. It still runs the original five suites
+beside them so we can compare both implementations before retiring any coverage.
+
 This page is a worked example of the reusable **[Contract-to-Gate method](contract-to-gate.md)**.
 
 This split matters. A frequent contract Gate should identify which Adapter
@@ -47,12 +54,13 @@ inventing report capabilities for them would make the design less honest.
 3. Separate evidence translation from I/O before testing it. ESLint message
    translation moved from its shell entrypoint into a pure model, matching the
    existing dependency-cruiser, Stryker, and testing models.
-4. Give each guideline its own Redproof Rule. Five command Checks run the five
-   small contract suites in parallel. A nonzero test exit breaches the contract
-   being tested; it is not treated as evidence from the wrapped external tool.
+4. Give each guideline its own Redproof Rule. Command Checks run both the five
+   original contract suites and the corresponding TCK lanes in parallel. A
+   nonzero test exit breaches the contract being tested; it is not treated as
+   evidence from the wrapped external tool.
 5. Prove the Gate causally. Each Rule has a RED proof that removes or corrupts
    the behavior it protects. The suite also has a GREEN proof and a REFUSE proof
-   that makes one contract process exceed its execution limit.
+   that terminates one wrapped contract process by signal.
 6. Keep compile-time and runtime validation together. Public type probes reject
    unknown option keys for TypeScript consumers, while constructor probes cover
    JavaScript and type-stripped Gate loading.
@@ -99,10 +107,36 @@ purity, and it uses the same TypeScript effect analysis as the architecture
 Gate. Constructor, runner, capability, and evidence contracts execute the
 public behavior they protect.
 
+## The Adapter TCK
+
+The `runAdapterTck()` helper owns every assertion. A registration must provide
+a valid construction, bad-option probes, an unavailable execution, selected,
+clean, and unselected structured evidence, a purity profile, and an explicit
+report-capability profile. ESLint, dependency-cruiser, Stryker, the generic
+testing Adapter, and the Vitest convenience Adapter are registered.
+
+The TCK emits contract-tagged Node test cases. The existing Gate selects one
+tag per command, so a failure still breaches the precise Redproof Rule rather
+than a vague “Adapter incompatible” Rule. Adding another registration therefore
+places the new Adapter under every applicable contract without editing five
+assertion suites.
+
+The dependency direction is deliberate:
+
+```text
+adapter production ──▶ redproof
+adapter tests      ──▶ @redproof/adapter-tck ──peer/types──▶ redproof
+root Gate          ──▶ adapter-owned TCK tests
+```
+
+`redproof` never depends on the TCK, Adapter production never imports it, and
+the TCK never imports a built-in Adapter. That keeps the published runtime graph
+acyclic while making the same contracts reusable by external Adapter authors.
+
 ## Next
 
 - **[Custom Adapter](custom-adapter.md)** for the promises these Gates enforce.
 - **[Contract-to-Gate method](contract-to-gate.md)** for the reusable RED-probe,
-  Check, and proof workflow.
+   Check, and proof workflow.
 - **[Red proving Redproof](red-proving-redproof.md)** for the complete self-hosted suite.
 - **[Built-in Adapters](built-in-adapters.md)** for each supported tool.

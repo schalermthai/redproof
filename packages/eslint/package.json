@@ -19,6 +19,9 @@
   "dependencies": {
     "redproof": "0.10.0"
   },
+  "devDependencies": {
+    "@redproof/adapter-tck": "0.10.0"
+  },
   "peerDependencies": {
     "eslint": ">=9"
   },

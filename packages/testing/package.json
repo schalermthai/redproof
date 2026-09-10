@@ -19,6 +19,9 @@
   "dependencies": {
     "redproof": "0.10.0"
   },
+  "devDependencies": {
+    "@redproof/adapter-tck": "0.10.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/schalermthai/redproof.git",

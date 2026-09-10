@@ -14,6 +14,8 @@ export type ManifestSnapshot = {
     }>>;
     readonly bin?: Readonly<Record<string, string>>;
     readonly dependencies?: Readonly<Record<string, string>>;
+    readonly devDependencies?: Readonly<Record<string, string>>;
+    readonly peerDependencies?: Readonly<Record<string, string>>;
   };
 };
 
@@ -104,6 +106,7 @@ function packageInventory(snapshot: RepositorySnapshot): RepositoryPolicyFinding
 
 function versionAlignment(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
   const findings: RepositoryPolicyFinding[] = [];
+  const internalNames = new Set(snapshot.manifests.map(pkg => pkg.name));
   const versions = new Set(snapshot.manifests.map(pkg => pkg.version));
   if (versions.size !== 1) {
     findings.push({
@@ -116,14 +119,17 @@ function versionAlignment(snapshot: RepositorySnapshot): RepositoryPolicyFinding
   }
 
   for (const pkg of snapshot.manifests) {
-    const core = pkg.manifest.dependencies?.redproof;
-    if (core !== undefined && core !== pkg.version) {
-      findings.push({
-        rule: 'versionAlignment',
-        code: 'internal-version-diverges',
-        message: `${pkg.name} depends on redproof@${core} instead of ${pkg.version}.`,
-        file: pkg.file,
-      });
+    for (const section of ['dependencies', 'devDependencies', 'peerDependencies'] as const) {
+      for (const [dependency, version] of Object.entries(pkg.manifest[section] ?? {})) {
+        if (internalNames.has(dependency) && version !== pkg.version) {
+          findings.push({
+            rule: 'versionAlignment',
+            code: 'internal-version-diverges',
+            message: `${pkg.name} pins ${dependency}@${version} in ${section} instead of ${pkg.version}.`,
+            file: pkg.file,
+          });
+        }
+      }
     }
   }
   return findings;

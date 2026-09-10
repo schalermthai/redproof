@@ -29,6 +29,17 @@ function contract(file: string): string[] {
   return stripTypes('--test', file);
 }
 
+function tck(contractName: string): string[] {
+  return stripTypes(
+    '--test',
+    `--test-name-pattern=^\\[${contractName}\\]`,
+    'packages/*/test/adapter.tck.test.ts',
+  );
+}
+
+const contractTimeoutMs = 60_000;
+const contractMaxOutputBytes = 1_000_000;
+
 const gate = defineGate({
   id: 'adapter-contracts',
   rules,
@@ -42,40 +53,80 @@ const gate = defineGate({
         label: 'constructor contracts',
         command: node,
         args: contract('tests/adapters/adapter-contracts.constructor.test.ts'),
-        timeoutMs: 60_000,
-        maxOutputBytes: 1_000_000,
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
       },
       {
         rule: rules.unavailableResult,
         label: 'runner contracts',
         command: node,
         args: contract('tests/adapters/adapter-contracts.runner.test.ts'),
-        timeoutMs: 60_000,
-        maxOutputBytes: 1_000_000,
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
       },
       {
         rule: rules.pureParsers,
         label: 'parser contracts',
         command: node,
         args: contract('tests/adapters/adapter-contracts.parser.test.ts'),
-        timeoutMs: 60_000,
-        maxOutputBytes: 1_000_000,
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
       },
       {
         rule: rules.reportCapabilities,
         label: 'capability contracts',
         command: node,
         args: contract('tests/adapters/adapter-contracts.capability.test.ts'),
-        timeoutMs: 60_000,
-        maxOutputBytes: 1_000_000,
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
       },
       {
         rule: rules.structuredBreaches,
         label: 'structured-evidence contracts',
         command: node,
         args: contract('tests/adapters/adapter-contracts.structured.test.ts'),
-        timeoutMs: 60_000,
-        maxOutputBytes: 1_000_000,
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
+      },
+      {
+        rule: rules.constructorOptions,
+        label: 'constructor TCK',
+        command: node,
+        args: tck('constructor-options'),
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
+      },
+      {
+        rule: rules.unavailableResult,
+        label: 'runner TCK',
+        command: node,
+        args: tck('unavailable-execution'),
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
+      },
+      {
+        rule: rules.pureParsers,
+        label: 'pure-model TCK',
+        command: node,
+        args: tck('pure-model'),
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
+      },
+      {
+        rule: rules.reportCapabilities,
+        label: 'capability TCK',
+        command: node,
+        args: tck('report-capabilities'),
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
+      },
+      {
+        rule: rules.structuredBreaches,
+        label: 'structured-evidence TCK',
+        command: node,
+        args: tck('structured-evidence'),
+        timeoutMs: contractTimeoutMs,
+        maxOutputBytes: contractMaxOutputBytes,
       },
     ],
   }),
