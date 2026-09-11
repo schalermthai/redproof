@@ -86,6 +86,7 @@ function workflowShellRuns(workflow: string, command: string): boolean {
 }
 
 function packageInventory(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
+  const readinessLoop = /for READY_PACKAGE in\s+([^;]+);/.exec(snapshot.publishWorkflow)?.[1]?.split(/\s+/) ?? [];
   const publishLoop = /for PKG in\s+([^;]+);/.exec(snapshot.publishWorkflow)?.[1]?.split(/\s+/) ?? [];
   const findings: RepositoryPolicyFinding[] = [];
 
@@ -106,6 +107,11 @@ function packageInventory(snapshot: RepositorySnapshot): RepositoryPolicyFinding
         file: 'scripts/verify-package.ts',
         ok: new RegExp(`name:\\s*['\"]${escaped(pkg.name)}['\"]`).test(snapshot.verifyPackageSource),
         stage: 'package verifier',
+      },
+      {
+        file: '.github/workflows/publish.yml',
+        ok: readinessLoop.includes(pkg.name),
+        stage: 'npm package readiness check',
       },
       {
         file: '.github/workflows/publish.yml',
