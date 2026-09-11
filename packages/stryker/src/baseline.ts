@@ -37,6 +37,29 @@ export type StrykerBaselineAssessment =
       readonly detail: string;
     };
 
+/** Make producer paths stable and meaningful after a Redproof Gate copy is released. */
+export function relativizeStrykerMutants(
+  gateRoot: string,
+  workingDirectory: string,
+  mutants: readonly StrykerMutantResult[],
+): readonly StrykerMutantResult[] {
+  const absoluteGateRoot = resolve(gateRoot);
+  const absoluteWorkingDirectory = resolve(workingDirectory);
+
+  return mutants.map((mutant) => {
+    if (!mutant.fileName) return mutant;
+    const absoluteFile = isAbsolute(mutant.fileName)
+      ? resolve(mutant.fileName)
+      : resolve(absoluteWorkingDirectory, mutant.fileName);
+    const relativeFile = relative(absoluteGateRoot, absoluteFile);
+    if (relativeFile === '' || relativeFile === '..'
+      || relativeFile.startsWith(`..${sep}`) || isAbsolute(relativeFile)) {
+      return mutant;
+    }
+    return { ...mutant, fileName: relativeFile.split(sep).join('/') };
+  });
+}
+
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   assessStrykerBaseline,
   parseAcceptedStrykerMutants,
+  relativizeStrykerMutants,
   strykerMutantIdentity,
   type AcceptedStrykerMutant,
 } from '../../packages/stryker/src/baseline.ts';
@@ -36,6 +37,18 @@ const survivor = (extra: Partial<StrykerMutantResult> = {}): StrykerMutantResult
 });
 
 const parseOne = (entry: unknown) => parseAcceptedStrykerMutants(JSON.stringify([entry]));
+
+test('mutant diagnostics are relative to the Gate root, not a disposable copy or nested cwd', () => {
+  const gateRoot = join('/', 'copies', 'gate-1');
+  const cwd = join(gateRoot, 'packages', 'parser');
+  const [absolute, alreadyRelative] = relativizeStrykerMutants(gateRoot, cwd, [
+    survivor({ fileName: join(cwd, 'src', 'parser.ts') }),
+    survivor({ id: '2', fileName: 'src/scanner.ts' }),
+  ]);
+
+  assert.equal(absolute?.fileName, 'packages/parser/src/parser.ts');
+  assert.equal(alreadyRelative?.fileName, 'packages/parser/src/scanner.ts');
+});
 
 test('a baseline entry is identified by file, span, mutator, and replacement together', () => {
   assert.equal(

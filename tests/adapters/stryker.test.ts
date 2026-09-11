@@ -126,6 +126,7 @@ test('a working directory below the Gate root is accepted, and the baseline is r
       'stryker-accepted-mutants-invalid',
       'the inner working directory is accepted, and its own baseline file is the one read',
     );
+    assert.equal(result.why.location?.file, 'project/accepted-mutants.json');
   });
 });
 
