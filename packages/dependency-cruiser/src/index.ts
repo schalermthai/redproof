@@ -12,7 +12,9 @@ import {
   rejectUnknownKeys,
 } from 'redproof';
 import {
+  dependencyCruiserRuleAvailability,
   violationsToBreaches,
+  type DependencyCruiserConfig,
   type DependencyCruiserViolation,
 } from './model.ts';
 
@@ -50,12 +52,6 @@ type PackageManifest = {
   readonly exports?: Readonly<Record<string, PackageExport>>;
 };
 
-type DependencyCruiserConfig = {
-  readonly forbidden?: readonly { readonly name?: string }[];
-  readonly required?: readonly { readonly name?: string }[];
-  readonly allowed?: readonly unknown[];
-};
-
 type CruiseOutputLike = {
   readonly summary?: {
     readonly totalCruised?: number;
@@ -80,14 +76,6 @@ function readCruiseOutput(output: unknown): CruiseOutputLike | null {
 
 function now(): string {
   return new Date().toISOString();
-}
-
-function configuredRuleNames(config: DependencyCruiserConfig): ReadonlySet<string> {
-  return new Set([
-    ...(config.forbidden ?? []).flatMap(rule => rule.name ? [rule.name] : []),
-    ...(config.required ?? []).flatMap(rule => rule.name ? [rule.name] : []),
-    ...((config.allowed?.length ?? 0) > 0 ? ['not-in-allowed'] : []),
-  ]);
 }
 
 function withCwd<T>(root: string, action: () => Promise<T>): Promise<T> {
@@ -236,10 +224,12 @@ export function dependencyCruiser<
             const dependencyCruiser = await loadDependencyCruiser(ctx.root);
             const configPath = resolve(ctx.root, configFile);
             const config = await dependencyCruiser.extractConfig(configPath) as DependencyCruiserConfig;
-            const available = configuredRuleNames(config);
-            const missing = Object.values(options.rules).filter(name => !available.has(name));
+            const availability = dependencyCruiserRuleAvailability(
+              config,
+              Object.values(options.rules),
+            );
 
-            if (missing.length > 0) {
+            if (availability.missing.length > 0) {
               return result.refuse(
                 {
                   source: 'dependency-cruiser',
@@ -251,7 +241,24 @@ export function dependencyCruiser<
                   code: 'dependency-cruiser-rule-missing',
                   message: 'Configured Redproof rules are missing from the dependency-cruiser configuration.',
                   location: { file: configFile, line: null, column: null },
-                  detail: `Missing: ${missing.join(', ')}`,
+                  detail: `Missing: ${availability.missing.join(', ')}`,
+                },
+              );
+            }
+
+            if (availability.inactive.length > 0) {
+              return result.refuse(
+                {
+                  source: 'dependency-cruiser',
+                  startedAt,
+                  finishedAt: now(),
+                  inspected: null,
+                },
+                {
+                  code: 'dependency-cruiser-rule-inactive',
+                  message: 'Configured Redproof rules are disabled in the dependency-cruiser configuration.',
+                  location: { file: configFile, line: null, column: null },
+                  detail: `Inactive: ${availability.inactive.join(', ')}`,
                 },
               );
             }
