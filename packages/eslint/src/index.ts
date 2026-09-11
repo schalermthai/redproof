@@ -10,7 +10,11 @@ import {
   type Rule,
   rejectUnknownKeys,
 } from 'redproof';
-import { eslintBreaches, fatalEslintDiagnostic } from './model.ts';
+import {
+  eslintBreaches,
+  fatalEslintDiagnostic,
+  incompleteEslintDiagnostic,
+} from './model.ts';
 
 type EslintRuleInput = Readonly<Record<string, string>>;
 
@@ -81,6 +85,14 @@ export function eslint<const O extends EslintAdapterOptions<EslintRuleInput>>(
           const engine = new ESLint({
             cwd: ctx.root,
             overrideConfig: {
+              languageOptions: {
+                parserOptions: {
+                  // ESLint's `cwd` does not become the parser's project root.
+                  // Keep project-aware parsers (for example TypeScript) inside
+                  // the Gate workspace when a check runs from a copy.
+                  tsconfigRootDir: ctx.root,
+                },
+              },
               rules: Object.fromEntries(
                 Object.values(options.rules).map(ruleId => [ruleId, 'error']),
               ),
@@ -98,6 +110,9 @@ export function eslint<const O extends EslintAdapterOptions<EslintRuleInput>>(
 
           const fatal = fatalEslintDiagnostic(ctx.root, lintResults);
           if (fatal) return result.refuse(scan, fatal);
+
+          const incomplete = incompleteEslintDiagnostic(ctx.root, lintResults);
+          if (incomplete) return result.refuse(scan, incomplete);
 
           return result.fromBreaches(scan, eslintBreaches(ctx.root, lintResults, byForeignId));
         } catch (error) {

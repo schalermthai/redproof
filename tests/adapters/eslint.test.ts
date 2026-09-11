@@ -89,6 +89,88 @@ test('one run reports breaches of every adopted Rule, and clean source passes', 
   });
 });
 
+test('project-aware parsers resolve their project from the Gate root', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', `import { realpathSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = dirname(fileURLToPath(import.meta.url));
+const parser = {
+  parse(source, options) {
+    if (realpathSync(options.tsconfigRootDir) !== realpathSync(root)) {
+      throw new Error('parser project root does not match the Gate root');
+    }
+    return {
+      type: 'Program',
+      body: [],
+      sourceType: 'module',
+      range: [0, source.length],
+      loc: {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: source.length },
+      },
+      tokens: [],
+      comments: [],
+    };
+  },
+};
+
+export default [{
+  files: ['**/*.js'],
+  languageOptions: { parser },
+  rules: {},
+}];
+`);
+    await write(root, 'src/clean.js', '');
+
+    const result = await run(root, ['src/clean.js']);
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+  });
+});
+
+test('a selected Rule remains a Breach when ESLint reports it as suppressed', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', FLAT_CONFIG);
+    await write(
+      root,
+      'src/suppressed.js',
+      '/* eslint-disable no-console */\nconsole.log(1);\n/* eslint-enable no-console */\n',
+    );
+
+    const result = await run(root, ['src/suppressed.js']);
+
+    assert.equal(result.verdict, 'fail');
+    if (result.verdict !== 'fail') return;
+    assert.equal(result.breaches.length, 1);
+    assert.equal(result.breaches[0]?.rule, 'eslint/no-console');
+    assert.equal(result.breaches[0]?.code, 'no-console');
+  });
+});
+
+test('an explicitly ignored target REFUSES as incomplete evidence', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', `export default [
+  { ignores: ['src/ignored.js'] },
+  {
+    files: ['**/*.js'],
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    rules: {},
+  },
+];
+`);
+    await write(root, 'src/ignored.js', 'console.log(1);\n');
+
+    const result = await run(root, ['src/ignored.js']);
+
+    assert.equal(result.verdict, 'refuse');
+    if (result.verdict !== 'refuse') return;
+    assert.equal(result.why.code, 'eslint-incomplete-evidence');
+    assert.equal(result.why.location?.file, 'src/ignored.js');
+  });
+});
+
 test('an ESLint finding the Gate did not adopt is not a Breach of anything', async () => {
   await withWorkspace(async root => {
     await write(root, 'eslint.config.mjs', `export default [
