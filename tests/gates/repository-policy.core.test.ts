@@ -7,10 +7,17 @@ import {
   type RepositorySnapshot,
 } from '../../gates/support/repository-policy-model.ts';
 
-const workflow = [
-  'run: npm run check',
+const ciWorkflow = [
+  'run: npm run check:quality',
+  'run: npm run check:proofs',
   'run: npm run build',
   'run: npm run verify:package',
+].join('\n');
+
+const publishWorkflow = [
+  'run: npm run check',
+  'run: npm run build',
+  'run: npm run verify:package -- --pack-destination artifacts',
 ].join('\n');
 
 function manifest(name: string, dir: string, version = '1.0.0', extra: Partial<ManifestSnapshot['manifest']> = {}): ManifestSnapshot {
@@ -32,7 +39,9 @@ function snapshot(overrides: Partial<RepositorySnapshot> = {}): RepositorySnapsh
   return {
     rootScripts: {
       build: 'tsc -p packages/redproof/tsconfig.build.json',
-      check: 'npm run self:check && npm run self:prove',
+      check: 'npm run check:quality && npm run check:proofs',
+      'check:quality': 'npm run self:check',
+      'check:proofs': 'npm run self:prove',
       'self:check': 'redproof check',
       'self:prove': 'redproof prove',
     },
@@ -40,8 +49,13 @@ function snapshot(overrides: Partial<RepositorySnapshot> = {}): RepositorySnapsh
     manifests: [manifest('redproof', 'packages/redproof')],
     setVersionSource: "const dirs = ['packages/redproof'];",
     verifyPackageSource: "const packages = [{ name: 'redproof' }];",
-    ciWorkflow: workflow,
-    publishWorkflow: [workflow, 'npm pack -w redproof', 'for PKG in redproof; do'].join('\n'),
+    ciWorkflow,
+    publishWorkflow: [
+      publishWorkflow,
+      'TARBALL="artifacts/redproof-${VERSION}.tgz"',
+      'for PKG in redproof; do',
+      'npm publish "$TARBALL" --tag "$NPM_TAG"',
+    ].join('\n'),
     existingPaths: new Set([
       'README.md',
       'docs/guide.md',
@@ -71,7 +85,7 @@ test('a package missing from any release stage is reported once per stage, again
     ['packageInventory', 'package-missing-from-release-stage', 'package.json', '@redproof/extra is missing from the root build script.'],
     ['packageInventory', 'package-missing-from-release-stage', 'scripts/set-version.ts', '@redproof/extra is missing from the version setter.'],
     ['packageInventory', 'package-missing-from-release-stage', 'scripts/verify-package.ts', '@redproof/extra is missing from the package verifier.'],
-    ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the tarball build.'],
+    ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the verified tarball publish.'],
     ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the publish loop.'],
     ['publicFiles', 'invalid-package-entrypoint', 'packages/extra/package.json', '@redproof/extra must declare matching runtime and type entrypoints backed by source.'],
   ]);
@@ -85,7 +99,13 @@ test('a second package is accepted once every release stage names it', () => {
     rootBuildScript: 'tsc -p packages/redproof/tsconfig.build.json && tsc -p packages/extra/tsconfig.build.json',
     setVersionSource: 'const dirs = ["packages/redproof", "packages/extra"];',
     verifyPackageSource: "const packages = [{ name: 'redproof' }, { name: \"@redproof/extra\" }];",
-    publishWorkflow: [workflow, 'npm pack -w redproof \\', '  -w @redproof/extra', 'for PKG in redproof @redproof/extra; do'].join('\n'),
+    publishWorkflow: [
+      publishWorkflow,
+      'TARBALL="artifacts/redproof-${VERSION}.tgz"',
+      'TARBALL="artifacts/redproof-extra-${VERSION}.tgz"',
+      'for PKG in redproof @redproof/extra; do',
+      'npm publish "$TARBALL" --tag "$NPM_TAG"',
+    ].join('\n'),
     existingPaths: new Set([...clean.existingPaths, 'packages/extra/src/index.ts']),
   });
 
@@ -217,7 +237,7 @@ test('the core package must ship both public report schemas', () => {
   assert.deepEqual(codes(evaluateRepositoryPolicy({ ...clean, existingPaths: withoutSchema })), ['public-schema-missing']);
 });
 
-test('the root check script must run both self-verification scripts', () => {
+test('the root check script must transitively run both self-verification scripts', () => {
   const clean = snapshot();
 
   const noProve = { ...clean.rootScripts };
@@ -227,14 +247,14 @@ test('the root check script must run both self-verification scripts', () => {
     [['self-verification-not-enforced', 'The root check must invoke the self proof script.']],
   );
 
-  const notInvoked = { ...clean.rootScripts, check: 'npm run self:prove' };
+  const notInvoked = { ...clean.rootScripts, 'check:quality': 'npm run typecheck' };
   assert.deepEqual(
     evaluateRepositoryPolicy({ ...clean, rootScripts: notInvoked }).map(item => item.message),
     ['The root check must invoke the self check script.'],
   );
 });
 
-test('each workflow must keep every verification command as an exact step', () => {
+test('CI and publishing must keep their complete verification portfolios', () => {
   const clean = snapshot();
 
   const drifted = evaluateRepositoryPolicy({
@@ -255,6 +275,50 @@ test('each workflow must keep every verification command as an exact step', () =
 
   const indented = evaluateRepositoryPolicy({ ...clean, ciWorkflow: clean.ciWorkflow.replace(/^/gm, '        ') });
   assert.deepEqual(indented, [], 'YAML indentation does not change the step');
+
+  const noProofLane = evaluateRepositoryPolicy({
+    ...clean,
+    ciWorkflow: clean.ciWorkflow.replace('run: npm run check:proofs\n', ''),
+  });
+  assert.deepEqual(noProofLane.map(item => [item.file, item.message]), [
+    ['.github/workflows/ci.yml', '.github/workflows/ci.yml must retain npm run check:proofs.'],
+  ]);
+
+  const publishWithUnverifiedCommand = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: clean.publishWorkflow.replace('npm run verify:package -- --pack-destination artifacts', 'npm run verify:package-off'),
+  });
+  assert.deepEqual(publishWithUnverifiedCommand.map(item => [item.file, item.message]), [
+    ['.github/workflows/publish.yml', '.github/workflows/publish.yml must retain npm run verify:package -- --pack-destination artifacts.'],
+  ]);
+
+  const publishWithoutRetainedOutput = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: clean.publishWorkflow.replace('npm run verify:package -- --pack-destination artifacts', 'npm run verify:package'),
+  });
+  assert.deepEqual(publishWithoutRetainedOutput.map(item => [item.file, item.message]), [
+    ['.github/workflows/publish.yml', '.github/workflows/publish.yml must retain npm run verify:package -- --pack-destination artifacts.'],
+  ]);
+
+  const workspacePublish = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: clean.publishWorkflow.replace('npm publish "$TARBALL"', 'npm publish -w "$PKG"'),
+  });
+  assert.deepEqual(workspacePublish.map(item => [item.file, item.message]), [
+    ['.github/workflows/publish.yml', '.github/workflows/publish.yml must publish the retained verified tarballs.'],
+  ]);
+});
+
+test('publishing must name the verified tarball for every package', () => {
+  const clean = snapshot();
+  const findings = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: clean.publishWorkflow.replace('artifacts/redproof-${VERSION}.tgz', 'artifacts/other-${VERSION}.tgz'),
+  });
+
+  assert.deepEqual(findings.map(item => [item.code, item.message]), [
+    ['package-missing-from-release-stage', 'redproof is missing from the verified tarball publish.'],
+  ]);
 });
 
 test('a relative documentation link must resolve to a file or a directory', () => {

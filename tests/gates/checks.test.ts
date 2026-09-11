@@ -178,14 +178,17 @@ const policyCheck = () => repositoryPolicy({
   linkTargets: ['README.md', 'docs/**/*', 'packages/**/*'],
 });
 
-const workflow = 'run: npm run check\nrun: npm run build\nrun: npm run verify:package\n';
+const ciWorkflow = 'run: npm run check:quality\nrun: npm run check:proofs\nrun: npm run build\nrun: npm run verify:package\n';
+const publishWorkflow = 'run: npm run check\nrun: npm run build\nrun: npm run verify:package -- --pack-destination artifacts\n';
 
 async function seedRepository(root: string, extra: Readonly<Record<string, string>> = {}): Promise<void> {
   await seed(root, {
     'package.json': JSON.stringify({
       scripts: {
         build: 'tsc -p packages/redproof/tsconfig.build.json',
-        check: 'npm run self:check && npm run self:prove',
+        check: 'npm run check:quality && npm run check:proofs',
+        'check:quality': 'npm run self:check',
+        'check:proofs': 'npm run self:prove',
         'self:check': 'redproof check',
         'self:prove': 'redproof prove',
       },
@@ -202,8 +205,8 @@ async function seedRepository(root: string, extra: Readonly<Record<string, strin
     'packages/redproof/schema/prove-report-v1.schema.json': '{}',
     'scripts/set-version.ts': "const dirs = ['packages/redproof'];\n",
     'scripts/verify-package.ts': "const packages = [{ name: 'redproof' }];\n",
-    '.github/workflows/ci.yml': workflow,
-    '.github/workflows/publish.yml': `${workflow}npm pack -w redproof\nfor PKG in redproof; do\n`,
+    '.github/workflows/ci.yml': ciWorkflow,
+    '.github/workflows/publish.yml': `${publishWorkflow}TARBALL="artifacts/redproof-\${VERSION}.tgz"\nfor PKG in redproof; do\nnpm publish "$TARBALL" --tag "$NPM_TAG"\n`,
     'README.md': '[docs](docs/guide.md)\n',
     'docs/guide.md': '# Guide\n',
     ...extra,
@@ -225,7 +228,7 @@ test('repositoryPolicy passes a healthy repository and counts the manifests and 
 test('repositoryPolicy reports each policy finding against its own Rule and file', async () => {
   await withWorkspace(async root => {
     await seedRepository(root, {
-      '.github/workflows/ci.yml': 'run: npm run check\nrun: npm run build\n',
+      '.github/workflows/ci.yml': 'run: npm run check:quality\nrun: npm run check:proofs\nrun: npm run build\n',
       'docs/guide.md': '# Guide\n\n[gone](missing.md)\n',
     });
 

@@ -56,6 +56,35 @@ function escaped(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function tarballStem(packageName: string): string {
+  return packageName.replace(/^@/, '').replaceAll('/', '-');
+}
+
+function scriptInvokes(
+  scripts: Readonly<Record<string, string>>,
+  from: string,
+  target: string,
+  visited = new Set<string>(),
+): boolean {
+  if (visited.has(from)) return false;
+  visited.add(from);
+
+  const source = scripts[from];
+  if (source === undefined) return false;
+
+  const invocations = [...source.matchAll(/\bnpm run ([\w:-]+)/g)].map(match => match[1]!);
+  return invocations.includes(target)
+    || invocations.some(script => scriptInvokes(scripts, script, target, visited));
+}
+
+function workflowRuns(workflow: string, command: string): boolean {
+  return new RegExp(`^\\s*run:\\s*${escaped(command)}\\s*$`, 'm').test(workflow);
+}
+
+function workflowShellRuns(workflow: string, command: string): boolean {
+  return new RegExp(`^\\s*${escaped(command)}(?:\\s|$)`, 'm').test(workflow);
+}
+
 function packageInventory(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
   const publishLoop = /for PKG in\s+([^;]+);/.exec(snapshot.publishWorkflow)?.[1]?.split(/\s+/) ?? [];
   const findings: RepositoryPolicyFinding[] = [];
@@ -80,8 +109,8 @@ function packageInventory(snapshot: RepositorySnapshot): RepositoryPolicyFinding
       },
       {
         file: '.github/workflows/publish.yml',
-        ok: new RegExp(`-w\\s+${escaped(pkg.name)}(?:\\s|\\\\|$)`).test(snapshot.publishWorkflow),
-        stage: 'tarball build',
+        ok: snapshot.publishWorkflow.includes(`artifacts/${tarballStem(pkg.name)}-\${VERSION}.tgz`),
+        stage: 'verified tarball publish',
       },
       {
         file: '.github/workflows/publish.yml',
@@ -251,7 +280,7 @@ function publicFiles(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
 function automationVerification(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
   const findings: RepositoryPolicyFinding[] = [];
   for (const [script, label] of [['self:check', 'self check'], ['self:prove', 'self proof']] as const) {
-    if (!snapshot.rootScripts[script] || !snapshot.rootScripts.check?.includes(`npm run ${script}`)) {
+    if (!snapshot.rootScripts[script] || !scriptInvokes(snapshot.rootScripts, 'check', script)) {
       findings.push({
         rule: 'automationVerification',
         code: 'self-verification-not-enforced',
@@ -261,13 +290,20 @@ function automationVerification(snapshot: RepositorySnapshot): RepositoryPolicyF
     }
   }
 
-  for (const [file, workflow] of [
-    ['.github/workflows/ci.yml', snapshot.ciWorkflow],
-    ['.github/workflows/publish.yml', snapshot.publishWorkflow],
+  for (const [file, workflow, commands] of [
+    [
+      '.github/workflows/ci.yml',
+      snapshot.ciWorkflow,
+      ['npm run check:quality', 'npm run check:proofs', 'npm run build', 'npm run verify:package'],
+    ],
+    [
+      '.github/workflows/publish.yml',
+      snapshot.publishWorkflow,
+      ['npm run check', 'npm run build', 'npm run verify:package -- --pack-destination artifacts'],
+    ],
   ] as const) {
-    for (const command of ['npm run check', 'npm run build', 'npm run verify:package']) {
-      const commandLine = new RegExp(`^\\s*run:\\s*${escaped(command)}\\s*$`, 'm');
-      if (!commandLine.test(workflow)) {
+    for (const command of commands) {
+      if (!workflowRuns(workflow, command)) {
         findings.push({
           rule: 'automationVerification',
           code: 'workflow-verification-missing',
@@ -276,6 +312,15 @@ function automationVerification(snapshot: RepositorySnapshot): RepositoryPolicyF
         });
       }
     }
+  }
+
+  if (!workflowShellRuns(snapshot.publishWorkflow, 'npm publish "$TARBALL"')) {
+    findings.push({
+      rule: 'automationVerification',
+      code: 'workflow-verification-missing',
+      message: '.github/workflows/publish.yml must publish the retained verified tarballs.',
+      file: '.github/workflows/publish.yml',
+    });
   }
   return findings;
 }
