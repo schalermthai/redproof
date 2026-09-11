@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Rule } from 'redproof';
 import {
+  dependencyCruiserRuleAvailability,
   violationDiagnostic,
   violationsToBreaches,
   type DependencyCruiserViolation,
@@ -29,6 +30,31 @@ const violation = (
   to: 'src/infrastructure/database.ts',
   rule: { name, severity: 'error' },
   ...extra,
+});
+
+test('rule availability distinguishes active, inactive, and missing configuration', () => {
+  assert.deepEqual(
+    dependencyCruiserRuleAvailability({
+      forbidden: [
+        { name: 'active-error', severity: 'error' },
+        { name: 'active-warn', severity: 'warn' },
+        { name: 'inactive', severity: 'ignore' },
+      ],
+      required: [{ name: 'active-info', severity: 'info' }],
+      allowed: [{ from: {}, to: {} }],
+    }, [
+      'active-error',
+      'active-warn',
+      'active-info',
+      'not-in-allowed',
+      'inactive',
+      'absent',
+    ]),
+    {
+      missing: ['absent'],
+      inactive: ['inactive'],
+    },
+  );
 });
 
 test('each adopted violation becomes a Breach of the Redproof Rule that maps to it', () => {
@@ -65,6 +91,17 @@ test('a violation of a rule the Gate did not adopt produces no Breach', () => {
     violation('domain-no-infrastructure'),
   ], byForeignRule);
   assert.deepEqual(mixed.map(item => item.rule), [domain.id]);
+});
+
+test('a known violation softened to ignore does not become a Redproof Breach', () => {
+  assert.deepEqual(
+    violationsToBreaches([
+      violation('domain-no-infrastructure', {
+        rule: { name: 'domain-no-infrastructure', severity: 'ignore' },
+      }),
+    ], byForeignRule),
+    [],
+  );
 });
 
 test('a Breach names the dependency that broke the rule and where it starts', () => {
@@ -113,6 +150,18 @@ test('an indirect breach carries the route that produced it', () => {
     })).detail,
     'Cycle: src/a.ts -> src/b.ts',
     'a cycle is the more precise route, so it wins over via',
+  );
+});
+
+test('a structured cycle names its modules instead of stringifying its objects', () => {
+  assert.equal(
+    violationDiagnostic(violation('no-cycles', {
+      cycle: [
+        { name: 'src/a.ts', dependencyTypes: ['local', 'import'] },
+        { name: 'src/b.ts', dependencyTypes: ['local', 'import'] },
+      ],
+    })).detail,
+    'Cycle: src/a.ts -> src/b.ts',
   );
 });
 

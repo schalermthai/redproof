@@ -163,13 +163,34 @@ test('a Rule the dependency-cruiser configuration does not define REFUSES instea
   });
 });
 
+test('a Rule disabled in dependency-cruiser REFUSES instead of falsely passing', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      config: "export default async function extractConfig() { return { forbidden: [{ name: 'no-new-debt', severity: 'ignore' }] }; }\n",
+      cruise: "export async function cruise() { throw new Error('cruise must not run'); }\n",
+    });
+
+    const result = await run(adapterFor({}), root);
+
+    assert.equal(result.verdict, 'refuse');
+    if (result.verdict !== 'refuse') return;
+    assert.equal(result.why.code, 'dependency-cruiser-rule-inactive');
+    assert.equal(result.why.location?.file, '.dependency-cruiser.mjs');
+    assert.match(result.why.detail ?? '', /no-new-debt/u);
+    assert.equal(result.scan.inspected, null);
+  });
+});
+
 test('a known-violations baseline is forwarded to dependency-cruiser, and new violations still fail', async () => {
   await withWorkspace(async root => {
     await writeFakeDependencyCruiser(root, {
       cruise: cruiseReporting(`{
-    totalCruised: 3,
+    totalCruised: 4,
     violations: (options.ignoreKnown === true && options.knownViolations.length === 1)
-      ? [{ rule: { name: 'no-new-debt', severity: 'error' }, from: 'src/a.ts', to: 'src/b.ts' }]
+      ? [
+          { rule: { name: 'no-new-debt', severity: 'ignore' }, from: 'src/known.ts', to: 'src/debt.ts' },
+          { rule: { name: 'no-new-debt', severity: 'error' }, from: 'src/a.ts', to: 'src/b.ts' },
+        ]
       : [{ rule: { name: 'no-new-debt' }, from: 'baseline', to: 'was not forwarded' }],
   }`),
     });
@@ -183,6 +204,7 @@ test('a known-violations baseline is forwarded to dependency-cruiser, and new vi
 
     assert.equal(result.verdict, 'fail');
     if (result.verdict !== 'fail') return;
+    assert.equal(result.breaches.length, 1);
     assert.equal(result.breaches[0]?.location?.file, 'src/a.ts');
   });
 });
