@@ -44,6 +44,16 @@ test('structured: every Adapter creates Breaches only from selected structured f
   );
   assert.equal(eslintFindings[0]?.location?.file, 'src/a.ts');
 
+  const suppressed = eslintBreaches('/repo', [{
+    filePath: '/repo/src/a.ts',
+    messages: [],
+    suppressedMessages: [{ ruleId: 'semi', message: 'Suppressed semicolon.', line: 3, column: 1 }],
+  }], new Map<string, Rule>([['semi', eslintRule]]));
+  assert.deepEqual(
+    suppressed.map(item => [item.rule, item.message, item.location?.line]),
+    [['eslint/semi', 'Suppressed semicolon.', 3]],
+  );
+
   const dependencyFindings: DependencyCruiserViolation[] = [
     { from: 'src/a.ts', to: 'src/b.ts', rule: { name: 'no-cycles' } },
     { from: 'src/a.ts', to: 'src/c.ts', rule: { name: 'not-selected' } },

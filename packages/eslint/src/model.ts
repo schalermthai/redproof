@@ -18,6 +18,7 @@ export type EslintMessage = {
 export type EslintResult = {
   readonly filePath: string;
   readonly messages: readonly EslintMessage[];
+  readonly suppressedMessages?: readonly EslintMessage[] | undefined;
 };
 
 export function eslintDiagnostic(root: string, file: string, message: EslintMessage): Diagnostic {
@@ -43,6 +44,22 @@ export function fatalEslintDiagnostic(
   return null;
 }
 
+export function incompleteEslintDiagnostic(
+  root: string,
+  results: readonly EslintResult[],
+): Diagnostic | null {
+  for (const result of results) {
+    const incomplete = result.messages.find(message => !message.ruleId && !message.fatal);
+    if (incomplete) {
+      return {
+        ...eslintDiagnostic(root, result.filePath, incomplete),
+        code: 'eslint-incomplete-evidence',
+      };
+    }
+  }
+  return null;
+}
+
 export function eslintBreaches<R extends RuleRef>(
   root: string,
   results: readonly EslintResult[],
@@ -51,7 +68,10 @@ export function eslintBreaches<R extends RuleRef>(
   const breaches: Breach<R>[] = [];
 
   for (const result of results) {
-    for (const message of result.messages) {
+    for (const message of [
+      ...result.messages,
+      ...(result.suppressedMessages ?? []),
+    ]) {
       if (!message.ruleId) continue;
       const rule = byForeignId.get(message.ruleId);
       if (!rule) continue;
