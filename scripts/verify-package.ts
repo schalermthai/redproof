@@ -2,13 +2,16 @@
 // drives them as a real consumer would.
 //
 // Usage: node --experimental-strip-types scripts/verify-package.ts
+//        node --experimental-strip-types scripts/verify-package.ts --pack-destination artifacts
 
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathIsInside, resolvePackageVerificationOptions } from './verify-package-options.ts';
 
 const REPO = resolve(import.meta.dirname, '..');
+const options = resolvePackageVerificationOptions(process.argv.slice(2), REPO);
 
 const PACKAGES = [
   { name: 'redproof', tarballPrefix: 'redproof-', probe: 'defineGate' },
@@ -50,19 +53,32 @@ function tryRun(command: string, args: readonly string[], cwd: string): { ok: bo
 }
 
 const workdir = await mkdtemp(join(tmpdir(), 'redproof-verify-'));
-const packDir = join(workdir, 'tarballs');
+const packDir = options.packDestination ?? join(workdir, 'tarballs');
 const consumer = join(workdir, 'consumer');
 
 try {
   console.log(`workspace: ${workdir}\n`);
 
   console.log('1. Pack the publishable packages');
-  await writeFile(join(workdir, '.keep'), '');
-  run('mkdir', ['-p', packDir, consumer], workdir);
+  await mkdir(packDir, { recursive: true });
+  await mkdir(consumer, { recursive: true });
+  if (options.packDestination !== undefined) {
+    const [canonicalRepository, canonicalPackDir] = await Promise.all([
+      realpath(REPO),
+      realpath(packDir),
+    ]);
+    if (!pathIsInside(canonicalRepository, canonicalPackDir)) {
+      throw new Error(`pack destination must stay inside the repository: ${packDir}`);
+    }
+  }
+  const existingArtifacts = await readdir(packDir);
+  if (options.packDestination !== undefined && existingArtifacts.length > 0) {
+    throw new Error(`pack destination must be empty: ${packDir}`);
+  }
 
   const packArgs = PACKAGES.flatMap(pkg => ['-w', pkg.name]);
   run('npm', ['pack', ...packArgs, '--pack-destination', packDir], REPO);
-  const packed = run('ls', ['-1', packDir], workdir).trim().split('\n');
+  const packed = (await readdir(packDir)).sort();
   report(packed.length === PACKAGES.length, `packed ${packed.length} of ${PACKAGES.length} packages`);
 
   console.log('\n2. Check what each tarball contains');
@@ -162,7 +178,8 @@ try {
   report(commandImport.ok, 'redproof/command imports at run time', commandImport.ok ? '' : commandImport.output.slice(0, 300));
 
   console.log('\n5. Run the redproof command line tool on a real project');
-  run('mkdir', ['-p', join(consumer, 'gates'), join(consumer, 'src')], consumer);
+  await mkdir(join(consumer, 'gates'), { recursive: true });
+  await mkdir(join(consumer, 'src'), { recursive: true });
 
   await writeFile(
     join(consumer, 'redproof.config.ts'),

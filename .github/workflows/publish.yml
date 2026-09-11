@@ -89,20 +89,7 @@ jobs:
         run: npm run build
 
       - name: Verify the packages a consumer would install
-        run: npm run verify:package
-
-      - name: Build the tarballs
-        run: |
-          mkdir -p artifacts
-          npm pack \
-            -w redproof \
-            -w @redproof/adapter-tck \
-            -w @redproof/eslint \
-            -w @redproof/dependency-cruiser \
-            -w @redproof/stryker \
-            -w @redproof/testing \
-            --pack-destination artifacts
-          ls -l artifacts
+        run: npm run verify:package -- --pack-destination artifacts
 
       - name: Upload the tarballs
         uses: actions/upload-artifact@v7
@@ -125,8 +112,17 @@ jobs:
               continue
             fi
 
-            echo "Publishing $PKG"
-            npm publish -w "$PKG" --tag "$NPM_TAG" --provenance
+            case "$PKG" in
+              redproof) TARBALL="artifacts/redproof-${VERSION}.tgz" ;;
+              @redproof/adapter-tck) TARBALL="artifacts/redproof-adapter-tck-${VERSION}.tgz" ;;
+              @redproof/eslint) TARBALL="artifacts/redproof-eslint-${VERSION}.tgz" ;;
+              @redproof/dependency-cruiser) TARBALL="artifacts/redproof-dependency-cruiser-${VERSION}.tgz" ;;
+              @redproof/stryker) TARBALL="artifacts/redproof-stryker-${VERSION}.tgz" ;;
+              @redproof/testing) TARBALL="artifacts/redproof-testing-${VERSION}.tgz" ;;
+            esac
+
+            echo "Publishing $TARBALL"
+            npm publish "$TARBALL" --tag "$NPM_TAG" --provenance
           done
 
       - name: Report a dry run

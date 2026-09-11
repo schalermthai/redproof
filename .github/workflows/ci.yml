@@ -1,6 +1,6 @@
 name: CI
 
-# Every push to main and every pull request runs the same gate the release runs.
+# Independent confidence layers start together and report their failures separately.
 on:
   push:
     branches: [main]
@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    name: Check and verify
+  quality:
+    name: Quality and integration checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -30,21 +30,78 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
 
-      - name: Show tool versions
-        run: |
-          echo "node: $(node --version)"
-          echo "npm:  $(npm --version)"
-
       # `npm ci` also proves package.json and package-lock.json still agree.
       - name: Install dependencies
         run: npm ci
 
-      - name: Run the full project check
-        run: npm run check
+      - name: Run quality and integration checks
+        run: npm run check:quality
 
-      # Rebuilt on purpose. Package verification must never read a stale dist.
+  proofs:
+    name: Redproof proofs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the proof runtime
+        run: npm run build
+
+      - name: Run the complete proof portfolio
+        run: npm run check:proofs
+
+  packages:
+    name: Package consumer verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Package verification must never read a stale dist.
       - name: Build the production artifact
         run: npm run build
 
       - name: Verify the packages a consumer would install
         run: npm run verify:package
+
+  # Preserve the established required-check name while the three useful jobs
+  # above run and report independently.
+  check:
+    name: Check and verify
+    if: always()
+    needs: [quality, proofs, packages]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require every confidence layer
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          PROOFS_RESULT: ${{ needs.proofs.result }}
+          PACKAGES_RESULT: ${{ needs.packages.result }}
+        run: |
+          if [ "$QUALITY_RESULT" != success ] || [ "$PROOFS_RESULT" != success ] || [ "$PACKAGES_RESULT" != success ]; then
+            echo "One or more CI confidence layers did not pass."
+            exit 1
+          fi

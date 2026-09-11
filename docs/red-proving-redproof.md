@@ -156,9 +156,17 @@ that packages share a version, internal dependency pins match, package edges
 follow the core–TCK–Adapter layers, public runtime and type surfaces are backed
 by source, and CI cannot silently drop required verification.
 
-The release workflow then packs all six packages and installs them into a clean
-consumer. It verifies runtime imports, published types, CLI behavior, package
-contents, and exact internal links before npm publishing is allowed.
+The release workflow then packs all six packages and installs those tarballs
+into a clean consumer. It verifies runtime imports, published types, CLI
+behavior, package contents, and exact internal links. The same verified
+tarballs are retained, attached to the workflow run, and passed directly to
+`npm publish`; the release does not rebuild a different artifact afterward.
+
+CI runs quality and integration checks, the complete proof portfolio, and the
+clean-consumer package verification as independent jobs. They start together,
+so a slow proof no longer makes unrelated verification wait, while the root
+`npm run check` command still composes the complete source and proof portfolio
+for local and release use.
 
 The proofs cover this boundary too. A deliberately omitted package must breach
 the inventory Rule. A divergent version must breach alignment. A forbidden
