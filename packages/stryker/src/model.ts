@@ -45,6 +45,27 @@ export type MutationMetrics = {
   readonly score: number | null;
 };
 
+export type StrykerProgrammaticOptions = {
+  readonly configFile?: string;
+  readonly reporters: [];
+  readonly cleanTempDir: 'always';
+  readonly logLevel: 'off';
+  readonly fileLogLevel: 'off';
+};
+
+/** Keep Stryker as an evidence producer while Redproof owns the reporting stream. */
+export function strykerProgrammaticOptions(
+  configFile?: string,
+): StrykerProgrammaticOptions {
+  return {
+    ...(configFile ? { configFile } : {}),
+    reporters: [],
+    cleanTempDir: 'always',
+    logLevel: 'off',
+    fileLogLevel: 'off',
+  };
+}
+
 export function mutationMetrics(mutants: readonly StrykerMutantResult[]): MutationMetrics {
   let detected = 0;
   let undetected = 0;

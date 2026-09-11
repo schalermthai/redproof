@@ -3,10 +3,28 @@ import test from 'node:test';
 import {
   mutationMetrics,
   mutationScoreBreach,
+  strykerProgrammaticOptions,
   undetectedMutantBreaches,
   type MutationMetrics,
   type StrykerMutantResult,
 } from '../../packages/stryker/src/model.ts';
+
+test('the programmatic producer cannot write beside the Redproof reporter', () => {
+  assert.deepEqual(strykerProgrammaticOptions('stryker.config.mjs'), {
+    configFile: 'stryker.config.mjs',
+    reporters: [],
+    cleanTempDir: 'always',
+    logLevel: 'off',
+    fileLogLevel: 'off',
+  });
+
+  assert.deepEqual(strykerProgrammaticOptions(), {
+    reporters: [],
+    cleanTempDir: 'always',
+    logLevel: 'off',
+    fileLogLevel: 'off',
+  });
+});
 
 const detectedRule = {
   id: 'stryker/mutants-detected',

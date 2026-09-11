@@ -84,6 +84,12 @@ undetected mutant without a stable identity refuses, and no other Rule is
 evaluated in that run. The `replacement` text comes from Stryker's code
 generator, so a Stryker upgrade can change it and make entries stale.
 
+The Adapter disables Stryker's reporters and logs while it runs. This keeps
+Redproof's text, JSON, and SARIF output as the only reporting stream. A Stryker
+failure is returned as REFUSE detail; rerun Stryker directly when you need its
+native debug log or mutation report. Mutant and baseline locations are reported
+relative to the Gate root, even when Stryker runs from a nested `cwd`.
+
 Then run:
 
 ```bash
