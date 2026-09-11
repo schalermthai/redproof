@@ -52,6 +52,7 @@ function snapshot(overrides: Partial<RepositorySnapshot> = {}): RepositorySnapsh
     ciWorkflow,
     publishWorkflow: [
       publishWorkflow,
+      'for READY_PACKAGE in redproof; do',
       'TARBALL="artifacts/redproof-${VERSION}.tgz"',
       'for PKG in redproof; do',
       'npm publish "$TARBALL" --tag "$NPM_TAG"',
@@ -85,6 +86,7 @@ test('a package missing from any release stage is reported once per stage, again
     ['packageInventory', 'package-missing-from-release-stage', 'package.json', '@redproof/extra is missing from the root build script.'],
     ['packageInventory', 'package-missing-from-release-stage', 'scripts/set-version.ts', '@redproof/extra is missing from the version setter.'],
     ['packageInventory', 'package-missing-from-release-stage', 'scripts/verify-package.ts', '@redproof/extra is missing from the package verifier.'],
+    ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the npm package readiness check.'],
     ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the verified tarball publish.'],
     ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the publish loop.'],
     ['publicFiles', 'invalid-package-entrypoint', 'packages/extra/package.json', '@redproof/extra must declare matching runtime and type entrypoints backed by source.'],
@@ -101,6 +103,7 @@ test('a second package is accepted once every release stage names it', () => {
     verifyPackageSource: "const packages = [{ name: 'redproof' }, { name: \"@redproof/extra\" }];",
     publishWorkflow: [
       publishWorkflow,
+      'for READY_PACKAGE in redproof @redproof/extra; do',
       'TARBALL="artifacts/redproof-${VERSION}.tgz"',
       'TARBALL="artifacts/redproof-extra-${VERSION}.tgz"',
       'for PKG in redproof @redproof/extra; do',
@@ -318,6 +321,26 @@ test('publishing must name the verified tarball for every package', () => {
 
   assert.deepEqual(findings.map(item => [item.code, item.message]), [
     ['package-missing-from-release-stage', 'redproof is missing from the verified tarball publish.'],
+  ]);
+});
+
+test('npm readiness and publication inventories are enforced independently', () => {
+  const clean = snapshot();
+
+  const missingFromReadiness = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: clean.publishWorkflow.replace('for READY_PACKAGE in redproof;', 'for READY_PACKAGE in redproof-off;'),
+  });
+  assert.deepEqual(missingFromReadiness.map(item => item.message), [
+    'redproof is missing from the npm package readiness check.',
+  ]);
+
+  const missingFromPublish = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: clean.publishWorkflow.replace('for PKG in redproof;', 'for PKG in redproof-off;'),
+  });
+  assert.deepEqual(missingFromPublish.map(item => item.message), [
+    'redproof is missing from the publish loop.',
   ]);
 });
 

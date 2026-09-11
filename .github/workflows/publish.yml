@@ -98,6 +98,53 @@ jobs:
           path: artifacts/*.tgz
           retention-days: 30
 
+      - name: Check npm package readiness
+        if: github.event_name == 'release' || github.event.inputs.dry-run == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          MISSING_PACKAGES=()
+          for READY_PACKAGE in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing; do
+            if LOOKUP=$(npm view "$READY_PACKAGE" name --json 2>&1); then
+              continue
+            fi
+
+            case "$LOOKUP" in
+              *E404*) MISSING_PACKAGES+=("$READY_PACKAGE") ;;
+              *)
+                echo "::error title=npm registry lookup failed::Could not confirm whether $READY_PACKAGE exists. This is not a package-bootstrap failure."
+                printf '%s\n' "$LOOKUP"
+                exit 1
+                ;;
+            esac
+          done
+
+          if [ "${#MISSING_PACKAGES[@]}" -gt 0 ]; then
+            echo "::error title=New npm package needs bootstrap::These packages do not exist on npm yet: ${MISSING_PACKAGES[*]}"
+            echo
+            echo "Action required before this release can continue:"
+            echo "Run these commands while signed in to npm with package write access and 2FA."
+            echo "1. Download the verified tarballs:"
+            echo "   gh run download ${GITHUB_RUN_ID} --repo schalermthai/redproof --name npm-tarballs-${VERSION} --dir artifacts"
+
+            for MISSING_PACKAGE in "${MISSING_PACKAGES[@]}"; do
+              TARBALL_STEM="${MISSING_PACKAGE#@}"
+              TARBALL_STEM="${TARBALL_STEM/\//-}"
+              TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"
+              echo
+              echo "2. Bootstrap $MISSING_PACKAGE with the verified tarball:"
+              echo "   npm publish \"$TARBALL\" --access public"
+              echo "3. Authorize this workflow as its trusted publisher:"
+              echo "   npm trust github \"$MISSING_PACKAGE\" --repo schalermthai/redproof --file publish.yml --allow-publish"
+            done
+
+            echo
+            echo "4. Re-run this workflow. Already-published package versions will be skipped."
+            exit 1
+          fi
+
       - name: Publish to npm
         if: github.event_name == 'release' || github.event.inputs.dry-run == 'false'
         env:
