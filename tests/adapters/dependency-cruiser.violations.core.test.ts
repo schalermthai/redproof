@@ -57,6 +57,32 @@ test('rule availability distinguishes active, inactive, and missing configuratio
   );
 });
 
+test('an allowed block disabled by allowedSeverity is inactive, not available', () => {
+  const allowed = [{ from: {}, to: {} }];
+
+  assert.deepEqual(
+    dependencyCruiserRuleAvailability({ allowed, allowedSeverity: 'ignore' }, ['not-in-allowed']),
+    { missing: [], inactive: ['not-in-allowed'] },
+  );
+
+  for (const allowedSeverity of ['error', 'warn', 'info', undefined]) {
+    assert.deepEqual(
+      dependencyCruiserRuleAvailability(
+        { allowed, ...(allowedSeverity ? { allowedSeverity } : {}) },
+        ['not-in-allowed'],
+      ),
+      { missing: [], inactive: [] },
+      `allowedSeverity ${String(allowedSeverity)}`,
+    );
+  }
+
+  assert.deepEqual(
+    dependencyCruiserRuleAvailability({ allowedSeverity: 'ignore' }, ['not-in-allowed']),
+    { missing: ['not-in-allowed'], inactive: [] },
+    'no allowed block at all is missing, not inactive',
+  );
+});
+
 test('each adopted violation becomes a Breach of the Redproof Rule that maps to it', () => {
   const breaches = violationsToBreaches([
     violation('domain-no-infrastructure'),
