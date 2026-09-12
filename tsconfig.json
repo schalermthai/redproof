@@ -31,6 +31,7 @@
       "@redproof/stryker": [
         "packages/stryker/src/index.ts"
       ],
+      "@redproof/istanbul": ["packages/istanbul/src/index.ts"],
       "@redproof/testing": [
         "packages/testing/src/index.ts"
       ]

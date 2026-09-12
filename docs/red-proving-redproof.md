@@ -17,7 +17,7 @@ defect, running the same Gate, and requiring the expected Rule to breach. A
 green check is useful. A green check whose detection has also been demonstrated
 is much stronger evidence.
 
-Redproof currently protects itself with five Gates, 27 Rules, and 36 proofs.
+Redproof currently protects itself with six Gates.
 These are the controls used by the real CI and release workflows, not a separate
 showcase suite.
 
@@ -61,7 +61,7 @@ The proof report makes the claim and the observed outcome visible together:
 
 ## One model for very different guardrails
 
-Redproof's self-hosted portfolio covers five different kinds of evidence. The
+Redproof's self-hosted portfolio covers several different kinds of evidence. The
 value is not the number of Gates; it is that the same proof model works across
 all of them.
 
@@ -70,6 +70,7 @@ all of them.
 | [`architecture`](../gates/architecture.ts) | Dependencies point inward and the functional core remains pure. | dependency-cruiser plus TypeScript syntax analysis | Introduce a dependency cycle, import a shell from the core, or read ambient process state. |
 | [`static-contracts`](../gates/static-contracts.ts) | Source and checked documentation compile, while unchecked fragment debt cannot grow. | TypeScript and documentation commands | Add a type error, an invalid documentation example, or one unbudgeted fragment. |
 | [`test-health`](../gates/test-health.ts) | Every collected test passes and none is skipped. | Structured JUnit evidence through `@redproof/testing` | Add a failing test or a skipped test. |
+| [`coverage`](../gates/coverage.ts) | The coverage model retains its statement, branch, function and line thresholds. | Fresh Istanbul-format evidence from c8 | Add unexecuted statements, branches, functions or lines; fail the producer. |
 | [`adapter-contracts`](../gates/adapter-contracts.ts) | Built-in Adapters validate configuration, handle unavailable execution honestly, preserve pure evidence models, respect report capabilities, and attribute structured findings correctly. | Original contract suites plus package-owned `@redproof/adapter-tck` suites | Remove option validation, corrupt runner mapping, add an effect to a pure model, or drop a selected finding. |
 | [`repository-policy`](../gates/repository-policy.ts) | Every package is complete, aligned, documented, and verified before release. | Package manifests, workflows, source inventory, and documentation links | Omit a package from release automation, diverge a version, remove verification, or add a broken link. |
 
@@ -150,13 +151,13 @@ the TCK does not import built-in Adapters.
 Dogfooding stops being convincing if it protects source code but not what users
 install.
 
-The repository-policy Gate reads the six package manifests, public exports,
+The repository-policy Gate reads the package manifests, public exports,
 source inventory, automation workflows, and documentation links. It checks
 that packages share a version, internal dependency pins match, package edges
 follow the core–TCK–Adapter layers, public runtime and type surfaces are backed
 by source, and CI cannot silently drop required verification.
 
-The release workflow then packs all six packages and installs those tarballs
+The release workflow then packs all publishable packages and installs those tarballs
 into a clean consumer. It verifies runtime imports, published types, CLI
 behavior, package contents, and exact internal links. The same verified
 tarballs are retained, attached to the workflow run, and passed directly to
@@ -222,7 +223,7 @@ the problems they were built to catch.
 
 ## Run the dogfood portfolio
 
-Describe the five Gates as an executable specification:
+Describe the Gates as an executable specification:
 
 ```bash
 npm run self:describe
@@ -247,7 +248,7 @@ documentation examples, native tests, and the real-tool fixture portfolio:
 npm run check
 ```
 
-The implementation is intentionally readable. Start with the five files in
+The implementation is intentionally readable. Start with the Gate files in
 [`gates/`](../gates), then see the reusable
 [Contract-to-Gate method](contract-to-gate.md), the
 [Adapter contract design](adapter-contract-gates.md), and the

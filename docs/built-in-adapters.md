@@ -8,6 +8,13 @@ Every Adapter reports how many targets it inspected. A PASS over zero targets is
 
 ## Testing
 
+For coverage thresholds, use [`@redproof/istanbul`](../packages/istanbul/README.md).
+It provides `nyc()` for fresh native coverage collection and `istanbul()` for
+other full coverage-map producers. Four Rules protect statement, branch,
+function and line thresholds; each can apply overall or per file. Missing
+expected files and unsuccessful producers REFUSE. Coverage complements test
+outcomes; it does not prove assertion quality.
+
 Package:
 
 ```bash
