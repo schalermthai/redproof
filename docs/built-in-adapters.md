@@ -24,9 +24,15 @@ export default defineGate({
 
 Warnings breach selected Rules; disabled categories and incomplete evidence
 REFUSE. The adapter preserves processed-file counts, issue locations and group
-details through a private Knip reporter. See the
-[Knip package](../packages/knip/README.md) for options and scope, and the
-[expert dogfood](knip-expert-dogfood.md) for native parity controls.
+details through a private Knip reporter.
+
+The adapter requires Knip 6.35.1 or later, below 7. It reads the installed
+version from the Knip package manifest and REFUSES an unsupported one. The
+`cli` option does not skip that check when the path it names sits inside an
+installed Knip. A `cli` path outside an installed Knip carries no version to
+read, so no version check runs for it.
+
+See the [Knip package](../packages/knip/README.md) for options and scope.
 
 ## Testing
 

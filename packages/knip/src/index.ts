@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { counting, defineAdapter, defineRules, rejectUnknownKeys, result,
   type Adapter, type NoUnknownKeys, type Rule } from 'redproof';
@@ -39,6 +39,24 @@ async function confined(root: string, path: string): Promise<string> {
     throw new Error('Knip path resolves outside the Gate root.');
   }
   return actual;
+}
+
+/** The Knip package root that holds a CLI path, when that path is inside an installed Knip. */
+function knipPackageRootOf(cli: string): string | undefined {
+  const parts = cli.split(sep);
+  const index = parts.lastIndexOf('knip');
+  if (index < 1 || parts[index - 1] !== 'node_modules') return undefined;
+  return parts.slice(0, index + 1).join(sep);
+}
+
+/** The installed version when it is outside the supported range, otherwise undefined. */
+async function unsupportedKnipVersion(packageRoot: string): Promise<string | undefined> {
+  const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as { version?: string };
+  const version = /^6\.(\d+)\.(\d+)$/u.exec(manifest.version ?? '');
+  if (!version || Number(version[1]) < 35 || (Number(version[1]) === 35 && Number(version[2]) < 1)) {
+    return `Installed: ${manifest.version ?? 'unknown'}`;
+  }
+  return undefined;
 }
 
 export function knip<const O extends KnipOptions>(options: O & NoUnknownKeys<O, KnipOptions>): Adapter<Catalog<O['rules']>> {
@@ -84,15 +102,20 @@ export function knip<const O extends KnipOptions>(options: O & NoUnknownKeys<O, 
         try {
           const root = await realpath(ctx.root);
           const cwd = await confined(root, settings.cwd ?? '.');
+          const required = 'This adapter requires Knip >=6.35.1 <7.';
           let cli: string;
-          if (settings.cli) cli = await confined(root, settings.cli);
-          else {
+          if (settings.cli) {
+            cli = await confined(root, settings.cli);
+            const packageRoot = knipPackageRootOf(cli);
+            /** A wrapper script names no version, so only a real install can be judged. */
+            const installed = packageRoot === undefined
+              ? undefined
+              : await unsupportedKnipVersion(packageRoot).catch(() => undefined);
+            if (installed) return refuse('knip-version-unsupported', required, installed);
+          } else {
             const packageRoot = resolve(dirname(createRequire(join(cwd, 'package.json')).resolve('knip')), '..');
-            const manifest = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as { version?: string };
-            const version = /^6\.(\d+)\.(\d+)$/u.exec(manifest.version ?? '');
-            if (!version || Number(version[1]) < 35 || (Number(version[1]) === 35 && Number(version[2]) < 1)) {
-              return refuse('knip-version-unsupported', 'This adapter requires Knip >=6.35.1 <7.', `Installed: ${manifest.version ?? 'unknown'}`);
-            }
+            const installed = await unsupportedKnipVersion(packageRoot);
+            if (installed) return refuse('knip-version-unsupported', required, installed);
             cli = join(packageRoot, 'bin/knip.js');
           }
           const reporter = fileURLToPath(new URL(import.meta.url.endsWith('.ts') ? './reporter.ts' : './reporter.js', import.meta.url));

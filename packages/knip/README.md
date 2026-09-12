@@ -102,5 +102,4 @@ whole-repository reachability or validate arbitrary configuration code.
 
 Development: the package owns its Adapter TCK registration, native tests and
 pure parser tests. The repository's `unused-code` Gate supplies RED proofs for
-six categories plus GREEN and REFUSE. See
-[the expert exercise](https://github.com/schalermthai/redproof/blob/main/docs/knip-expert-dogfood.md) for independent controls.
+six categories plus GREEN and REFUSE.

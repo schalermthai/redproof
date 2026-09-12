@@ -128,3 +128,30 @@ test('an undeletable evidence directory cannot relabel a timeout', async () => w
   if (outcome.verdict === 'refuse') assert.equal(outcome.why.code, 'command-timeout');
   await releaseLocked(root);
 }));
+
+/** An installed Knip whose CLI runs but whose manifest states an unsupported version. */
+async function installOldKnip(root: string): Promise<void> {
+  await mkdir(join(root, 'app/node_modules/knip/bin'), { recursive: true });
+  await writeFile(join(root, 'app/package.json'), '{"name":"consumer"}');
+  await writeFile(join(root, 'app/node_modules/knip/package.json'),
+    '{"name":"knip","version":"5.0.0","main":"bin/knip.js"}');
+  await writeFile(join(root, 'app/node_modules/knip/bin/knip.js'), writeReport(envelope()));
+}
+
+test('an unsupported installed version REFUSES whether or not cli names it', async () => withProject(async root => {
+  await installOldKnip(root);
+  for (const options of [{ cwd: 'app' }, { cwd: 'app', cli: 'app/node_modules/knip/bin/knip.js' }]) {
+    const outcome = await knip({ ...options, rules }).check.run({ root, rules: ['knip/unused-exports'] });
+    assert.equal(outcome.verdict, 'refuse', JSON.stringify({ options, outcome }));
+    if (outcome.verdict === 'refuse') {
+      assert.equal(outcome.why.code, 'knip-version-unsupported');
+      assert.equal(outcome.why.detail, 'Installed: 5.0.0');
+    }
+  }
+}));
+
+test('a wrapper script outside an installed Knip carries no version to judge', async () => withProject(async root => {
+  await writeFile(join(root, 'wrapper.mjs'), writeReport(envelope()));
+  const outcome = await knip({ cli: 'wrapper.mjs', rules }).check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(outcome.verdict, 'pass', JSON.stringify(outcome));
+}));
