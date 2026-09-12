@@ -8,6 +8,27 @@ export const issueTypes = [
 ] as const;
 export type KnipIssueType = typeof issueTypes[number];
 
+/** Native selectors and diagnostic codes stay intact; Rule identities describe findings. */
+export const ruleDefinitions = {
+  files: { id: 'knip/unused-files', description: 'Files in the configured scan must be reachable from its entrypoints.' },
+  dependencies: { id: 'knip/unused-dependencies', description: 'Declared dependencies must be used in the configured scan.' },
+  devDependencies: { id: 'knip/unused-dev-dependencies', description: 'Development dependencies must be used and not duplicate regular dependencies.' },
+  optionalPeerDependencies: { id: 'knip/referenced-optional-peer-dependencies', description: 'Referenced optional peer dependencies must also be declared as direct dependencies or development dependencies.' },
+  unlisted: { id: 'knip/undeclared-dependencies', description: 'Used dependencies must be declared in the applicable package manifest.' },
+  binaries: { id: 'knip/undeclared-command-dependencies', description: 'Dependencies providing used commands must be declared in the applicable package manifest.' },
+  unresolved: { id: 'knip/unresolved-imports', description: 'Import specifiers in the configured scan must resolve.' },
+  exports: { id: 'knip/unused-exports', description: 'Exports in the configured scan must be used.' },
+  types: { id: 'knip/unused-exported-types', description: 'Exported types in the configured scan must be used.' },
+  nsExports: { id: 'knip/unreferenced-exports-in-used-namespaces', description: 'Exports in used import namespaces must have individual references, not only a reference to the namespace object.' },
+  nsTypes: { id: 'knip/unreferenced-types-in-used-namespaces', description: 'Exported types in used import namespaces must have individual references, not only a reference to the namespace object.' },
+  duplicates: { id: 'knip/duplicate-exports', description: 'The same symbol must not be exported more than once from a module.' },
+  enumMembers: { id: 'knip/unused-exported-enum-members', description: 'Exported enum members in the configured scan must be used.' },
+  namespaceMembers: { id: 'knip/unused-exported-namespace-members', description: 'Exported TypeScript namespace members in the configured scan must be used.' },
+  catalog: { id: 'knip/unused-catalog-entries', description: 'Dependency catalog entries in the configured scan must be referenced.' },
+  catalogReferences: { id: 'knip/unresolved-catalog-references', description: 'Dependency catalog references must resolve to entries in the referenced catalog.' },
+  cycles: { id: 'knip/circular-imports', description: 'Runtime imports in the configured scan must not form cycles.' },
+} as const satisfies Record<KnipIssueType, { readonly id: string; readonly description: string }>;
+
 export type KnipFinding = {
   readonly type: KnipIssueType;
   readonly file: string;

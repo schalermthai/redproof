@@ -24,11 +24,40 @@ const adapter = knip({
 export default defineGate({ id: 'unused-code', adapter });
 ```
 
-Each alias becomes a Rule with the id `knip/<issue-type>`. Supported types:
-`files`, `dependencies`, `devDependencies`, `optionalPeerDependencies`,
-`unlisted`, `binaries`, `unresolved`, `exports`, `types`, `nsExports`, `nsTypes`,
-`duplicates`, `enumMembers`, `namespaceMembers`, `catalog`, `catalogReferences`,
-and `cycles`.
+Aliases are local property names; values remain Knip's native category keys.
+Generated Rule IDs describe the finding, independently of the alias. For example,
+`adapter.rules.unusedFiles.id` is `knip/unused-files`.
+
+| Native selector | Generated Rule ID |
+|---|---|
+| `files` | `knip/unused-files` |
+| `dependencies` | `knip/unused-dependencies` |
+| `devDependencies` | `knip/unused-dev-dependencies` |
+| `optionalPeerDependencies` | `knip/referenced-optional-peer-dependencies` |
+| `unlisted` | `knip/undeclared-dependencies` |
+| `binaries` | `knip/undeclared-command-dependencies` |
+| `unresolved` | `knip/unresolved-imports` |
+| `exports` | `knip/unused-exports` |
+| `types` | `knip/unused-exported-types` |
+| `nsExports` | `knip/unreferenced-exports-in-used-namespaces` |
+| `nsTypes` | `knip/unreferenced-types-in-used-namespaces` |
+| `enumMembers` | `knip/unused-exported-enum-members` |
+| `namespaceMembers` | `knip/unused-exported-namespace-members` |
+| `duplicates` | `knip/duplicate-exports` |
+| `catalog` | `knip/unused-catalog-entries` |
+| `catalogReferences` | `knip/unresolved-catalog-references` |
+| `cycles` | `knip/circular-imports` |
+
+Optional-peer findings concern referenced optional peers without a direct
+dependency or development-dependency declaration, not unused peers. Namespace
+import findings mean an individual export lacks a reference even though the
+namespace object is used; they do not establish that dynamic consumers never
+use that export. These differ from exported TypeScript namespace members.
+
+Breach diagnostic codes retain the native category (for example, `exports`),
+so reports can still be compared directly with Knip evidence. Generated IDs
+replace the pre-release `knip/<native-category>` names; update any hard-coded
+Rule references or proof expectations. Native selectors are unchanged.
 
 Knip configuration determines analysis scope, plugins, ignore patterns and
 enabled categories. Selection here does not override disabled Knip rules.

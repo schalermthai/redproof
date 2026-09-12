@@ -20,7 +20,7 @@ test('native Knip baseline, export mutation, selected-only parity and repeat res
     assert.equal(red.verdict, 'fail', JSON.stringify(red));
     if (red.verdict === 'fail') {
       assert.equal(red.breaches.length, 1);
-      assert.equal(red.breaches[0]?.rule, 'knip/exports');
+      assert.equal(red.breaches[0]?.rule, 'knip/unused-exports');
       assert.equal(red.breaches[0]?.location?.file, 'receive.ts');
       assert.equal(red.breaches[0]?.location?.line, 2);
     }

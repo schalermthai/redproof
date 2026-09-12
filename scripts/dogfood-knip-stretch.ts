@@ -70,7 +70,7 @@ for (const specimen of [
 }
 await compare(eslint, { rules: { files: 'files' } }, []);
 const vitestAdapter = knip({ rules: { files: 'files' } });
-const installed = await vitestAdapter.check.run({ root: vitest, rules: ['knip/files'] });
+const installed = await vitestAdapter.check.run({ root: vitest, rules: ['knip/unused-files'] });
 console.log(JSON.stringify({ vitestInstalled: installed }));
 const bridge = 'node_modules/.redproof-knip-cli.mjs';
 const restoreBridge = await mutate.writeText(bridge,

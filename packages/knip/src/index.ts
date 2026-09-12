@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { counting, defineAdapter, defineRules, rejectUnknownKeys, result,
   type Adapter, type NoUnknownKeys, type Rule } from 'redproof';
 import { executeCommand } from 'redproof/command';
-import { issueTypes, knipBreaches, parseKnipEvidence, type KnipIssueType } from './model.ts';
+import { issueTypes, knipBreaches, parseKnipEvidence, ruleDefinitions, type KnipIssueType } from './model.ts';
 
 type Selection = Readonly<Record<string, KnipIssueType>>;
-type Catalog<M extends Selection> = { readonly [K in keyof M]: Rule<`knip/${M[K]}`> };
+type Catalog<M extends Selection> = { readonly [K in keyof M]: Rule<typeof ruleDefinitions[M[K]]['id']> };
 export type KnipOptions<M extends Selection = Selection> = {
   readonly rules: M;
   readonly cwd?: string;
@@ -64,9 +64,7 @@ export function knip<const O extends KnipOptions>(options: O & NoUnknownKeys<O, 
     const value = options[name];
     if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) throw new Error(`Knip ${name} must be a positive integer.`);
   }
-  const rules = defineRules(Object.fromEntries(entries.map(([alias, type]) => [alias, {
-    id: `knip/${type}`, description: `Knip must report no ${type} issues.`,
-  }])) as Catalog<O['rules']>);
+  const rules = defineRules(Object.fromEntries(entries.map(([alias, type]) => [alias, ruleDefinitions[type]])) as Catalog<O['rules']>);
   const selected = new Map(entries.map(([alias, type]) => [type, rules[alias as keyof O['rules']]! ]));
   const settings = { ...options };
   const limit = options.maxOutputBytes ?? 10 * 1024 * 1024;

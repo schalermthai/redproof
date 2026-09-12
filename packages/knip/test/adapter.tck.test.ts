@@ -22,8 +22,8 @@ runAdapterTck([{
     ],
   },
   unavailable: [{ name: 'missing configuration REFUSES', code: 'knip-unavailable', run: () => withProject(root =>
-    knip({ rules: { exports: 'exports' }, configFile: 'missing.json' }).check.run({ root, rules: ['knip/exports'] })) }],
-  evidence: [{ rule: 'knip/exports', expectedBreaches: [{ code: 'exports' }],
+    knip({ rules: { exports: 'exports' }, configFile: 'missing.json' }).check.run({ root, rules: ['knip/unused-exports'] })) }],
+  evidence: [{ rule: 'knip/unused-exports', expectedBreaches: [{ code: 'exports' }],
     violating: () => translated([finding]), clean: () => translated([]),
     unselected: () => translated([{ ...finding, type: 'types' }]) }],
   purity: { kind: 'sources', files: ['packages/knip/src/model.ts'], allowedExternalImports: ['redproof'] },

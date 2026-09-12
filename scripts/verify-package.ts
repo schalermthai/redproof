@@ -190,13 +190,13 @@ await writeFile(resolve(root, 'knip.json'), '{"entry":["index.ts"],"project":["*
 await writeFile(resolve(root, 'index.ts'), "import { receive } from './receive.ts'; receive();");
 await writeFile(resolve(root, 'receive.ts'), 'export function receive() { return 1; }');
 const adapter = knip({ configFile: 'knip.json', rules: { exports: 'exports' } });
-const run = () => adapter.check.run({ root, rules: ['knip/exports'] });
+const run = () => adapter.check.run({ root, rules: ['knip/unused-exports'] });
 const green = await run();
 assert.equal(green.verdict, 'pass', JSON.stringify(green));
 await appendFile(resolve(root, 'receive.ts'), '\\nexport const unusedReceipt = 2;');
 const red = await run();
 assert.equal(red.verdict, 'fail', JSON.stringify(red));
-assert.equal(red.breaches[0].rule, 'knip/exports');
+assert.equal(red.breaches[0].rule, 'knip/unused-exports');
 `);
   const knipRuntime = tryRun('node', ['probe-knip.mjs'], consumer);
   report(knipRuntime.ok, '@redproof/knip: packed reporter runs native GREEN and RED checks',

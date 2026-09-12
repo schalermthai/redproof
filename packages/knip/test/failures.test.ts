@@ -29,7 +29,7 @@ for (const [name, code, script] of [
 ] as const) test(`${name} REFUSES`, async () => withProject(async root => {
   await writeFile(join(root, 'cli.mjs'), script);
   const adapter = knip({ cli: 'cli.mjs', rules, maxOutputBytes: 5000 });
-  const outcome = await adapter.check.run({ root, rules: ['knip/exports'] });
+  const outcome = await adapter.check.run({ root, rules: ['knip/unused-exports'] });
   assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
   if (outcome.verdict === 'refuse') assert.equal(outcome.why.code, code);
 }));
@@ -47,7 +47,7 @@ test('parallel reports cannot cross-attribute and config stdout is harmless', as
   await writeFile(join(root, 'missing.mjs'), '');
   const outcomes = await Promise.all(['clean.mjs', 'missing.mjs', 'clean.mjs'].map(cli => {
     const adapter = knip({ cli, rules });
-    return adapter.check.run({ root, rules: ['knip/exports'] });
+    return adapter.check.run({ root, rules: ['knip/unused-exports'] });
   }));
   assert.deepEqual(outcomes.map(value => value.verdict), ['pass', 'refuse', 'pass']);
 }));
@@ -56,7 +56,7 @@ test('cwd and configuration symlinks cannot escape root', async () => withProjec
   await symlink('..', join(root, 'outside'), 'dir');
   for (const options of [{ cwd: 'outside' }, { configFile: 'outside' }]) {
     const adapter = knip({ rules, ...options });
-    assert.equal((await adapter.check.run({ root, rules: ['knip/exports'] })).verdict, 'refuse');
+    assert.equal((await adapter.check.run({ root, rules: ['knip/unused-exports'] })).verdict, 'refuse');
   }
 }));
 
@@ -67,7 +67,7 @@ test('nested cwd preserves Gate-relative evidence locations', async () => withPr
   await writeFile(join(root, 'nested/index.ts'), "import './unused.ts';");
   await writeFile(join(root, 'nested/unused.ts'), 'export const unused = 1;');
   const adapter = knip({ cwd: 'nested', configFile: 'nested/knip.json', rules });
-  const outcome = await adapter.check.run({ root, rules: ['knip/exports'] });
+  const outcome = await adapter.check.run({ root, rules: ['knip/unused-exports'] });
   assert.equal(outcome.verdict, 'fail', JSON.stringify(outcome));
   if (outcome.verdict === 'fail') assert.equal(outcome.breaches[0].location?.file, 'nested/unused.ts');
 }));
@@ -79,7 +79,7 @@ test('an installed Knip without required metadata is explicitly unsupported', as
     '{"name":"knip","version":"6.33.0","main":"dist/index.js"}');
   await writeFile(join(root, 'nested/node_modules/knip/dist/index.js'), '');
   const adapter = knip({ cwd: 'nested', rules });
-  const outcome = await adapter.check.run({ root, rules: ['knip/exports'] });
+  const outcome = await adapter.check.run({ root, rules: ['knip/unused-exports'] });
   assert.equal(outcome.verdict, 'refuse');
   if (outcome.verdict === 'refuse') {
     assert.equal(outcome.why.code, 'knip-version-unsupported');
