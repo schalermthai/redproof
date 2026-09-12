@@ -15,6 +15,8 @@ export type EffectAnalysis = {
 const CORE_PATH = /^packages\/redproof\/src\/(?:domain|[^/]+\/core)\//;
 
 const APPROVED_EFFECT_BOUNDARIES = new Set([
+  'packages/knip/src/index.ts',
+  'packages/knip/src/reporter.ts',
   'packages/adapter-tck/src/index.ts',
   'packages/dependency-cruiser/src/index.ts',
   'packages/eslint/src/index.ts',

@@ -9,7 +9,7 @@ import {
   type ReporterSpec,
 } from '../../reporter/index.ts';
 import { checkProject, proveProject } from '../../run/index.ts';
-import { DEFAULT_CONFIG_FILES, HELP, noConfigMessage, parseArguments } from '../core/arguments.ts';
+import { DEFAULT_CONFIG_FILES, HELP, noConfigMessage, parseArguments } from '../core/index.ts';
 
 async function defaultConfigPath(): Promise<string | null> {
   for (const file of DEFAULT_CONFIG_FILES) {

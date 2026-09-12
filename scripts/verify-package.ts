@@ -19,6 +19,7 @@ const PACKAGES = [
   { name: '@redproof/eslint', tarballPrefix: 'redproof-eslint-', probe: 'eslint' },
   { name: '@redproof/dependency-cruiser', tarballPrefix: 'redproof-dependency-cruiser-', probe: 'dependencyCruiser' },
   { name: '@redproof/stryker', tarballPrefix: 'redproof-stryker-', probe: 'stryker' },
+  { name: '@redproof/knip', tarballPrefix: 'redproof-knip-', probe: 'knip' },
   { name: '@redproof/testing', tarballPrefix: 'redproof-testing-', probe: 'testing' },
   { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
 ] as const;
@@ -196,6 +197,29 @@ assert.equal(red.breaches[0].rule, 'istanbul/branches-coverage');
 `);
   const coverageSmoke = tryRun('node', ['coverage-smoke.mjs'], consumer);
   report(coverageSmoke.ok, '@redproof/istanbul: native packaged GREEN/RED', coverageSmoke.ok ? '' : coverageSmoke.output.slice(0, 500));
+  await writeFile(join(consumer, 'probe-knip.mjs'), `
+import assert from 'node:assert/strict';
+import { mkdir, writeFile, appendFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { knip } from '@redproof/knip';
+const root = resolve('knip-smoke');
+await mkdir(root);
+await writeFile(resolve(root, 'package.json'), '{"name":"knip-smoke","type":"module"}');
+await writeFile(resolve(root, 'knip.json'), '{"entry":["index.ts"],"project":["*.ts"]}');
+await writeFile(resolve(root, 'index.ts'), "import { receive } from './receive.ts'; receive();");
+await writeFile(resolve(root, 'receive.ts'), 'export function receive() { return 1; }');
+const adapter = knip({ configFile: 'knip.json', rules: { exports: 'exports' } });
+const run = () => adapter.check.run({ root, rules: ['knip/unused-exports'] });
+const green = await run();
+assert.equal(green.verdict, 'pass', JSON.stringify(green));
+await appendFile(resolve(root, 'receive.ts'), '\\nexport const unusedReceipt = 2;');
+const red = await run();
+assert.equal(red.verdict, 'fail', JSON.stringify(red));
+assert.equal(red.breaches[0].rule, 'knip/unused-exports');
+`);
+  const knipRuntime = tryRun('node', ['probe-knip.mjs'], consumer);
+  report(knipRuntime.ok, '@redproof/knip: packed reporter runs native GREEN and RED checks',
+    knipRuntime.ok ? '' : knipRuntime.output.slice(0, 500));
 
   console.log('\n5. Run the redproof command line tool on a real project');
   await mkdir(join(consumer, 'gates'), { recursive: true });
@@ -280,6 +304,8 @@ assert.equal(red.breaches[0].rule, 'istanbul/branches-coverage');
     + "import { nyc } from '@redproof/istanbul';\n"
     + "export const coverage = nyc({ command: 'node', rules: { lines: { minimum: 90, perFile: true } } });\n"
     + "export const coverageId: 'istanbul/lines-coverage' = coverage.rules.lines.id;\n"
+    + "import { knip } from '@redproof/knip';\n"
+    + "export const unused = knip({ rules: { files: 'files', unusedExports: 'exports' }, timeoutMs: 1000 });\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
     + "export const check = command({ rule, command: 'node' });\n"
     + "export const group = commands({ entries: [{ rule, command: 'node' }] });\n"
@@ -292,6 +318,12 @@ assert.equal(red.breaches[0].rule, 'istanbul/branches-coverage');
   await writeFile(join(consumer, 'consumer.ts'), green);
   const typesOk = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
   report(typesOk.ok, 'valid consumer code type-checks', typesOk.ok ? '' : typesOk.output.slice(0, 400));
+
+  await writeFile(join(consumer, 'consumer.ts'), "import { knip } from '@redproof/knip';\nknip({ rules: { files: 'files' }, mystery: true });\n");
+  const knipTypesRed = tryRun(tsc, ['-p', 'tsconfig.json'], consumer);
+  report(!knipTypesRed.ok && /consumer\.ts\(2,\d+\): error TS2322/u.test(knipTypesRed.output)
+    && knipTypesRed.output.includes('never'), '@redproof/knip: published types reject unknown options',
+    knipTypesRed.output.slice(0, 300));
 
   console.log('\n7. Red-proof: the type check must reject bad code');
   const red = "import { counting, defineGate, pass } from 'redproof';\n"

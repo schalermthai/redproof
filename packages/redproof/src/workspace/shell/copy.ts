@@ -16,7 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { copiesEntry, copyName, stampsEntry } from '../core/copy-policy.ts';
-import { assessFreshness, type Freshness, type TreeStamp } from '../core/freshness.ts';
+import { assessFreshness, type Freshness, type TreeStamp } from '../core/index.ts';
 import { fingerprint, stampRecord, type StampEntry } from '../core/stamp.ts';
 
 
