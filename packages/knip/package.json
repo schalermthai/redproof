@@ -1,0 +1,16 @@
+{
+  "name": "@redproof/knip",
+  "version": "0.10.0",
+  "description": "Redproof adapter for Knip unused-code and dependency evidence.",
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "engines": { "node": ">=24" },
+  "dependencies": { "redproof": "0.10.0" },
+  "devDependencies": { "@redproof/adapter-tck": "0.10.0", "knip": "6.35.1" },
+  "peerDependencies": { "knip": ">=6.35.1 <7" },
+  "repository": { "type": "git", "url": "git+https://github.com/schalermthai/redproof.git", "directory": "packages/knip" },
+  "publishConfig": { "access": "public" },
+  "license": "Apache-2.0"
+}

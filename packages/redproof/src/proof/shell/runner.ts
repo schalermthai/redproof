@@ -13,7 +13,7 @@ import {
   completedOutcome,
   failedOutcome,
 } from '../core/lifecycle.ts';
-import { applyInspectionPolicy } from '../core/inspection.ts';
+import { applyInspectionPolicy } from '../core/index.ts';
 import type { ProofOutcome } from '../core/outcome.ts';
 
 function ruleRefs(adapter: Adapter<any>): RuleRef[] {

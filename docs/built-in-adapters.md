@@ -6,6 +6,28 @@ The external tool remains responsible for doing the real analysis. Redproof adds
 
 Every Adapter reports how many targets it inspected. A PASS over zero targets is refused as `nothing-inspected` unless the Gate sets `policies: { emptyEvidence: 'allow' }`. See [Empty evidence](composition.md#empty-evidence).
 
+## Knip
+
+`@redproof/knip` exposes Knip issue categories as named Rules:
+
+```ts
+import { knip } from '@redproof/knip';
+import { defineGate } from 'redproof';
+
+export default defineGate({
+  id: 'unused-code',
+  adapter: knip({
+    rules: { unusedFiles: 'files', unusedExports: 'exports', unresolvedImports: 'unresolved' },
+  }),
+});
+```
+
+Warnings breach selected Rules; disabled categories and incomplete evidence
+REFUSE. The adapter preserves processed-file counts, issue locations and group
+details through a private Knip reporter. See the
+[Knip package](../packages/knip/README.md) for options and scope, and the
+[expert dogfood](knip-expert-dogfood.md) for native parity controls.
+
 ## Testing
 
 Package:
