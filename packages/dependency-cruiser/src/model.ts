@@ -26,6 +26,7 @@ export type DependencyCruiserConfig = {
   readonly forbidden?: readonly DependencyCruiserRuleDefinition[];
   readonly required?: readonly DependencyCruiserRuleDefinition[];
   readonly allowed?: readonly unknown[];
+  readonly allowedSeverity?: string;
 };
 
 type DependencyCruiserRuleDefinition = {
@@ -41,7 +42,12 @@ export function dependencyCruiserRuleAvailability(
   for (const rule of [...(config.forbidden ?? []), ...(config.required ?? [])]) {
     if (rule.name) configured.set(rule.name, rule.severity);
   }
-  if ((config.allowed?.length ?? 0) > 0) configured.set('not-in-allowed', undefined);
+  // dependency-cruiser carries the severity of the synthetic `not-in-allowed`
+  // rule beside the `allowed` block, not inside it. `ignore` there deletes the
+  // whole block before the cruise, so the boundary is never checked.
+  if ((config.allowed?.length ?? 0) > 0) {
+    configured.set('not-in-allowed', config.allowedSeverity);
+  }
 
   return {
     missing: selected.filter(name => !configured.has(name)),

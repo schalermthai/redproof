@@ -181,6 +181,49 @@ test('a Rule disabled in dependency-cruiser REFUSES instead of falsely passing',
   });
 });
 
+test('an allowed boundary disabled by allowedSeverity REFUSES instead of falsely passing', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      config: "export default async function extractConfig() { return { allowed: [{ from: {}, to: {} }], allowedSeverity: 'ignore' }; }\n",
+      cruise: "export async function cruise() { throw new Error('cruise must not run'); }\n",
+    });
+
+    const result = await run(adapterFor({ rules: { boundary: 'not-in-allowed' } }), root);
+
+    assert.equal(result.verdict, 'refuse');
+    if (result.verdict !== 'refuse') return;
+    assert.equal(result.why.code, 'dependency-cruiser-rule-inactive');
+    assert.equal(result.why.location?.file, '.dependency-cruiser.mjs');
+    assert.match(result.why.detail ?? '', /not-in-allowed/u);
+    assert.equal(result.scan.inspected, null);
+  });
+});
+
+test('an allowed boundary that is still active is checked, not refused', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      config: "export default async function extractConfig() { return { allowed: [{ from: {}, to: {} }] }; }\n",
+      cruise: cruiseReporting(`{
+    totalCruised: 2,
+    violations: [{
+      rule: { name: 'not-in-allowed', severity: 'warn' },
+      from: 'src/a.ts',
+      to: 'src/b.ts',
+    }],
+  }`),
+    });
+
+    const result = await run(adapterFor({ rules: { boundary: 'not-in-allowed' } }), root);
+
+    assert.equal(result.verdict, 'fail', JSON.stringify(result));
+    if (result.verdict !== 'fail') return;
+    assert.deepEqual(
+      result.breaches.map(item => [item.rule, item.location?.file]),
+      [['dependency-cruiser/not-in-allowed', 'src/a.ts']],
+    );
+  });
+});
+
 test('a known-violations baseline is forwarded to dependency-cruiser, and new violations still fail', async () => {
   await withWorkspace(async root => {
     await writeFakeDependencyCruiser(root, {

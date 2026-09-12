@@ -50,6 +50,11 @@ Every selected dependency-cruiser Rule must also be active. A Rule configured
 with severity `ignore` produces REFUSE, because Redproof cannot honestly claim
 that an architecture boundary holds when dependency-cruiser has disabled it.
 
+The `not-in-allowed` Rule takes its severity from the `allowedSeverity` option
+beside the `allowed` block, not from a severity inside it. `allowedSeverity:
+'ignore'` deletes the whole `allowed` block before the cruise, so that Rule
+produces REFUSE too.
+
 A baseline weakens the Gate on purpose. Keep a RED proof that plants a new
 violation, so the Gate is known to still fail. A baseline that grows with every
 new violation guards nothing and still reports PASS. A baseline file that is not
