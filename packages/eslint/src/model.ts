@@ -44,12 +44,26 @@ export function fatalEslintDiagnostic(
   return null;
 }
 
+// ESLint reports its own directive bookkeeping without a Rule id. Those
+// messages describe the configuration, not a target ESLint failed to inspect.
+const DIRECTIVE_NOTICES = [
+  'Unused eslint-disable directive',
+  'Unused eslint-enable directive',
+  'Unused inline config',
+];
+
+function directiveNotice(message: EslintMessage): boolean {
+  return DIRECTIVE_NOTICES.some(notice => message.message.startsWith(notice));
+}
+
 export function incompleteEslintDiagnostic(
   root: string,
   results: readonly EslintResult[],
 ): Diagnostic | null {
   for (const result of results) {
-    const incomplete = result.messages.find(message => !message.ruleId && !message.fatal);
+    const incomplete = result.messages.find(
+      message => !message.ruleId && !message.fatal && !directiveNotice(message),
+    );
     if (incomplete) {
       return {
         ...eslintDiagnostic(root, result.filePath, incomplete),

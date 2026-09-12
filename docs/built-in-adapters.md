@@ -262,6 +262,22 @@ A configured ESLint finding becomes a Breach of the corresponding Redproof Rule.
 
 Fatal parsing or execution problems become `REFUSE`, not fake Rule breaches.
 
+An adopted Rule cannot be suppressed in the source. A finding that ESLint
+reports as suppressed by `/* eslint-disable */` still breaches the Redproof
+Rule that adopted it. The ESLint Adapter has no baseline. A Rule you adopt is a
+Rule you keep.
+
+A named target that ESLint declined to inspect becomes `REFUSE` with
+`eslint-incomplete-evidence`, so an ignored file cannot pass as a clean one.
+This covers each path you name in `files`. It does not expand a glob. An
+`ignores` pattern still applies to a glob target, because that is the pattern
+doing what you configured it to do. Name the path in `files` when you need
+Redproof to prove that ESLint read it.
+
+ESLint reports unused `eslint-disable` and `eslint-enable` directives without a
+Rule id. Those describe your configuration, so they are not incomplete
+evidence. Any other ESLint diagnostic without a Rule id is, and it refuses.
+
 ## dependency-cruiser
 
 Package:

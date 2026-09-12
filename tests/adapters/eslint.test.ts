@@ -171,6 +171,42 @@ test('an explicitly ignored target REFUSES as incomplete evidence', async () => 
   });
 });
 
+test('a stale disable directive does not refuse a healthy project', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', FLAT_CONFIG);
+    await write(
+      root,
+      'src/stale.js',
+      '/* eslint-disable no-unused-vars */\nexport const value = 1;\n',
+    );
+
+    const result = await run(root, ['src/**/*.js']);
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+  });
+});
+
+test('a stale disable directive cannot hide a Breach of an adopted Rule', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', FLAT_CONFIG);
+    await write(
+      root,
+      'src/stale.js',
+      '/* eslint-disable no-unused-vars */\nexport const value = 1;\n',
+    );
+    await write(root, 'src/noisy.js', 'console.log(1);\n');
+
+    const result = await run(root, ['src/**/*.js']);
+
+    assert.equal(result.verdict, 'fail', JSON.stringify(result));
+    if (result.verdict !== 'fail') return;
+    assert.deepEqual(
+      result.breaches.map(item => [item.rule, item.location?.file]),
+      [['eslint/no-console', 'src/noisy.js']],
+    );
+  });
+});
+
 test('an ESLint finding the Gate did not adopt is not a Breach of anything', async () => {
   await withWorkspace(async root => {
     await write(root, 'eslint.config.mjs', `export default [
