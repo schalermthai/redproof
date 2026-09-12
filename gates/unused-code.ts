@@ -9,10 +9,10 @@ const adapter = knip({
 const gate = defineGate({ id: 'unused-code', adapter });
 
 export const proofs = defineProofs(gate, [
-  proof.red(adapter.rules.files, 'finds an unreachable implementation file',
-    mutate.writeText('packages/knip/src/unused-receipt.ts', 'export const unusedReceipt = 1;\n')),
-  proof.red(adapter.rules.exports, 'finds an unused internal export',
-    mutate.appendText('packages/knip/src/model.ts', '\nexport const unusedReceipt = 1;\n')),
+  proof.red(adapter.rules.files, 'finds an unreachable file in the root workspace',
+    mutate.writeText('gates/support/unused-receipt.ts', 'export const unusedReceipt = 1;\n')),
+  proof.red(adapter.rules.exports, 'finds an unused internal export in another package',
+    mutate.appendText('packages/eslint/src/model.ts', '\nexport const unusedReceipt = 1;\n')),
   proof.red(adapter.rules.dependencies, 'finds a dependency without consumers',
     mutate.jsonMerge(locate.json({ files: 'packages/knip/package.json', path: '$.dependencies' }), { 'unused-receipt': '1.0.0' })),
   proof.red(adapter.rules.devDependencies, 'finds a dev dependency without consumers',

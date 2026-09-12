@@ -11,6 +11,7 @@ const dependencies = dependencyCruiser({
     'packages/dependency-cruiser/src',
     'packages/stryker/src',
     'packages/testing/src',
+    'packages/knip/src',
   ],
   rules: {
     noCycles: 'no-cycles',
@@ -102,6 +103,11 @@ export const proofs = defineProofs(gate, [
     rules.adaptersPublicCoreApiOnly,
     'keeps adapters on the public command entrypoint, not its core',
     mutate.appendText('packages/testing/src/index.ts', "\nimport '../../redproof/src/command/core/options.ts';\n"),
+  ),
+  proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps the newest adapter package inside the scanned set',
+    mutate.appendText('packages/knip/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.productionNoTestFixtureDependencies,

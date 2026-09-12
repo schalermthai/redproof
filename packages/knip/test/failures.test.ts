@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
 import { defineGate, runGate } from 'redproof';
@@ -85,4 +85,46 @@ test('an installed Knip without required metadata is explicitly unsupported', as
     assert.equal(outcome.why.code, 'knip-version-unsupported');
     assert.equal(outcome.why.detail, 'Installed: 6.33.0');
   }
+}));
+
+const lockReportDirectory = "import {chmodSync as lockMode, writeFileSync as lockNote} from 'node:fs';"
+  + " import {dirname as lockDir, join as lockJoin} from 'node:path';"
+  + " const locked = lockDir(process.env.REDPROOF_KNIP_REPORT);"
+  + " lockNote(lockJoin(process.env.REDPROOF_KNIP_ROOT, 'locked.txt'), locked); lockMode(locked, 0o500);";
+
+/** Release the directory the fake CLI locked, so the run leaves no undeletable temporary tree. */
+async function releaseLocked(root: string): Promise<void> {
+  const locked = await readFile(join(root, 'locked.txt'), 'utf8');
+  await chmod(locked, 0o700);
+  await rm(locked, { recursive: true, force: true });
+}
+
+test('an undeletable evidence directory REFUSES only when nothing else was found', async () => withProject(async root => {
+  await writeFile(join(root, 'clean.mjs'), `${writeReport(envelope())} ${lockReportDirectory}`);
+  const clean = await knip({ cli: 'clean.mjs', rules }).check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(clean.verdict, 'refuse', JSON.stringify(clean));
+  if (clean.verdict === 'refuse') assert.equal(clean.why.code, 'knip-cleanup-unavailable');
+  await releaseLocked(root);
+}));
+
+test('an undeletable evidence directory cannot erase a real breach', async () => withProject(async root => {
+  const base = envelope();
+  const found = {
+    ...base,
+    counters: { ...base.counters, exports: 1 },
+    issues: { ...base.issues, exports: [{ type: 'exports', file: 'src/a.ts', symbol: 'unused', line: 1, col: 1 }] },
+  };
+  await writeFile(join(root, 'found.mjs'), `${writeReport(found)} ${lockReportDirectory}`);
+  const outcome = await knip({ cli: 'found.mjs', rules }).check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(outcome.verdict, 'fail', JSON.stringify(outcome));
+  if (outcome.verdict === 'fail') assert.equal(outcome.breaches[0].rule, 'knip/unused-exports');
+  await releaseLocked(root);
+}));
+
+test('an undeletable evidence directory cannot relabel a timeout', async () => withProject(async root => {
+  await writeFile(join(root, 'slow.mjs'), `${writeReport(envelope())} ${lockReportDirectory} setInterval(() => {}, 1_000);`);
+  const outcome = await knip({ cli: 'slow.mjs', rules, timeoutMs: 200 }).check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
+  if (outcome.verdict === 'refuse') assert.equal(outcome.why.code, 'command-timeout');
+  await releaseLocked(root);
 }));
