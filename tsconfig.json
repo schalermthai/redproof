@@ -13,6 +13,7 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
+      "@redproof/knip": ["packages/knip/src/index.ts"],
       "redproof": [
         "packages/redproof/src/index.ts"
       ],

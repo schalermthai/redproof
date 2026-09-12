@@ -1,0 +1,54 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreWorkspaces": [
+    "fixtures/*"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "gates/*.ts",
+        "gates/support/check-doc-fragment-budget.ts",
+        "redproof.config.ts",
+        "scripts/*.ts",
+        "tests/**/*.ts"
+      ],
+      "project": [
+        "gates/**/*.ts",
+        "scripts/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
+    "packages/*": {
+      "entry": [
+        "src/index.ts",
+        "test/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+      ]
+    },
+    "packages/redproof": {
+      "entry": [
+        "src/index.ts",
+        "src/cli.ts",
+        "src/command/index.ts",
+        "src/run/shell/gate-worker.ts"
+      ],
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
+    "packages/knip": {
+      "entry": [
+        "src/index.ts",
+        "src/reporter.ts",
+        "test/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+      ]
+    }
+  }
+}

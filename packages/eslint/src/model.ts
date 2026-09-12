@@ -21,7 +21,7 @@ export type EslintResult = {
   readonly suppressedMessages?: readonly EslintMessage[] | undefined;
 };
 
-export function eslintDiagnostic(root: string, file: string, message: EslintMessage): Diagnostic {
+function eslintDiagnostic(root: string, file: string, message: EslintMessage): Diagnostic {
   return {
     code: message.ruleId ?? 'eslint-fatal',
     message: message.message,

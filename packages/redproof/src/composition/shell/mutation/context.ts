@@ -19,7 +19,7 @@ async function existsAbsolute(path: string): Promise<boolean> {
   }
 }
 
-export async function capturePaths(root: string, paths: readonly string[]): Promise<UndoMutation> {
+async function capturePaths(root: string, paths: readonly string[]): Promise<UndoMutation> {
   const snapshotRoot = await mkdtemp(join(tmpdir(), 'redproof-mutation-'));
   const snapshots: Array<{ path: string; existed: boolean; backup: string }> = [];
   const absentAncestors = new Set<string>();
