@@ -91,6 +91,13 @@ module.exports = {
       from: { path: '^packages/[^/]+/src/' },
       to: { path: '^(?:tests|fixtures|scripts|gates)/' },
     },
+    {
+      name: 'production-no-adapter-tck-dependency',
+      severity: 'error',
+      comment: 'The Adapter TCK is test infrastructure. Publishable source must not depend on it, whatever the manifests declare.',
+      from: { path: '^packages/(?!adapter-tck/)[^/]+/src/' },
+      to: { path: '^packages/adapter-tck/' },
+    },
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
