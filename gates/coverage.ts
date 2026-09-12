@@ -1,11 +1,13 @@
 import { istanbul } from '@redproof/istanbul';
+import { createRequire } from 'node:module';
 import { defineGate, defineProofs, mutate, proof } from 'redproof';
 
 const source = 'packages/istanbul/src/model.ts';
+const require = createRequire(import.meta.url);
 const adapter = istanbul({
   command: process.execPath,
   args: ({ reportDirectory, tempDirectory }) => [
-    'node_modules/c8/bin/c8.js', '--reporter=json', `--reports-dir=${reportDirectory}`,
+    require.resolve('c8/bin/c8.js'), '--reporter=json', `--reports-dir=${reportDirectory}`,
     `--temp-directory=${tempDirectory}`, `--include=${source}`, process.execPath,
     '--experimental-strip-types', '--test', 'packages/istanbul/test/model.core.test.ts',
   ],

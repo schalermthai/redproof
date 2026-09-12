@@ -12,6 +12,7 @@ const dependencies = dependencyCruiser({
     'packages/stryker/src',
     'packages/testing/src',
     'packages/knip/src',
+    'packages/istanbul/src',
   ],
   rules: {
     noCycles: 'no-cycles',
@@ -106,8 +107,13 @@ export const proofs = defineProofs(gate, [
   ),
   proof.red(
     rules.adaptersPublicCoreApiOnly,
-    'keeps the newest adapter package inside the scanned set',
+    'keeps the Knip adapter package inside the scanned set',
     mutate.appendText('packages/knip/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps the Istanbul adapter inside the scan and public API boundary',
+    mutate.appendText('packages/istanbul/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.productionNoTestFixtureDependencies,

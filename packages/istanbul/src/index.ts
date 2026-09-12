@@ -84,53 +84,57 @@ function adapter<R extends CoverageRules>(options: CommonOptions<R>, plan: (cont
         code, message, location: null, ...(detail ? { detail } : {}),
       });
       let temp: string | undefined;
-      try {
-        const root = await realpath(ctx.root), cwd = await realpath(resolve(root, cwdOption));
-        if (cwd !== root) coveragePath(root, cwd);
-        const required = await Promise.all(expectedFiles.map(async file => coveragePath(root, await realpath(resolve(root, file)))));
-        temp = await mkdtemp(join(tmpdir(), 'redproof-istanbul-'));
-        const reportDirectory = temp, reportFile = join(temp, 'coverage-final.json');
-        const command = await plan({ root, cwd, reportDirectory, reportFile, tempDirectory: join(temp, 'raw') });
-        if (!Array.isArray(command.args) || command.args.some(arg => typeof arg !== 'string' || arg.includes('\0'))) throw new Error('Invalid coverage command arguments.');
-        const execution = await executeCommand({ ...command, cwd, timeoutMs, maxOutputBytes,
-          env: { NODE_TEST_CONTEXT: undefined, REDPROOF_COVERAGE_REPORT: reportFile } });
-        if (execution.kind === 'refused') return refuse(execution.code, execution.message, execution.detail);
-        // Coverage can be emitted even when tests or instrumentation fail. It cannot explain that failure.
-        if (execution.exitCode !== 0) return refuse('istanbul-producer-unsuccessful', 'Coverage producer did not complete successfully.',
-          `exit code: ${execution.exitCode}\n${execution.stderr}\n${execution.stdout}`);
-        const stat = await lstat(reportFile);
-        if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > maxReportBytes) throw new Error('Coverage report must be a private bounded regular file.');
-        const handle = await open(reportFile, constants.O_RDONLY | constants.O_NOFOLLOW);
-        let text: string;
+      const outcome = await (async () => {
         try {
-          const opened = await handle.stat();
-          if (!opened.isFile() || opened.ino !== stat.ino || opened.dev !== stat.dev || opened.nlink !== 1) throw new Error('Coverage report identity changed.');
-          const bytes = Buffer.alloc(stat.size + 1);
-          let length = 0;
-          while (length < bytes.length) {
-            const read = await handle.read(bytes, length, bytes.length - length, null);
-            if (!read.bytesRead) break;
-            length += read.bytesRead;
+          const root = await realpath(ctx.root), cwd = await realpath(resolve(root, cwdOption));
+          if (cwd !== root) coveragePath(root, cwd);
+          const required = await Promise.all(expectedFiles.map(async file => coveragePath(root, await realpath(resolve(root, file)))));
+          temp = await mkdtemp(join(tmpdir(), 'redproof-istanbul-'));
+          const reportDirectory = temp, reportFile = join(temp, 'coverage-final.json');
+          const command = await plan({ root, cwd, reportDirectory, reportFile, tempDirectory: join(temp, 'raw') });
+          if (!Array.isArray(command.args) || command.args.some(arg => typeof arg !== 'string' || arg.includes('\0'))) throw new Error('Invalid coverage command arguments.');
+          const execution = await executeCommand({ ...command, cwd, timeoutMs, maxOutputBytes,
+            env: { NODE_TEST_CONTEXT: undefined, REDPROOF_COVERAGE_REPORT: reportFile } });
+          if (execution.kind === 'refused') return refuse(execution.code, execution.message, execution.detail);
+          // Coverage can be emitted even when tests or instrumentation fail. It cannot explain that failure.
+          if (execution.exitCode !== 0) return refuse('istanbul-producer-unsuccessful', 'Coverage producer did not complete successfully.',
+            `exit code: ${execution.exitCode}\n${execution.stderr}\n${execution.stdout}`);
+          const stat = await lstat(reportFile);
+          if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > maxReportBytes) throw new Error('Coverage report must be a private bounded regular file.');
+          const handle = await open(reportFile, constants.O_RDONLY | constants.O_NOFOLLOW);
+          let text: string;
+          try {
+            const opened = await handle.stat();
+            if (!opened.isFile() || opened.ino !== stat.ino || opened.dev !== stat.dev || opened.nlink !== 1) throw new Error('Coverage report identity changed.');
+            const bytes = Buffer.alloc(stat.size + 1);
+            let length = 0;
+            while (length < bytes.length) {
+              const read = await handle.read(bytes, length, bytes.length - length, null);
+              if (!read.bytesRead) break;
+              length += read.bytesRead;
+            }
+            if (length !== stat.size) throw new Error('Coverage report size changed while reading.');
+            text = bytes.toString('utf8', 0, length);
+          } finally { await handle.close(); }
+          const evidence = parseCoverage(text, root);
+          for (const file of evidence.files) {
+            coveragePath(root, await realpath(resolve(root, file.file)));
           }
-          if (length !== stat.size) throw new Error('Coverage report size changed while reading.');
-          text = bytes.toString('utf8', 0, length);
-        } finally { await handle.close(); }
-        const evidence = parseCoverage(text, root);
-        for (const file of evidence.files) {
-          coveragePath(root, await realpath(resolve(root, file.file)));
+          const reported = new Set(evidence.files.map(file => file.file));
+          const missing = required.filter(file => !reported.has(file));
+          if (missing.length) return refuse('istanbul-incomplete-inventory', 'Expected source files are absent from coverage.', missing.join('\n'));
+          return result.fromBreaches(scan(evidence.files.length), coverageBreaches(evidence, selected));
+        } catch (error) {
+          return refuse('istanbul-evidence-unavailable', 'Could not collect trustworthy Istanbul coverage.', error instanceof Error ? error.message : String(error));
         }
-        const reported = new Set(evidence.files.map(file => file.file));
-        const missing = required.filter(file => !reported.has(file));
-        if (missing.length) return refuse('istanbul-incomplete-inventory', 'Expected source files are absent from coverage.', missing.join('\n'));
-        return result.fromBreaches(scan(evidence.files.length), coverageBreaches(evidence, selected));
-      } catch (error) {
-        return refuse('istanbul-evidence-unavailable', 'Could not collect trustworthy Istanbul coverage.', error instanceof Error ? error.message : String(error));
-      } finally {
-        if (temp) {
-          try { await rm(temp, { recursive: true, force: true }); }
-          catch (error) { return refuse('istanbul-cleanup-unavailable', 'Could not clean up private coverage artifacts.', String(error)); }
+      })();
+      if (temp) {
+        try { await rm(temp, { recursive: true, force: true }); }
+        catch (error) {
+          if (outcome.verdict === 'pass') return refuse('istanbul-cleanup-unavailable', 'Could not clean up private coverage artifacts.', String(error));
         }
       }
+      return outcome;
     },
   } });
 }

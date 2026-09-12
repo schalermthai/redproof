@@ -4,7 +4,8 @@ import { createRequire } from 'node:module';
 import { defineRule } from 'redproof';
 import { coverageBreaches, metrics, parseCoverage } from '../src/model.ts';
 import { sample } from './support/workspace.ts';
-const native = createRequire(import.meta.url)('istanbul-lib-coverage');
+const require = createRequire(import.meta.url);
+const native = require('istanbul-lib-coverage');
 const root = '/project';
 
 test('all four metrics agree with independent Istanbul library, globally and per file', () => {

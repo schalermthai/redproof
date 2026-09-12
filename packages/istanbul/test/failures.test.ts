@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { writeFile, symlink } from 'node:fs/promises';
+import { chmod, rm, writeFile, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { defineGate, runGate } from 'redproof';
 import { istanbul } from '../src/index.ts';
@@ -8,6 +8,32 @@ import { sample, withWorkspace } from './support/workspace.ts';
 
 const rules = { lines: { minimum: 100 } } as const;
 const writer = (text: string, extra = '') => `require('node:fs').writeFileSync(process.env.REDPROOF_COVERAGE_REPORT, ${JSON.stringify(text)}); ${extra}`;
+
+for (const outcome of ['pass', 'fail', 'timeout'] as const) {
+  test(`cleanup failure preserves ${outcome === 'pass' ? 'a cleanup refusal' : outcome}`, () => withWorkspace(async root => {
+    await writeFile(join(root, 'source.js'), 'module.exports = 1;');
+    let privateDirectory: string | undefined;
+    const adapter = istanbul({ command: process.execPath, rules, timeoutMs: 1000,
+      args: ({ reportDirectory }) => {
+        privateDirectory = reportDirectory;
+        return ['-e', writer(JSON.stringify(sample('source.js', outcome === 'fail' ? [0, 0] : [1, 1])),
+          `require('node:fs').chmodSync(${JSON.stringify(reportDirectory)}, 0o500); ${outcome === 'timeout' ? 'setInterval(() => {}, 1000);' : ''}`)];
+      },
+    });
+    try {
+      const result = await adapter.check.run({ root, rules: [adapter.rules.lines.id] });
+      assert.equal(result.verdict, outcome === 'fail' ? 'fail' : 'refuse');
+      if (result.verdict === 'refuse') assert.equal(result.why.code,
+        outcome === 'timeout' ? 'command-timeout' : 'istanbul-cleanup-unavailable');
+      if (result.verdict === 'fail') assert.equal(result.breaches[0]?.rule, adapter.rules.lines.id);
+    } finally {
+      if (privateDirectory) {
+        await chmod(privateDirectory, 0o700);
+        await rm(privateDirectory, { recursive: true, force: true });
+      }
+    }
+  }));
+}
 
 for (const [name, body, code] of [
   ['missing report', '', 'istanbul-evidence-unavailable'],

@@ -89,6 +89,24 @@ to be present and protects statements/lines/functions at 90% and branches at 80%
 Each Rule has a RED proof; failed production REFUSES; the healthy model passes.
 This is focused model coverage, not a claim of whole-repository coverage.
 
+## Integration with the Knip dogfood
+
+After merging the reviewed Knip adapter, we applied the same lessons to Istanbul:
+
+- Register the adapter in both the architecture scan and its public-API boundary.
+  A RED proof imports a private Redproof module from Istanbul to protect both registrations.
+- Preserve an existing coverage breach or execution refusal if report cleanup also fails.
+  Three cleanup probes cover PASS, FAIL and timeout; before the fix, two probes failed
+  because cleanup replaced the original verdict or reason.
+- Run the new unused-code Gate against the coverage work. It exposed development-tool
+  dependency ownership and an inline `createRequire` call that analysis could not see.
+  Correcting declarations and using a named require binding fixed these without ignores.
+
+The integrated baseline passes 780 tests, seven Gates protecting 38 Rules, and
+the full repository proof portfolio.
+All eight packages passed clean-consumer verification, including native Istanbul
+and Knip GREEN/RED checks. These checks do not replay the upstream experiments.
+
 ## Trust boundary and further stretches
 
 The implementation run passed 718 repository tests, six Gates protecting 32
