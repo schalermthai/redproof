@@ -53,8 +53,9 @@ function snapshot(overrides: Partial<RepositorySnapshot> = {}): RepositorySnapsh
     publishWorkflow: [
       publishWorkflow,
       'for READY_PACKAGE in redproof; do',
-      'TARBALL="artifacts/redproof-${VERSION}.tgz"',
+      'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
       'for PKG in redproof; do',
+      'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
       'npm publish "$TARBALL" --tag "$NPM_TAG"',
     ].join('\n'),
     existingPaths: new Set([
@@ -87,7 +88,6 @@ test('a package missing from any release stage is reported once per stage, again
     ['packageInventory', 'package-missing-from-release-stage', 'scripts/set-version.ts', '@redproof/extra is missing from the version setter.'],
     ['packageInventory', 'package-missing-from-release-stage', 'scripts/verify-package.ts', '@redproof/extra is missing from the package verifier.'],
     ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the npm package readiness check.'],
-    ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the verified tarball publish.'],
     ['packageInventory', 'package-missing-from-release-stage', '.github/workflows/publish.yml', '@redproof/extra is missing from the publish loop.'],
     ['publicFiles', 'invalid-package-entrypoint', 'packages/extra/package.json', '@redproof/extra must declare matching runtime and type entrypoints backed by source.'],
   ]);
@@ -104,9 +104,9 @@ test('a second package is accepted once every release stage names it', () => {
     publishWorkflow: [
       publishWorkflow,
       'for READY_PACKAGE in redproof @redproof/extra; do',
-      'TARBALL="artifacts/redproof-${VERSION}.tgz"',
-      'TARBALL="artifacts/redproof-extra-${VERSION}.tgz"',
+      'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
       'for PKG in redproof @redproof/extra; do',
+      'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
       'npm publish "$TARBALL" --tag "$NPM_TAG"',
     ].join('\n'),
     existingPaths: new Set([...clean.existingPaths, 'packages/extra/src/index.ts']),
@@ -312,15 +312,27 @@ test('CI and publishing must keep their complete verification portfolios', () =>
   ]);
 });
 
-test('publishing must name the verified tarball for every package', () => {
+test('publishing must derive each tarball from the package, never from a table', () => {
   const clean = snapshot();
-  const findings = evaluateRepositoryPolicy({
-    ...clean,
-    publishWorkflow: clean.publishWorkflow.replace('artifacts/redproof-${VERSION}.tgz', 'artifacts/other-${VERSION}.tgz'),
-  });
 
-  assert.deepEqual(findings.map(item => [item.code, item.message]), [
-    ['package-missing-from-release-stage', 'redproof is missing from the verified tarball publish.'],
+  const noDerivation = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: clean.publishWorkflow.replace(
+      'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
+      'TARBALL="artifacts/redproof-${VERSION}.tgz"',
+    ),
+  });
+  assert.equal(noDerivation.length, 1, 'one step deriving the name is not enough');
+  assert.deepEqual(noDerivation.map(item => item.message), [
+    '.github/workflows/publish.yml must derive each tarball name from the package being published.',
+  ]);
+
+  const handWritten = evaluateRepositoryPolicy({
+    ...clean,
+    publishWorkflow: [clean.publishWorkflow, 'case "$PKG" in'].join('\n'),
+  });
+  assert.deepEqual(handWritten.map(item => item.message), [
+    '.github/workflows/publish.yml must not map packages to tarballs by hand.',
   ]);
 });
 

@@ -206,7 +206,7 @@ async function seedRepository(root: string, extra: Readonly<Record<string, strin
     'scripts/set-version.ts': "const dirs = ['packages/redproof'];\n",
     'scripts/verify-package.ts': "const packages = [{ name: 'redproof' }];\n",
     '.github/workflows/ci.yml': ciWorkflow,
-    '.github/workflows/publish.yml': `${publishWorkflow}for READY_PACKAGE in redproof; do\nTARBALL="artifacts/redproof-\${VERSION}.tgz"\nfor PKG in redproof; do\nnpm publish "$TARBALL" --tag "$NPM_TAG"\n`,
+    '.github/workflows/publish.yml': `${publishWorkflow}for READY_PACKAGE in redproof; do\nTARBALL="artifacts/\${TARBALL_STEM}-\${VERSION}.tgz"\nfor PKG in redproof; do\nTARBALL="artifacts/\${TARBALL_STEM}-\${VERSION}.tgz"\nnpm publish "$TARBALL" --tag "$NPM_TAG"\n`,
     'README.md': '[docs](docs/guide.md)\n',
     'docs/guide.md': '# Guide\n',
     ...extra,
