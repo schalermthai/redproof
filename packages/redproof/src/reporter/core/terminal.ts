@@ -273,7 +273,7 @@ function mismatchReason(reason: { readonly expected: string; readonly actual: st
   return `expected ${reason.expected}, got ${reason.actual}${detail ? `: ${detail}` : ''}`;
 }
 
-export function proofReason(outcome: CompletedProofOutcome): string {
+function proofReason(outcome: CompletedProofOutcome): string {
   const result = outcome.result;
 
   if (outcome.expected === 'red') {
