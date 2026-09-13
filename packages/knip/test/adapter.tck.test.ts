@@ -1,6 +1,6 @@
 import { runAdapterTck, type AdapterTckSpec } from '@redproof/adapter-tck';
 import { knip } from '../src/index.ts';
-import { knipBreaches, type KnipFinding } from '../src/model.ts';
+import { knipBreaches, type KnipFinding } from '../src/core/model.ts';
 import { withProject } from './support/workspace.ts';
 
 const adapter = knip({ rules: { exports: 'exports' } });
@@ -26,6 +26,15 @@ runAdapterTck([{
   evidence: [{ rule: 'knip/unused-exports', expectedBreaches: [{ code: 'exports' }],
     violating: () => translated([finding]), clean: () => translated([]),
     unselected: () => translated([{ ...finding, type: 'types' }]) }],
-  purity: { kind: 'sources', files: ['packages/knip/src/model.ts'], allowedExternalImports: ['redproof'] },
+  purity: {
+    kind: 'sources',
+    files: [
+      'packages/knip/src/core/decision.ts',
+      'packages/knip/src/core/model.ts',
+      'packages/knip/src/core/options.ts',
+      'packages/knip/src/core/version.ts',
+    ],
+    allowedExternalImports: ['node:path', 'redproof', 'redproof/command'],
+  },
   capabilities: { kind: 'not-applicable', reason: 'The bundled Knip reporter has one fixed protocol; runtime report flags establish category availability.' },
 } satisfies AdapterTckSpec]);

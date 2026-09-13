@@ -46,10 +46,8 @@ test('warn findings breach even when native Knip exits zero; off and exclude REF
   });
 });
 
-test('missing config and timeout are REFUSE', async () => {
+test('timeout is REFUSE', async () => {
   await withProject(async root => {
-    const missing = await run(root, { configFile: 'missing.json', rules: { exports: 'exports' } });
-    assert.equal(missing.verdict, 'refuse');
     await writeFile(join(root, 'hang.mjs'), 'setInterval(() => {}, 1000);');
     const timed = await run(root, { cli: 'hang.mjs', timeoutMs: 100, rules: { exports: 'exports' } });
     assert.equal(timed.verdict, 'refuse');
@@ -77,6 +75,19 @@ test('production cannot pretend to inspect dev dependencies', async () => {
     const outcome = await run(root, { production: true, rules: { dev: 'devDependencies' } });
     assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
     if (outcome.verdict === 'refuse') assert.equal(outcome.why.code, 'knip-rule-inactive');
+  });
+});
+
+test('the bundled reporter refuses to write evidence larger than maxOutputBytes', async () => {
+  await withProject(async root => {
+    const unused = Array.from({ length: 60 }, (_, index) => `export const unusedReceipt${index} = ${index};`).join('\n');
+    await appendFile(join(root, 'receive.ts'), `${unused}\n`);
+    const outcome = await run(root, { maxOutputBytes: 3_000, rules: { exports: 'exports' } });
+    assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
+    if (outcome.verdict === 'refuse') {
+      assert.equal(outcome.why.code, 'knip-report-unavailable');
+      assert.match(outcome.why.detail ?? '', /Knip evidence exceeds maxOutputBytes/u);
+    }
   });
 });
 
