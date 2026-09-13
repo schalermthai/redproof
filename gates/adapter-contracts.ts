@@ -155,7 +155,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.pureParsers,
     'detects a pure evidence model reaching its I/O shell',
-    mutate.appendText('packages/eslint/src/model.ts', "\nimport './index.ts';\n"),
+    mutate.appendText('packages/eslint/src/core/model.ts', "\nimport '../index.ts';\n"),
   ),
   proof.red(
     rules.pureParsers,
@@ -165,7 +165,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.pureParsers,
     'detects qualified ambient state inside a pure evidence model',
-    mutate.appendText('packages/eslint/src/model.ts', '\nvoid globalThis.Date.now();\n'),
+    mutate.appendText('packages/eslint/src/core/model.ts', '\nvoid globalThis.Date.now();\n'),
   ),
   proof.red(
     rules.reportCapabilities,
@@ -182,7 +182,7 @@ export const proofs = defineProofs(gate, [
     rules.structuredBreaches,
     'detects evidence translation that drops selected structured findings',
     mutate.replaceText(
-      locate.text({ files: 'packages/eslint/src/model.ts', find: 'if (!message.ruleId) continue;' }),
+      locate.text({ files: 'packages/eslint/src/core/model.ts', find: 'if (!message.ruleId) continue;' }),
       'if (message.ruleId) continue;',
     ),
   ),

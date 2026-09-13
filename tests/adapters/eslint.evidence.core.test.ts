@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { incompleteEslintDiagnostic } from '../../packages/eslint/src/model.ts';
+import { incompleteEslintDiagnostic } from '../../packages/eslint/src/core/model.ts';
 
 const result = (message: string, extra: Record<string, unknown> = {}) => [{
   filePath: '/repo/src/a.js',

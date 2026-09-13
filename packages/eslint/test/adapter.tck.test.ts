@@ -1,7 +1,7 @@
 import { runAdapterTck, type AdapterTckSpec, type EvidenceObservation } from '@redproof/adapter-tck';
 import { defineRule, type Rule } from 'redproof';
 import { eslint } from '../src/index.ts';
-import { eslintBreaches } from '../src/model.ts';
+import { eslintBreaches } from '../src/core/model.ts';
 import { withWorkspace } from './support/workspace.ts';
 
 const rule = defineRule({ id: 'eslint/semi', description: 'Semicolons must hold.' });
@@ -59,7 +59,11 @@ const spec = {
   }],
   purity: {
     kind: 'sources',
-    files: ['packages/eslint/src/model.ts'],
+    files: [
+      'packages/eslint/src/core/decide.ts',
+      'packages/eslint/src/core/model.ts',
+      'packages/eslint/src/core/options.ts',
+    ],
     allowedExternalImports: ['node:path', 'redproof'],
   },
   capabilities: {

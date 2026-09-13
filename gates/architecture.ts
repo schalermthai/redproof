@@ -150,8 +150,8 @@ export const proofs = defineProofs(gate, [
     rules.productionNoAdapterTckDependency,
     'keeps the Adapter test kit out of publishable Adapter source',
     mutate.appendText(
-      'packages/eslint/src/model.ts',
-      "\nimport '../../adapter-tck/src/index.ts';\n",
+      'packages/eslint/src/core/model.ts',
+      "\nimport '../../../adapter-tck/src/index.ts';\n",
     ),
   ),
   proof.red(
