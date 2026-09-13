@@ -254,6 +254,30 @@ test('only the configured files are linted', async () => {
   });
 });
 
+test('configured files are snapshotted when the adapter is constructed', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', FLAT_CONFIG);
+    await write(root, 'src/clean.js', 'export const value = 1;\n');
+    await write(root, 'scripts/noisy.js', 'console.log(1);\n');
+
+    const files = ['src/**/*.js'];
+    const built = adapter(files);
+    files[0] = 'scripts/**/*.js';
+
+    const result = await built.check.run({
+      root,
+      rules: [built.rules.noConsole.id, built.rules.strictEquality.id],
+    });
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+    assert.equal(result.scan.inspected, 1);
+    assert.equal(
+      built.check.description,
+      'run ESLint against src/**/*.js and report configured rule breaches',
+    );
+  });
+});
+
 test('a file ESLint cannot parse REFUSES the Gate instead of inventing a Rule breach', async () => {
   await withWorkspace(async root => {
     await write(root, 'eslint.config.mjs', FLAT_CONFIG);

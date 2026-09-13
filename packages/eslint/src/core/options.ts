@@ -55,7 +55,7 @@ export function planEslintAdapter<M extends EslintRuleInput>(
     byForeignId.set(foreignId, rules[alias as keyof M]);
   }
 
-  const lintFiles = options.files ?? ['.'];
+  const lintFiles = [...(options.files ?? ['.'])];
 
   return {
     rules,
