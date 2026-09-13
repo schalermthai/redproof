@@ -71,7 +71,7 @@ all of them.
 | [`static-contracts`](../gates/static-contracts.ts) | Source and checked documentation compile, while unchecked fragment debt cannot grow. | TypeScript and documentation commands | Add a type error, an invalid documentation example, or one unbudgeted fragment. |
 | [`test-health`](../gates/test-health.ts) | Every collected test passes and none is skipped. | Structured JUnit evidence through `@redproof/testing` | Add a failing test or a skipped test. |
 | [`adapter-contracts`](../gates/adapter-contracts.ts) | Built-in Adapters validate configuration, handle unavailable execution honestly, preserve pure evidence models, respect report capabilities, and attribute structured findings correctly. | Original contract suites plus package-owned `@redproof/adapter-tck` suites | Remove option validation, corrupt runner mapping, add an effect to a pure model, or drop a selected finding. |
-| [`repository-policy`](../gates/repository-policy.ts) | Every package is complete, aligned, documented, and verified before release. | Package manifests, workflows, source inventory, and documentation links | Omit a package from release automation, diverge a version, remove verification, or add a broken link. |
+| [`repository-policy`](../gates/repository-policy.ts) | Every package is complete, aligned, documented, and verified before release. | Package manifests, workflows, source inventory, documentation links, and the dependency lockfile | Omit a package from release automation, diverge a version, remove verification, add a broken link, or drop a platform binary from the lockfile. |
 | [`unused-code`](../gates/unused-code.ts) | Files, exports, dependencies and imports stay connected to real consumers. | Knip structured findings and inspection metadata | Add an unused file, export or dependency; introduce an undeclared dependency or unresolved import. |
 
 Together they protect behavior, architecture, documentation, integrations, and
@@ -152,10 +152,11 @@ Dogfooding stops being convincing if it protects source code but not what users
 install.
 
 The repository-policy Gate reads the package manifests, public exports,
-source inventory, automation workflows, and documentation links. It checks
-that packages share a version, internal dependency pins match, package edges
-follow the core–TCK–Adapter layers, public runtime and type surfaces are backed
-by source, and CI cannot silently drop required verification.
+source inventory, automation workflows, documentation links, and the dependency
+lockfile. It checks that packages share a version, internal dependency pins
+match, package edges follow the core–TCK–Adapter layers, public runtime and type
+surfaces are backed by source, CI cannot silently drop required verification,
+and the lockfile records every optional platform binary its packages declare.
 
 The release workflow then packs all publishable packages and installs those tarballs
 into a clean consumer. It verifies runtime imports, published types, CLI

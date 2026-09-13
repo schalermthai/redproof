@@ -24,6 +24,14 @@ export type MarkdownSnapshot = {
   readonly content: string;
 };
 
+/** The lockfile entries, keyed by install path, reduced to what the policy reads. */
+export type LockfileSnapshot = {
+  readonly file: string;
+  readonly packages: Readonly<Record<string, {
+    readonly optionalDependencies?: Readonly<Record<string, string>>;
+  }>>;
+};
+
 export type RepositorySnapshot = {
   readonly rootScripts: Readonly<Record<string, string>>;
   readonly rootBuildScript: string;
@@ -34,6 +42,7 @@ export type RepositorySnapshot = {
   readonly publishWorkflow: string;
   readonly existingPaths: ReadonlySet<string>;
   readonly markdown: readonly MarkdownSnapshot[];
+  readonly lockfile: LockfileSnapshot;
 };
 
 export type RepositoryPolicyRule =
@@ -42,7 +51,8 @@ export type RepositoryPolicyRule =
   | 'packageBoundaries'
   | 'publicFiles'
   | 'automationVerification'
-  | 'docsLinks';
+  | 'docsLinks'
+  | 'lockfileIntegrity';
 
 export type RepositoryPolicyFinding = {
   readonly rule: RepositoryPolicyRule;
@@ -385,6 +395,41 @@ function docsLinks(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
   return findings;
 }
 
+/** Node resolution over lockfile keys: the parent's own node_modules, then each enclosing one, then the root. */
+function lockfileResolves(packages: LockfileSnapshot['packages'], parentPath: string, name: string): boolean {
+  let base = parentPath;
+  for (;;) {
+    if ((base ? `${base}/node_modules/${name}` : `node_modules/${name}`) in packages) return true;
+    const cut = base.lastIndexOf('/node_modules/');
+    if (cut < 0) return `node_modules/${name}` in packages;
+    base = base.slice(0, cut);
+  }
+}
+
+// A regenerated lockfile can drop the optional platform binaries for every
+// platform but the one it was generated on. Nothing fails locally, and CI on
+// another platform then reports packages the change never touched.
+function lockfileIntegrity(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
+  const findings: RepositoryPolicyFinding[] = [];
+  const { file, packages } = snapshot.lockfile;
+  for (const [parentPath, entry] of Object.entries(packages)) {
+    const at = parentPath.lastIndexOf('node_modules/');
+    const parent = at < 0 ? parentPath || 'the root package' : parentPath.slice(at + 'node_modules/'.length);
+    for (const name of Object.keys(entry.optionalDependencies ?? {}).sort()) {
+      if (!lockfileResolves(packages, parentPath, name)) {
+        findings.push({
+          rule: 'lockfileIntegrity',
+          code: 'optional-dependency-unresolved',
+          message: `${parent} declares optional dependency ${name}, but ${file} records no entry for it.`,
+          file,
+          detail: parentPath,
+        });
+      }
+    }
+  }
+  return findings;
+}
+
 export function evaluateRepositoryPolicy(snapshot: RepositorySnapshot): RepositoryPolicyFinding[] {
   return [
     ...packageInventory(snapshot),
@@ -393,5 +438,6 @@ export function evaluateRepositoryPolicy(snapshot: RepositorySnapshot): Reposito
     ...publicFiles(snapshot),
     ...automationVerification(snapshot),
     ...docsLinks(snapshot),
+    ...lockfileIntegrity(snapshot),
   ];
 }

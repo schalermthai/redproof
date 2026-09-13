@@ -26,6 +26,10 @@ const rules = defineRules({
     id: 'repository/docs-relative-links-resolve',
     description: 'Repository and skill documentation cannot point to missing local files.',
   },
+  lockfileIntegrity: {
+    id: 'repository/lockfile-resolves-declared-optional-dependencies',
+    description: 'The lockfile records every optional dependency its packages declare, so no platform binary silently disappears.',
+  },
 });
 
 const gate = defineGate({
@@ -95,6 +99,13 @@ export const proofs = defineProofs(gate, [
     mutate.createFile(
       'docs/redproof-broken-link-proof.md',
       '# Proof probe\n\n[missing document](./definitely-missing.md)\n',
+    ),
+  ),
+  proof.red(
+    rules.lockfileIntegrity,
+    'detects a platform binary dropped from the lockfile',
+    mutate.jsonDelete(
+      locate.json({ files: 'package-lock.json', path: '$.packages["node_modules/lightningcss-linux-x64-gnu"]' }),
     ),
   ),
   proof.refuse(

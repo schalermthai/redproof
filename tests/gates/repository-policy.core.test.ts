@@ -66,9 +66,81 @@ function snapshot(overrides: Partial<RepositorySnapshot> = {}): RepositorySnapsh
       'packages/redproof/schema/prove-report-v1.schema.json',
     ]),
     markdown: [{ file: 'README.md', content: '[guide](docs/guide.md)\n' }],
+    lockfile: {
+      file: 'package-lock.json',
+      packages: {
+        'node_modules/native': { optionalDependencies: { 'native-linux-x64': '1.0.0', 'native-darwin-arm64': '1.0.0' } },
+        'node_modules/native-linux-x64': {},
+        'node_modules/native-darwin-arm64': {},
+      },
+    },
     ...overrides,
   };
 }
+
+const lockfileFindings = (findings: readonly RepositoryPolicyFinding[]) =>
+  findings.filter(item => item.rule === 'lockfileIntegrity').map(item => [item.code, item.file, item.message, item.detail]);
+
+test('a declared optional dependency with no lockfile entry is reported against the lockfile, naming the parent', () => {
+  const clean = snapshot();
+  const { 'node_modules/native-linux-x64': _dropped, ...packages } = clean.lockfile.packages;
+  const findings = evaluateRepositoryPolicy({ ...clean, lockfile: { ...clean.lockfile, packages } });
+
+  assert.deepEqual(lockfileFindings(findings), [[
+    'optional-dependency-unresolved',
+    'package-lock.json',
+    'native declares optional dependency native-linux-x64, but package-lock.json records no entry for it.',
+    'node_modules/native',
+  ]]);
+});
+
+test('an optional dependency resolves from a nested parent through each enclosing node_modules to the root', () => {
+  const clean = snapshot();
+  const findings = evaluateRepositoryPolicy({
+    ...clean,
+    lockfile: {
+      ...clean.lockfile,
+      packages: {
+        ...clean.lockfile.packages,
+        'node_modules/host/node_modules/native': { optionalDependencies: { 'native-linux-x64': '1.0.0', 'native-win32-x64': '1.0.0' } },
+        'node_modules/host/node_modules/native-win32-x64': {},
+      },
+    },
+  });
+
+  assert.deepEqual(lockfileFindings(findings), []);
+});
+
+test('a workspace package and the root package are named by their lockfile key, not a node_modules segment', () => {
+  const clean = snapshot();
+  const findings = evaluateRepositoryPolicy({
+    ...clean,
+    lockfile: {
+      ...clean.lockfile,
+      packages: {
+        ...clean.lockfile.packages,
+        '': { optionalDependencies: { 'root-only': '1.0.0' } },
+        'fixtures/native-app': { optionalDependencies: { 'app-only': '1.0.0' } },
+      },
+    },
+  });
+
+  assert.deepEqual(lockfileFindings(findings).map(item => [item[2], item[3]]), [
+    ['the root package declares optional dependency root-only, but package-lock.json records no entry for it.', ''],
+    ['fixtures/native-app declares optional dependency app-only, but package-lock.json records no entry for it.', 'fixtures/native-app'],
+  ]);
+});
+
+test('an entry that lives only under an unrelated nested path does not satisfy a top-level parent', () => {
+  const clean = snapshot();
+  const { 'node_modules/native-linux-x64': _moved, ...packages } = clean.lockfile.packages;
+  const findings = evaluateRepositoryPolicy({
+    ...clean,
+    lockfile: { ...clean.lockfile, packages: { ...packages, 'node_modules/other/node_modules/native-linux-x64': {} } },
+  });
+
+  assert.deepEqual(lockfileFindings(findings).map(item => item[3]), ['node_modules/native']);
+});
 
 const codes = (findings: readonly RepositoryPolicyFinding[]) => findings.map(item => item.code);
 

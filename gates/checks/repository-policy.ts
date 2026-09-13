@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { breach, type Breach, type Check, type Rule, type RuleRef } from 'redproof';
 import {
   evaluateRepositoryPolicy,
+  type LockfileSnapshot,
   type ManifestSnapshot,
   type RepositoryPolicyRule,
   type RepositorySnapshot,
@@ -23,6 +24,21 @@ export type RepositoryPolicyOptions<R extends RuleRef> = {
 
 async function read(root: string, file: string): Promise<string> {
   return readFile(join(root, file), 'utf8');
+}
+
+async function lockfile(root: string): Promise<LockfileSnapshot> {
+  const file = 'package-lock.json';
+  const parsed = JSON.parse(await read(root, file)) as {
+    packages?: Record<string, { optionalDependencies?: Record<string, string> }>;
+  };
+  if (!parsed.packages) throw new Error(`${file} has no packages map.`);
+  return {
+    file,
+    packages: Object.fromEntries(Object.entries(parsed.packages).map(([path, entry]) => [
+      path,
+      entry.optionalDependencies ? { optionalDependencies: entry.optionalDependencies } : {},
+    ])),
+  };
 }
 
 async function manifests(root: string): Promise<ManifestSnapshot[]> {
@@ -49,7 +65,7 @@ export function repositoryPolicy<R extends RuleRef>(
   options: RepositoryPolicyOptions<R>,
 ): Check<R> {
   return scanning<R, RepositorySnapshot>({
-    description: 'evaluate package, release, public-surface, automation, and documentation contracts',
+    description: 'evaluate package, release, public-surface, automation, documentation, and lockfile contracts',
     source: 'repository policy',
 
     gather: async root => {
@@ -71,10 +87,12 @@ export function repositoryPolicy<R extends RuleRef>(
         existingPaths: await listPaths(root, options.linkTargets),
         markdown: [...new Map(documents.flat().map(doc => [doc.file, doc])).values()]
           .sort((left, right) => left.file.localeCompare(right.file)),
+        lockfile: await lockfile(root),
       };
     },
 
-    inspected: state => state.manifests.length + state.markdown.length,
+    inspected: state => state.manifests.length + state.markdown.length
+      + Object.values(state.lockfile.packages).filter(entry => entry.optionalDependencies).length,
 
     breaches: (state): Breach<R>[] =>
       evaluateRepositoryPolicy(state).map(finding => breach(options.rules[finding.rule], {
