@@ -8,7 +8,9 @@ import { parseJestJson, parseJunitXml } from '../../packages/testing/src/index.t
 
 const pureAdapterSources = [
   'packages/dependency-cruiser/src/model.ts',
-  'packages/eslint/src/model.ts',
+  'packages/eslint/src/core/decide.ts',
+  'packages/eslint/src/core/model.ts',
+  'packages/eslint/src/core/options.ts',
   'packages/stryker/src/baseline.ts',
   'packages/stryker/src/cwd.ts',
   'packages/stryker/src/model.ts',

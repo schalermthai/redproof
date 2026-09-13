@@ -1,11 +1,5 @@
 import { relative } from 'node:path';
-import {
-  breach,
-  type Breach,
-  type Diagnostic,
-  type Rule,
-  type RuleRef,
-} from 'redproof';
+import type { Breach, Diagnostic, Rule, RuleRef } from 'redproof';
 
 export type EslintMessage = {
   readonly ruleId: string | null;
@@ -89,7 +83,7 @@ export function eslintBreaches<R extends RuleRef>(
       if (!message.ruleId) continue;
       const rule = byForeignId.get(message.ruleId);
       if (!rule) continue;
-      breaches.push(breach(rule, eslintDiagnostic(root, result.filePath, message)));
+      breaches.push({ rule: rule.id, ...eslintDiagnostic(root, result.filePath, message) });
     }
   }
 

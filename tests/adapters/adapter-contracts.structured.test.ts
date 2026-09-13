@@ -6,7 +6,7 @@ import {
   violationsToBreaches,
   type DependencyCruiserViolation,
 } from '../../packages/dependency-cruiser/src/model.ts';
-import { eslintBreaches } from '../../packages/eslint/src/model.ts';
+import { eslintBreaches } from '../../packages/eslint/src/core/model.ts';
 import {
   undetectedMutantBreaches,
   type StrykerMutantResult,

@@ -254,6 +254,30 @@ test('only the configured files are linted', async () => {
   });
 });
 
+test('configured files are snapshotted when the adapter is constructed', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', FLAT_CONFIG);
+    await write(root, 'src/clean.js', 'export const value = 1;\n');
+    await write(root, 'scripts/noisy.js', 'console.log(1);\n');
+
+    const files = ['src/**/*.js'];
+    const built = adapter(files);
+    files[0] = 'scripts/**/*.js';
+
+    const result = await built.check.run({
+      root,
+      rules: [built.rules.noConsole.id, built.rules.strictEquality.id],
+    });
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+    assert.equal(result.scan.inspected, 1);
+    assert.equal(
+      built.check.description,
+      'run ESLint against src/**/*.js and report configured rule breaches',
+    );
+  });
+});
+
 test('a file ESLint cannot parse REFUSES the Gate instead of inventing a Rule breach', async () => {
   await withWorkspace(async root => {
     await write(root, 'eslint.config.mjs', FLAT_CONFIG);
@@ -280,5 +304,81 @@ test('an ESLint that cannot run at all REFUSES with no inspection count', async 
     assert.equal(result.why.code, 'eslint-unavailable');
     assert.equal(result.scan.inspected, null);
     assert.equal(typeof result.why.detail, 'string');
+  });
+});
+
+test('an adopted Rule the project turned off is still enforced by the Gate', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', `export default [
+  {
+    files: ['**/*.js'],
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    rules: { 'no-console': 'off' },
+  },
+];
+`);
+    await write(root, 'src/noisy.js', 'console.log(1);\n');
+
+    const result = await run(root, ['src/**/*.js']);
+
+    assert.equal(result.verdict, 'fail', JSON.stringify(result));
+    if (result.verdict !== 'fail') return;
+    assert.deepEqual(
+      result.breaches.map(item => [item.rule, item.location?.file]),
+      [['eslint/no-console', 'src/noisy.js']],
+    );
+  });
+});
+
+test('a parse error outranks an ignored target in the same run', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', `export default [
+  { ignores: ['src/ignored.js'] },
+  {
+    files: ['**/*.js'],
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    rules: {},
+  },
+];
+`);
+    await write(root, 'src/ignored.js', 'console.log(1);\n');
+    await write(root, 'src/broken.js', 'export const value = ;\n');
+
+    const result = await run(root, ['src/ignored.js', 'src/broken.js']);
+
+    assert.equal(result.verdict, 'refuse', JSON.stringify(result));
+    if (result.verdict !== 'refuse') return;
+    assert.equal(result.why.code, 'eslint-fatal');
+    assert.equal(result.why.location?.file, 'src/broken.js');
+  });
+});
+
+test('a target no configuration matches REFUSES as incomplete evidence', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', FLAT_CONFIG);
+    await write(root, 'src/unmatched.ts', 'console.log(1);\n');
+
+    const result = await run(root, ['src/unmatched.ts']);
+
+    assert.equal(result.verdict, 'refuse', JSON.stringify(result));
+    if (result.verdict !== 'refuse') return;
+    assert.equal(result.why.code, 'eslint-incomplete-evidence');
+    assert.equal(result.why.location?.file, 'src/unmatched.ts');
+  });
+});
+
+test('with no files option the whole Gate root is linted', async () => {
+  await withWorkspace(async root => {
+    await write(root, 'eslint.config.mjs', FLAT_CONFIG);
+    await write(root, 'src/noisy.js', 'console.log(1);\n');
+
+    const result = await run(root);
+
+    assert.equal(result.verdict, 'fail', JSON.stringify(result));
+    if (result.verdict !== 'fail') return;
+    assert.deepEqual(
+      result.breaches.map(item => [item.rule, item.location?.file]),
+      [['eslint/no-console', 'src/noisy.js']],
+    );
   });
 });
