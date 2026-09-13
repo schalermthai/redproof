@@ -136,6 +136,23 @@ export function refuseTestRunnerUnavailable(
   });
 }
 
+/** A secondary cleanup failure only invalidates an otherwise successful check. */
+export function finalTestingOutcome<R extends RuleRef>(
+  outcome: CheckResult<R>,
+  cleanupError: Error | undefined,
+  format: TestReportFormat,
+  times: ScanTimes,
+): CheckResult<R> {
+  if (!cleanupError || outcome.verdict !== 'pass') return outcome;
+
+  return refuseTestRunnerUnavailable(
+    format,
+    times,
+    'The testing Adapter could not remove its report directory.',
+    cleanupError,
+  );
+}
+
 function parseReport(root: string, report: string | Error, format: TestReportFormat): TestRun | Error {
   if (report instanceof Error) return report;
   try {

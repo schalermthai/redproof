@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { counting, type Check, type RuleRef } from 'redproof';
 import {
   decideCheck,
+  finalTestingOutcome,
   refuseTestRunnerUnavailable,
   type CheckEvidence,
   type SelectedTestRules,
@@ -69,16 +70,10 @@ export function testingCheck<R extends RuleRef>(
           error,
         ));
 
-      const cleanup = await rm(created, { recursive: true, force: true }).catch(errorOf);
-      if (cleanup instanceof Error) {
-        return refuseTestRunnerUnavailable(
-          format,
-          times(),
-          'The testing Adapter could not remove its report directory.',
-          cleanup,
-        );
-      }
-      return outcome;
+      const cleanup = await rm(created, { recursive: true, force: true })
+        .then(() => undefined)
+        .catch(errorOf);
+      return finalTestingOutcome(outcome, cleanup, format, times());
     },
   };
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { chmod, lstat, mkdir, readdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import {
   defineTestRunner,
@@ -315,6 +315,46 @@ test('a failing exit that the report does explain is a FAIL, not a refusal', asy
     assert.deepEqual(breachesOf(result).map(item => item.code), ['test-failed']);
   });
 });
+
+for (const expected of ['pass', 'fail', 'refuse'] as const) {
+  test(`a cleanup failure preserves ${expected === 'pass' ? 'a cleanup refusal' : `the primary ${expected.toUpperCase()}`}`, async () => {
+    await withWorkspace(async root => {
+      let reportDirectory: string | undefined;
+      const content = expected === 'fail' ? failingReport : expected === 'refuse' ? '{' : passingReport;
+      const adapter = testing({
+        runner: fakeRunner(async ctx => {
+          reportDirectory = dirname(ctx.reportFile);
+          await writeFile(ctx.reportFile, content, 'utf8');
+          await chmod(reportDirectory, 0o500);
+          return { kind: 'completed', exitCode: expected === 'fail' ? 1 : 0, stdout: '', stderr: '' };
+        }),
+        report: report.jestJson(),
+        rules: { testsPass: true },
+      });
+
+      try {
+        const result = await adapter.check.run({ root, rules: ['testing/tests-pass'] });
+        assert.equal(result.verdict, expected === 'pass' ? 'refuse' : expected);
+        if (expected === 'pass') {
+          assert.equal(refusalOf(result).code, 'test-runner-unavailable');
+          assert.equal(
+            refusalOf(result).message,
+            'The testing Adapter could not remove its report directory.',
+          );
+        } else if (expected === 'fail') {
+          assert.deepEqual(breachesOf(result).map(item => item.code), ['test-failed']);
+        } else {
+          assert.equal(refusalOf(result).code, 'test-report-unavailable');
+        }
+      } finally {
+        if (reportDirectory) {
+          await chmod(reportDirectory, 0o700);
+          await rm(reportDirectory, { recursive: true, force: true });
+        }
+      }
+    });
+  });
+}
 
 test('a runner that could not start refuses as unavailable test evidence', async () => {
   await withWorkspace(async root => {
