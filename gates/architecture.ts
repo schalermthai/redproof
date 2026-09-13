@@ -18,6 +18,7 @@ const dependencies = dependencyCruiser({
     noCycles: 'no-cycles',
     coreNoEffectImports: 'core-no-effect-imports',
     coreNoShell: 'core-no-shell',
+    adapterCoreNoShell: 'adapter-core-no-shell',
     domainInwardOnly: 'domain-inward-only',
     compositionNoRuntimeOrReporters: 'composition-no-runtime-or-reporters',
     adaptersPublicCoreApiOnly: 'adapters-public-core-api-only',
@@ -98,7 +99,7 @@ export const proofs = defineProofs(gate, [
     mutate.appendText('packages/testing/src/core/paths.ts', '\nvoid process.cwd();\n'),
   ),
   proof.red(
-    rules.coreNoShell,
+    rules.adapterCoreNoShell,
     'keeps an Adapter core inside src/core',
     mutate.appendText('packages/testing/src/core/paths.ts', "\nimport '../runner.ts';\n"),
   ),
