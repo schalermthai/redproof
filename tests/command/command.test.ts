@@ -59,6 +59,16 @@ function killQuietly(pid: number | undefined): void {
   try { process.kill(pid, 'SIGKILL'); } catch {}
 }
 
+/**
+ * True once the pid file holds a pid, not merely once it exists. `writeFileSync`
+ * creates the file before it writes, so a waiter that only tests existence can
+ * release while the file is still empty.
+ */
+function pidWritten(pidFile: string, readFileSync = "require('node:fs').readFileSync"): string {
+  return `(() => { try { return Number(${readFileSync}(${JSON.stringify(pidFile)}, 'utf8')) > 0; }`
+    + ' catch { return false; } })()';
+}
+
 /** Records its pid, ignores SIGTERM, and lives 10 s. */
 function stubbornDescendant(pidFile: string): string {
   return `process.on('SIGTERM', () => {}); require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 10_000)`;
@@ -82,7 +92,7 @@ function parentWaitingFor(
   thenDo: string,
   detached = stdio === 'inherit',
 ): string {
-  return `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: '${stdio}', detached: ${detached} }).unref(); const tick = () => { if (require('node:fs').existsSync(${JSON.stringify(pidFile)})) { ${thenDo} } else setTimeout(tick, 5); }; tick();`;
+  return `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(descendant)}], { stdio: '${stdio}', detached: ${detached} }).unref(); const tick = () => { if (${pidWritten(pidFile)}) { ${thenDo} } else setTimeout(tick, 5); }; tick();`;
 }
 
 test('executeCommand returns the raw exit code and both captured streams without applying Gate policy', async () => {
@@ -241,7 +251,7 @@ test('a host that exits takes a supervised command and its descendants with it',
     const childPidFile = join(root, 'child.pid');
     const descendantPidFile = join(root, 'descendant.pid');
     const child = parentOf(stubbornDescendant(descendantPidFile), childPidFile);
-    const host = `import { executeCommand } from 'redproof/command'; import { existsSync } from 'node:fs'; void executeCommand({ command: process.execPath, args: ['-e', ${JSON.stringify(child)}], cwd: ${JSON.stringify(root)} }); const tick = () => { if (existsSync(${JSON.stringify(descendantPidFile)})) process.exit(0); else setTimeout(tick, 5); }; tick();`;
+    const host = `import { executeCommand } from 'redproof/command'; import { readFileSync } from 'node:fs'; void executeCommand({ command: process.execPath, args: ['-e', ${JSON.stringify(child)}], cwd: ${JSON.stringify(root)} }); const tick = () => { if (${pidWritten(descendantPidFile, 'readFileSync')}) process.exit(0); else setTimeout(tick, 5); }; tick();`;
     const hostProcess = spawn(process.execPath, ['--input-type=module', '-e', host], { cwd: process.cwd(), stdio: 'ignore' });
     const hostExit = new Promise<number | null>(resolve => hostProcess.once('exit', code => resolve(code)));
     let pids: number[] = [];
