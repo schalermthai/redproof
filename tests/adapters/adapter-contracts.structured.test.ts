@@ -5,7 +5,7 @@ import { defineRule, type Rule } from 'redproof';
 import {
   violationsToBreaches,
   type DependencyCruiserViolation,
-} from '../../packages/dependency-cruiser/src/model.ts';
+} from '../../packages/dependency-cruiser/src/core/model.ts';
 import { eslintBreaches } from '../../packages/eslint/src/core/model.ts';
 import {
   undetectedMutantBreaches,

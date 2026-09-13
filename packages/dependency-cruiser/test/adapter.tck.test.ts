@@ -4,7 +4,7 @@ import { dependencyCruiser } from '../src/index.ts';
 import {
   violationsToBreaches,
   type DependencyCruiserViolation,
-} from '../src/model.ts';
+} from '../src/core/model.ts';
 import { withWorkspace } from './support/workspace.ts';
 
 const rule = defineRule({
@@ -67,8 +67,12 @@ const spec = {
   }],
   purity: {
     kind: 'sources',
-    files: ['packages/dependency-cruiser/src/model.ts'],
-    allowedExternalImports: ['redproof'],
+    files: [
+      'packages/dependency-cruiser/src/core/model.ts',
+      'packages/dependency-cruiser/src/core/options.ts',
+      'packages/dependency-cruiser/src/core/outcome.ts',
+    ],
+    allowedExternalImports: ['node:path', 'redproof'],
   },
   capabilities: {
     kind: 'not-applicable',

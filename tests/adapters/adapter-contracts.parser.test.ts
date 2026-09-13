@@ -7,7 +7,9 @@ import { analyzePureTestEffects } from '../../gates/support/effects-model.ts';
 import { parseJestJson, parseJunitXml } from '../../packages/testing/src/index.ts';
 
 const pureAdapterSources = [
-  'packages/dependency-cruiser/src/model.ts',
+  'packages/dependency-cruiser/src/core/model.ts',
+  'packages/dependency-cruiser/src/core/options.ts',
+  'packages/dependency-cruiser/src/core/outcome.ts',
   'packages/eslint/src/core/decide.ts',
   'packages/eslint/src/core/model.ts',
   'packages/eslint/src/core/options.ts',

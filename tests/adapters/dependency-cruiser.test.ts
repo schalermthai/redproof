@@ -142,6 +142,110 @@ test('the run keeps the configured cruise options, disables caching, and asks fo
   });
 });
 
+test('the configured files reach dependency-cruiser as the modules to cruise', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      cruise: cruiseReporting(`{
+    totalCruised: 2,
+    violations: JSON.stringify(files) === JSON.stringify(['src', 'gates'])
+      ? []
+      : [{ rule: { name: 'no-new-debt' }, from: 'files', to: JSON.stringify(files) }],
+  }`),
+    });
+
+    const result = await run(adapterFor({ files: ['src', 'gates'] }), root);
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+  });
+});
+
+test('configured files are snapshotted when the adapter is constructed', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      cruise: cruiseReporting(`{
+    totalCruised: 1,
+    violations: JSON.stringify(files) === JSON.stringify(['src'])
+      ? []
+      : [{ rule: { name: 'no-new-debt' }, from: 'files', to: JSON.stringify(files) }],
+  }`),
+    });
+
+    const files = ['src'];
+    const adapter = adapterFor({ files });
+    files[0] = 'test';
+
+    const result = await run(adapter, root);
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+    assert.equal(
+      adapter.check.description,
+      'run dependency-cruiser against src and report configured rule breaches',
+    );
+  });
+});
+
+test('without configFile the adapter reads .dependency-cruiser.cjs from the Gate root', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      config: "export default async function extractConfig(path) { return path.endsWith('/.dependency-cruiser.cjs') ? { forbidden: [{ name: 'no-new-debt' }] } : {}; }\n",
+      cruise: noViolations,
+    });
+    await writeFile(join(root, '.dependency-cruiser.cjs'), 'module.exports = { forbidden: [] };\n', 'utf8');
+
+    const adapter = dependencyCruiser({ rules: { noNewDebt: 'no-new-debt' } });
+    const result = await adapter.check.run({ root, rules: [adapter.rules.noNewDebt.id] });
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+    assert.equal(result.scan.inspected, 7);
+  });
+});
+
+test('a cruise result handed over as an object, not a JSON string, is read the same way', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      cruise: `export async function cruise() {
+  return { output: { summary: { totalCruised: 5, violations: [{
+    rule: { name: 'no-new-debt', severity: 'error' },
+    from: 'src/domain/order.ts',
+    to: 'src/infrastructure/db.ts',
+  }] } } };
+}
+`,
+    });
+
+    const result = await run(adapterFor({}), root);
+
+    assert.equal(result.verdict, 'fail', JSON.stringify(result));
+    if (result.verdict !== 'fail') return;
+    assert.equal(result.breaches.length, 1);
+    assert.equal(result.breaches[0]?.rule, 'dependency-cruiser/no-new-debt');
+    assert.equal(result.scan.inspected, 5);
+  });
+});
+
+test('a cycle violation carries its route as the breach detail', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      cruise: cruiseReporting(`{
+    totalCruised: 2,
+    violations: [{
+      rule: { name: 'no-new-debt', severity: 'error' },
+      from: 'src/a.ts',
+      to: 'src/b.ts',
+      cycle: ['src/b.ts', { name: 'src/a.ts', dependencyTypes: ['local'] }],
+    }],
+  }`),
+    });
+
+    const result = await run(adapterFor({}), root);
+
+    assert.equal(result.verdict, 'fail', JSON.stringify(result));
+    if (result.verdict !== 'fail') return;
+    assert.equal(result.breaches[0]?.detail, 'Cycle: src/b.ts -> src/a.ts');
+    assert.equal(result.breaches[0]?.location?.file, 'src/a.ts');
+  });
+});
+
 test('a Rule the dependency-cruiser configuration does not define REFUSES instead of passing', async () => {
   await withWorkspace(async root => {
     await writeFakeDependencyCruiser(root, {
