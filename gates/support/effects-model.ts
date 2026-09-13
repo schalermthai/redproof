@@ -12,7 +12,7 @@ export type EffectAnalysis = {
   readonly unapprovedBoundaries: readonly EffectFinding[];
 };
 
-const CORE_PATH = /^packages\/redproof\/src\/(?:domain|[^/]+\/core)\//;
+const CORE_PATH = /^packages\/(?:redproof\/src\/(?:domain|[^/]+\/core)|(?!redproof\/)[^/]+\/src\/core)\//;
 
 const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/knip/src/index.ts',

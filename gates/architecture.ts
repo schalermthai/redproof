@@ -21,6 +21,7 @@ const dependencies = dependencyCruiser({
     domainInwardOnly: 'domain-inward-only',
     compositionNoRuntimeOrReporters: 'composition-no-runtime-or-reporters',
     adaptersPublicCoreApiOnly: 'adapters-public-core-api-only',
+    adaptersNoCrossAdapterImports: 'adapters-no-cross-adapter-imports',
     productionNoTestFixtureDependencies: 'production-no-test-fixture-dependencies',
     productionNoAdapterTckDependency: 'production-no-adapter-tck-dependency',
     contextsImportThroughIndex: 'contexts-import-through-index',
@@ -87,6 +88,21 @@ export const proofs = defineProofs(gate, [
     mutate.appendText('packages/redproof/src/run/core/exit-code.ts', "\nimport '../shell/worker-process.ts';\n"),
   ),
   proof.red(
+    rules.coreNoEffectImports,
+    'keeps effect imports out of an Adapter core',
+    mutate.appendText('packages/testing/src/core/paths.ts', "\nimport 'node:fs/promises';\n"),
+  ),
+  proof.red(
+    rules.coreNoAmbientInputs,
+    'keeps ambient process state out of an Adapter core',
+    mutate.appendText('packages/testing/src/core/paths.ts', '\nvoid process.cwd();\n'),
+  ),
+  proof.red(
+    rules.coreNoShell,
+    'keeps an Adapter core inside src/core',
+    mutate.appendText('packages/testing/src/core/paths.ts', "\nimport '../runner.ts';\n"),
+  ),
+  proof.red(
     rules.domainInwardOnly,
     'keeps domain types independent of outer layers',
     mutate.appendText('packages/redproof/src/domain/rule.ts', "\nimport '../run/core/exit-code.ts';\n"),
@@ -115,6 +131,11 @@ export const proofs = defineProofs(gate, [
     rules.adaptersPublicCoreApiOnly,
     'keeps the Istanbul adapter inside the scan and public API boundary',
     mutate.appendText('packages/istanbul/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
+    rules.adaptersNoCrossAdapterImports,
+    'keeps one Adapter from importing another',
+    mutate.appendText('packages/istanbul/src/index.ts', "\nimport '../../knip/src/index.ts';\n"),
   ),
   proof.red(
     rules.productionNoTestFixtureDependencies,

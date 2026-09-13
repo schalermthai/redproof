@@ -10,8 +10,8 @@ module.exports = {
     {
       name: 'core-no-effect-imports',
       severity: 'error',
-      comment: 'The functional core cannot import effectful Node modules.',
-      from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
+      comment: 'The functional core cannot import effectful Node modules. In redproof that is domain/ and every <context>/core/; in an Adapter package it is src/core/.',
+      from: { path: '^packages/(?:redproof/src/(?:domain|[^/]+/core)|(?!redproof/)[^/]+/src/core)/' },
       to: {
         dependencyTypes: ['core'],
         path: '^(node:)?(fs|fs/promises|child_process|os|stream|net|http|https|worker_threads|timers|timers/promises)$',
@@ -20,10 +20,10 @@ module.exports = {
     {
       name: 'core-no-shell',
       severity: 'error',
-      comment: 'The functional core cannot depend on orchestration or presentation. A context barrel carries its shell, so a core uses core/index.ts instead. The domain barrel is types only.',
-      from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
+      comment: 'The functional core cannot depend on orchestration or presentation. A context barrel carries its shell, so a core uses core/index.ts instead. The domain barrel is types only. An Adapter core imports nothing from its package outside src/core/.',
+      from: { path: '^packages/(?:redproof/src/(?:domain|[^/]+/core)|(?!redproof/)[^/]+/src/core)/' },
       to: {
-        path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|cli[.]ts$)',
+        path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|cli[.]ts$)|^packages/(?!redproof/)[^/]+/src/(?!core/)',
         pathNot: '^packages/redproof/src/domain/index[.]ts$',
       },
     },
@@ -83,6 +83,13 @@ module.exports = {
           '^packages/redproof/src/command/index[.]ts$',
         ],
       },
+    },
+    {
+      name: 'adapters-no-cross-adapter-imports',
+      severity: 'error',
+      comment: 'An Adapter package depends on redproof only. Two Adapters that share code share it through redproof, not through each other.',
+      from: { path: '^packages/(?!redproof/)([^/]+)/src/' },
+      to: { path: '^packages/(?!redproof/)[^/]+/', pathNot: '^packages/$1/' },
     },
     {
       name: 'production-no-test-fixture-dependencies',
