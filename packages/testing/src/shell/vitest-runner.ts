@@ -6,7 +6,7 @@ import type {
   TestRunnerCompleted,
   TestRunnerResult,
   TestRunnerUnavailable,
-} from '../model.ts';
+} from '../core/model.ts';
 import {
   confineCanonicalTestingPath,
   resolveTestingPath,

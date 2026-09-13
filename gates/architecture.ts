@@ -101,7 +101,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.adapterCoreNoShell,
     'keeps an Adapter core inside src/core',
-    mutate.appendText('packages/testing/src/core/paths.ts', "\nimport '../runner.ts';\n"),
+    mutate.appendText('packages/testing/src/core/paths.ts', "\nimport '../shell/command-runner.ts';\n"),
   ),
   proof.red(
     rules.domainInwardOnly,

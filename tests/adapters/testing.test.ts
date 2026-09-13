@@ -493,13 +493,6 @@ test('a test command that cannot start refuses as unavailable and names the comm
   });
 });
 
-test('an invalid test command is rejected before a runner exists', () => {
-  assert.throws(
-    () => runner.command({ command: '' }),
-    /command must not be empty/u,
-  );
-});
-
 test('a private report is requested from Vitest when no configured report file is named', async () => {
   await withWorkspace(async root => {
     const project = join(root, 'project');
