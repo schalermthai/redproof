@@ -20,12 +20,19 @@ module.exports = {
     {
       name: 'core-no-shell',
       severity: 'error',
-      comment: 'The functional core cannot depend on orchestration or presentation. A context barrel carries its shell, so a core uses core/index.ts instead. The domain barrel is types only. An Adapter core imports nothing from its package outside src/core/.',
-      from: { path: '^packages/(?:redproof/src/(?:domain|[^/]+/core)|(?!redproof/)[^/]+/src/core)/' },
+      comment: 'The functional core cannot depend on orchestration or presentation. A context barrel carries its shell, so a core uses core/index.ts instead. The domain barrel is types only.',
+      from: { path: '^packages/redproof/src/(?:domain|[^/]+/core)/' },
       to: {
-        path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|cli[.]ts$)|^packages/(?!redproof/)[^/]+/src/(?!core/)',
+        path: '^packages/redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|index[.]ts$|cli[.]ts$)',
         pathNot: '^packages/redproof/src/domain/index[.]ts$',
       },
+    },
+    {
+      name: 'adapter-core-no-shell',
+      severity: 'error',
+      comment: 'An Adapter core imports nothing from its own package outside src/core/. The public redproof entry point is not shell; its pure helpers are the API an Adapter core builds on.',
+      from: { path: '^packages/(?!redproof/)[^/]+/src/core/' },
+      to: { path: '^packages/(?!redproof/)[^/]+/src/(?!core/)' },
     },
     {
       name: 'contexts-import-through-index',
