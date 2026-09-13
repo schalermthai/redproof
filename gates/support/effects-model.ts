@@ -19,6 +19,7 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/knip/src/reporter.ts',
   'packages/adapter-tck/src/index.ts',
   'packages/dependency-cruiser/src/index.ts',
+  'packages/dependency-cruiser/src/shell/tool.ts',
   'packages/eslint/src/index.ts',
   'packages/redproof/src/cli.ts',
   'packages/redproof/src/cli/shell/main.ts',

@@ -1,155 +1,31 @@
-import { readFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
-import { isAbsolute, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import {
   counting,
   defineAdapter,
-  defineRules,
-  result,
   type Adapter,
   type NoUnknownKeys,
   type Rule,
-  rejectUnknownKeys,
 } from 'redproof';
+import type { DependencyCruiserConfig } from './core/model.ts';
 import {
-  dependencyCruiserRuleAvailability,
-  violationsToBreaches,
-  type DependencyCruiserConfig,
-  type DependencyCruiserViolation,
-} from './model.ts';
+  checkDescription,
+  ruleCatalog,
+  rulesByForeignName,
+  settingsOf,
+  validateOptions,
+  type DependencyCruiserAdapterOptions,
+  type DependencyCruiserRuleCatalog,
+  type DependencyCruiserRuleInput,
+} from './core/options.ts';
+import {
+  cruiseVerdict,
+  knownViolationsRefusal,
+  ruleAvailabilityRefusal,
+  unavailableRefusal,
+} from './core/outcome.ts';
+import { loadDependencyCruiser, now, readKnownViolations, withCwd } from './shell/tool.ts';
 
-type DependencyCruiserRuleInput = Readonly<Record<string, string>>;
-
-type DependencyCruiserRuleCatalog<M extends DependencyCruiserRuleInput> = {
-  readonly [K in keyof M]: Rule<`dependency-cruiser/${M[K] & string}`>;
-};
-
-export type DependencyCruiserAdapterOptions<M extends DependencyCruiserRuleInput> = {
-  readonly files?: readonly string[];
-  readonly configFile?: string;
-  readonly knownViolationsFile?: string;
-  readonly rules: M;
-};
-
-type DependencyCruiserModules = {
-  readonly cruise: typeof import('dependency-cruiser').cruise;
-  readonly extractConfig: typeof import('dependency-cruiser/config-utl/extract-depcruise-config').default;
-  readonly extractOptions: typeof import('dependency-cruiser/config-utl/extract-depcruise-options').default;
-};
-
-type DependencyCruiserOptions = NonNullable<
-  Parameters<DependencyCruiserModules['cruise']>[1]
->;
-type KnownViolations = NonNullable<DependencyCruiserOptions['knownViolations']>;
-
-type PackageExport = string | {
-  readonly import?: string;
-  readonly default?: string;
-};
-
-type PackageManifest = {
-  readonly name?: string;
-  readonly exports?: Readonly<Record<string, PackageExport>>;
-};
-
-type CruiseOutputLike = {
-  readonly summary?: {
-    readonly totalCruised?: number;
-    readonly violations?: readonly DependencyCruiserViolation[];
-  };
-};
-
-// dependency-cruiser returns a JSON string for outputType 'json'.
-function readCruiseOutput(output: unknown): CruiseOutputLike | null {
-  if (typeof output === 'string') {
-    try {
-      return JSON.parse(output) as CruiseOutputLike;
-    } catch {
-      return null;
-    }
-  }
-
-  return typeof output === 'object' && output !== null
-    ? output as CruiseOutputLike
-    : null;
-}
-
-function now(): string {
-  return new Date().toISOString();
-}
-
-function withCwd<T>(root: string, action: () => Promise<T>): Promise<T> {
-  const before = process.cwd();
-  process.chdir(root);
-  return action().finally(() => process.chdir(before));
-}
-
-function selfExport(manifest: PackageManifest, subpath: string): string {
-  const exported = manifest.exports?.[subpath];
-  const target = typeof exported === 'string'
-    ? exported
-    : exported?.import ?? exported?.default;
-  if (!target) {
-    throw new Error(`dependency-cruiser does not export ${subpath}.`);
-  }
-  return target;
-}
-
-async function selfManifest(root: string): Promise<PackageManifest | null> {
-  const manifest = await readFile(resolve(root, 'package.json'), 'utf8')
-    .then(text => JSON.parse(text) as PackageManifest, () => null);
-  return manifest?.name === 'dependency-cruiser' ? manifest : null;
-}
-
-async function loadDependencyCruiser(root: string): Promise<DependencyCruiserModules> {
-  const manifest = await selfManifest(root);
-
-  if (manifest) {
-    const loadSelf = (subpath: string) => import(pathToFileURL(
-      resolve(root, selfExport(manifest, subpath)),
-    ).href);
-    const [main, config, options] = await Promise.all([
-      loadSelf('.'),
-      loadSelf('./config-utl/extract-depcruise-config'),
-      loadSelf('./config-utl/extract-depcruise-options'),
-    ]);
-    return {
-      cruise: main.cruise as DependencyCruiserModules['cruise'],
-      extractConfig: config.default as DependencyCruiserModules['extractConfig'],
-      extractOptions: options.default as DependencyCruiserModules['extractOptions'],
-    };
-  }
-
-  const [main, config, options] = await Promise.all([
-    import('dependency-cruiser'),
-    import('dependency-cruiser/config-utl/extract-depcruise-config'),
-    import('dependency-cruiser/config-utl/extract-depcruise-options'),
-  ]);
-  return {
-    cruise: main.cruise,
-    extractConfig: config.default,
-    extractOptions: options.default,
-  };
-}
-
-async function readKnownViolations(path: string): Promise<KnownViolations | Error> {
-  const text = await readFile(path, 'utf8').catch(
-    (error: NodeJS.ErrnoException) => error,
-  );
-  if (text instanceof Error) return new Error(`Cannot read ${path}. ${text.message}`);
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (error) {
-    return new Error(`${path} is not valid JSON. ${(error as Error).message}`);
-  }
-
-  if (!Array.isArray(parsed)) {
-    return new Error(`${path} must hold a JSON array of known violations.`);
-  }
-  return parsed as KnownViolations;
-}
+export type { DependencyCruiserAdapterOptions } from './core/options.ts';
 
 export function dependencyCruiser<
   const O extends DependencyCruiserAdapterOptions<DependencyCruiserRuleInput>,
@@ -157,136 +33,49 @@ export function dependencyCruiser<
   options: O
     & NoUnknownKeys<O, DependencyCruiserAdapterOptions<DependencyCruiserRuleInput>>,
 ): Adapter<DependencyCruiserRuleCatalog<O['rules']>> {
-  type M = O['rules'];
-  type Catalog = DependencyCruiserRuleCatalog<M>;
+  type Catalog = DependencyCruiserRuleCatalog<O['rules']>;
   type Ref = Catalog[keyof Catalog]['id'];
 
-  rejectUnknownKeys(
-    options,
-    ['files', 'configFile', 'knownViolationsFile', 'rules'],
-    'dependency-cruiser adapter',
-  );
-  const configuredRules = Object.entries(options.rules);
-  if (configuredRules.length === 0) {
-    throw new Error('dependency-cruiser adapter requires at least one Redproof rule.');
-  }
-  for (const [alias, foreignName] of configuredRules) {
-    if (!alias.trim() || !foreignName.trim()) {
-      throw new Error(
-        `dependency-cruiser rule ${JSON.stringify(alias)} must name a non-empty rule.`,
-      );
-    }
-  }
-  for (const [name, path] of [
-    ['configFile', options.configFile],
-    ['knownViolationsFile', options.knownViolationsFile],
-  ] as const) {
-    if (path !== undefined && (!path.trim() || isAbsolute(path))) {
-      throw new Error(`dependency-cruiser ${name} must be a relative path.`);
-    }
-  }
-  for (const file of options.files ?? []) {
-    if (!file.trim() || isAbsolute(file)) {
-      throw new Error('dependency-cruiser files must contain non-empty relative paths.');
-    }
-  }
-
-  const rules = defineRules(Object.fromEntries(
-    configuredRules.map(([alias, foreignName]) => [
-      alias,
-      {
-        id: `dependency-cruiser/${foreignName}`,
-        description: `dependency-cruiser rule ${foreignName} must hold.`,
-      },
-    ]),
-  ) as Catalog);
-
-  const byForeignRule = new Map<string, Rule<Ref>>();
-  for (const [alias, foreignName] of configuredRules) {
-    byForeignRule.set(foreignName, rules[alias as keyof M] as Rule<Ref>);
-  }
-
-  const files = [...(options.files ?? ['src'])];
-  const configFile = options.configFile ?? '.dependency-cruiser.cjs';
+  validateOptions(options);
+  const rules = ruleCatalog(options.rules) as Catalog;
+  const byForeignRule = rulesByForeignName(options.rules, rules) as ReadonlyMap<string, Rule<Ref>>;
+  const settings = settingsOf(options);
 
   return defineAdapter({
     kind: 'dependency-cruiser',
     rules,
     check: {
-      description: `run dependency-cruiser against ${files.join(', ')} and report configured rule breaches`,
+      description: checkDescription(settings.files),
       counting: counting.supported,
 
       async run(ctx) {
         const startedAt = now();
+        const time = () => ({ startedAt, finishedAt: now() });
 
         try {
           return await withCwd(ctx.root, async () => {
-            const dependencyCruiser = await loadDependencyCruiser(ctx.root);
-            const configPath = resolve(ctx.root, configFile);
-            const config = await dependencyCruiser.extractConfig(configPath) as DependencyCruiserConfig;
-            const availability = dependencyCruiserRuleAvailability(
+            const tool = await loadDependencyCruiser(ctx.root);
+            const configPath = resolve(ctx.root, settings.configFile);
+            const config = await tool.extractConfig(configPath) as DependencyCruiserConfig;
+            const unavailableRule = ruleAvailabilityRefusal(
               config,
-              Object.values(options.rules),
+              settings.foreignRules,
+              settings.configFile,
+              time(),
             );
+            if (unavailableRule) return unavailableRule;
 
-            if (availability.missing.length > 0) {
-              return result.refuse(
-                {
-                  source: 'dependency-cruiser',
-                  startedAt,
-                  finishedAt: now(),
-                  inspected: null,
-                },
-                {
-                  code: 'dependency-cruiser-rule-missing',
-                  message: 'Configured Redproof rules are missing from the dependency-cruiser configuration.',
-                  location: { file: configFile, line: null, column: null },
-                  detail: `Missing: ${availability.missing.join(', ')}`,
-                },
-              );
-            }
-
-            if (availability.inactive.length > 0) {
-              return result.refuse(
-                {
-                  source: 'dependency-cruiser',
-                  startedAt,
-                  finishedAt: now(),
-                  inspected: null,
-                },
-                {
-                  code: 'dependency-cruiser-rule-inactive',
-                  message: 'Configured Redproof rules are disabled in the dependency-cruiser configuration.',
-                  location: { file: configFile, line: null, column: null },
-                  detail: `Inactive: ${availability.inactive.join(', ')}`,
-                },
-              );
-            }
-
-            const cruiseOptions = await dependencyCruiser.extractOptions(configPath);
-            const baselineFile = options.knownViolationsFile;
+            const cruiseOptions = await tool.extractOptions(configPath);
+            const baselineFile = settings.knownViolationsFile;
             const knownViolations = baselineFile
               ? await readKnownViolations(resolve(ctx.root, baselineFile))
               : undefined;
-
             if (knownViolations instanceof Error) {
-              return result.refuse(
-                {
-                  source: 'dependency-cruiser',
-                  startedAt,
-                  finishedAt: now(),
-                  inspected: null,
-                },
-                {
-                  code: 'dependency-cruiser-known-violations-invalid',
-                  message: 'The known-violations baseline could not be read.',
-                  location: { file: baselineFile!, line: null, column: null },
-                  detail: knownViolations.message,
-                },
-              );
+              return knownViolationsRefusal(baselineFile!, knownViolations, time());
             }
-            const cruiseResult = await dependencyCruiser.cruise(
-              files,
+
+            const cruised = await tool.cruise(
+              [...settings.files],
               {
                 ...cruiseOptions,
                 cache: false,
@@ -294,55 +83,14 @@ export function dependencyCruiser<
                 outputType: 'json',
               },
             );
-
-            const output = readCruiseOutput(cruiseResult.output);
-            if (!output?.summary || !Array.isArray(output.summary.violations)) {
-              return result.refuse(
-                {
-                  source: 'dependency-cruiser',
-                  startedAt,
-                  finishedAt: now(),
-                  inspected: null,
-                },
-                {
-                  code: 'dependency-cruiser-output-unreadable',
-                  message: 'dependency-cruiser completed without a trustworthy structured result.',
-                  location: null,
-                },
-              );
-            }
-
-            const scan = {
-              source: 'dependency-cruiser',
-              startedAt,
-              finishedAt: now(),
-              inspected: output.summary.totalCruised ?? null,
-            } as const;
-
-            return result.fromBreaches(
-              scan,
-              violationsToBreaches(output.summary.violations, byForeignRule),
-            );
+            return cruiseVerdict(cruised.output, byForeignRule, time());
           });
         } catch (error) {
-          return result.refuse(
-            {
-              source: 'dependency-cruiser',
-              startedAt,
-              finishedAt: now(),
-              inspected: null,
-            },
-            {
-              code: 'dependency-cruiser-unavailable',
-              message: 'dependency-cruiser could not complete the check.',
-              location: null,
-              detail: error instanceof Error ? error.message : String(error),
-            },
-          );
+          return unavailableRefusal(error, time());
         }
       },
     },
   });
 }
 
-export type { DependencyCruiserViolation } from './model.ts';
+export type { DependencyCruiserViolation } from './core/model.ts';

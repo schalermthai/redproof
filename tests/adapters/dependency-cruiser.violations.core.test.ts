@@ -6,7 +6,7 @@ import {
   violationDiagnostic,
   violationsToBreaches,
   type DependencyCruiserViolation,
-} from '../../packages/dependency-cruiser/src/model.ts';
+} from '../../packages/dependency-cruiser/src/core/model.ts';
 
 const domain = {
   id: 'dependency-cruiser/domain-no-infrastructure',
