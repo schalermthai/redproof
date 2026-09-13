@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
-import { stryker, type StrykerMutantResult } from '@redproof/stryker';
+import type { StrykerMutantResult } from '@redproof/stryker';
+import { createStrykerAdapter } from '../../packages/stryker/src/shell/adapter.ts';
 import { withWorkspace } from '../helpers/workspace.ts';
 
 /**
@@ -35,7 +36,7 @@ const acceptedParserMutant = JSON.stringify([{
 const engineOf = (mutants: readonly StrykerMutantResult[]) => async () => mutants;
 
 const runBaseline = async (root: string, mutants: readonly StrykerMutantResult[]) => {
-  const adapter = stryker(
+  const adapter = createStrykerAdapter(
     { cwd: 'project', rules: { noNewUndetectedMutants: { acceptedMutantsFile: 'accepted-mutants.json' } } },
     engineOf(mutants),
   );
@@ -43,13 +44,13 @@ const runBaseline = async (root: string, mutants: readonly StrykerMutantResult[]
 };
 
 const runScore = async (root: string, minimum: number, mutants: readonly StrykerMutantResult[]) => {
-  const adapter = stryker({ rules: { mutationScore: { minimum } } }, engineOf(mutants));
+  const adapter = createStrykerAdapter({ rules: { mutationScore: { minimum } } }, engineOf(mutants));
   return adapter.check.run({ root, rules: [adapter.rules.mutationScore.id] });
 };
 
 test('a run that leaves mutants pending REFUSES as incomplete, with every mutant counted as inspected', async () => {
   await withWorkspace(async root => {
-    const adapter = stryker(
+    const adapter = createStrykerAdapter(
       { rules: { mutantsDetected: true } },
       engineOf([mutant('1', 'Killed'), mutant('2', 'Pending'), mutant('3', 'Pending')]),
     );
@@ -75,7 +76,7 @@ test('a run with no valid mutant REFUSES a score policy, and passes a detection 
     assert.equal(scored.why.code, 'mutation-score-unavailable');
     assert.equal(scored.scan.inspected, 3);
 
-    const adapter = stryker({ rules: { mutantsDetected: true } }, engineOf(mutants));
+    const adapter = createStrykerAdapter({ rules: { mutantsDetected: true } }, engineOf(mutants));
     const detected = await adapter.check.run({ root, rules: [adapter.rules.mutantsDetected.id] });
     assert.equal(detected.verdict, 'pass');
   });
@@ -157,7 +158,7 @@ test('every undetected mutant is reported at a file path relative to the Gate ro
     await mkdir(join(root, 'project'));
     await writeFile(join(root, 'project', 'accepted-mutants.json'), '[]', 'utf8');
 
-    const adapter = stryker(
+    const adapter = createStrykerAdapter(
       {
         cwd: 'project',
         rules: {
@@ -202,7 +203,7 @@ test('the engine runs inside the working directory without the test-runner env, 
       const exitCodeBefore = process.exitCode;
       let seen: unknown;
 
-      const adapter = stryker(
+      const adapter = createStrykerAdapter(
         { cwd: 'project', configFile: 'stryker.config.mjs', rules: { mutantsDetected: true } },
         async options => {
           seen = { options, cwd: process.cwd(), testContext: process.env.NODE_TEST_CONTEXT };

@@ -347,6 +347,8 @@ const cruiserRuleId: 'dependency-cruiser/no-cycles' =
 void cruiserRuleId;
 
 stryker({ rules: { mutantsDetected: true } });
+// @ts-expect-error mutation-engine injection is an internal test seam, not public API.
+stryker({ rules: { mutantsDetected: true } }, async () => []);
 // @ts-expect-error mystery is not a Stryker adapter option.
 stryker({ rules: { mutantsDetected: true }, mystery: true });
 // @ts-expect-error cwd must be a path string.
