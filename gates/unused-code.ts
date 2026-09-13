@@ -21,9 +21,9 @@ export const proofs = defineProofs(gate, [
   proof.red(adapter.rules.devDependencies, 'finds a dev dependency without consumers',
     mutate.jsonMerge(locate.json({ files: 'packages/knip/package.json', path: '$.devDependencies' }), { 'unused-receipt': '1.0.0' })),
   proof.red(adapter.rules.unlisted, 'finds an undeclared external dependency',
-    mutate.appendText('packages/knip/src/model.ts', "\nimport 'redproof-undeclared-receipt';\n")),
+    mutate.appendText('packages/knip/src/core/model.ts', "\nimport 'redproof-undeclared-receipt';\n")),
   proof.red(adapter.rules.unresolved, 'finds an unresolved internal import',
-    mutate.appendText('packages/knip/src/model.ts', "\nimport './redproof-missing-receipt.ts';\n")),
+    mutate.appendText('packages/knip/src/core/model.ts', "\nimport './redproof-missing-receipt.ts';\n")),
   proof.refuse('refuses incomplete Knip configuration', mutate.writeText('knip.json', '{ invalid')),
   proof.green('accepts the maintained repository inventory'),
 ]);

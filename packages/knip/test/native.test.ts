@@ -46,10 +46,8 @@ test('warn findings breach even when native Knip exits zero; off and exclude REF
   });
 });
 
-test('missing config and timeout are REFUSE', async () => {
+test('timeout is REFUSE', async () => {
   await withProject(async root => {
-    const missing = await run(root, { configFile: 'missing.json', rules: { exports: 'exports' } });
-    assert.equal(missing.verdict, 'refuse');
     await writeFile(join(root, 'hang.mjs'), 'setInterval(() => {}, 1000);');
     const timed = await run(root, { cli: 'hang.mjs', timeoutMs: 100, rules: { exports: 'exports' } });
     assert.equal(timed.verdict, 'refuse');

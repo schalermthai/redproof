@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { defineGate, runGate } from 'redproof';
 import { knip } from '../src/index.ts';
-import { issueTypes } from '../src/model.ts';
+import { issueTypes } from '../src/core/model.ts';
 import { withProject } from './support/workspace.ts';
 
 function envelope() {
