@@ -80,6 +80,19 @@ test('production cannot pretend to inspect dev dependencies', async () => {
   });
 });
 
+test('the bundled reporter refuses to write evidence larger than maxOutputBytes', async () => {
+  await withProject(async root => {
+    const unused = Array.from({ length: 60 }, (_, index) => `export const unusedReceipt${index} = ${index};`).join('\n');
+    await appendFile(join(root, 'receive.ts'), `${unused}\n`);
+    const outcome = await run(root, { maxOutputBytes: 3_000, rules: { exports: 'exports' } });
+    assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
+    if (outcome.verdict === 'refuse') {
+      assert.equal(outcome.why.code, 'knip-report-unavailable');
+      assert.match(outcome.why.detail ?? '', /Knip evidence exceeds maxOutputBytes/u);
+    }
+  });
+});
+
 test('native blocking hints remain actionable even alongside unselected findings', async () => {
   await withProject(async root => {
     await writeFile(join(root, 'knip.json'), JSON.stringify({ entry: ['index.ts'], project: ['*.ts'],

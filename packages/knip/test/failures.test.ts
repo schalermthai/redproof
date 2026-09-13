@@ -143,11 +143,11 @@ test('an undeletable evidence directory cannot relabel a timeout', async () => w
 }));
 
 /** An installed Knip whose CLI runs but whose manifest states an unsupported version. */
-async function installOldKnip(root: string): Promise<void> {
+async function installOldKnip(root: string, version = '5.0.0'): Promise<void> {
   await mkdir(join(root, 'app/node_modules/knip/bin'), { recursive: true });
   await writeFile(join(root, 'app/package.json'), '{"name":"consumer"}');
   await writeFile(join(root, 'app/node_modules/knip/package.json'),
-    '{"name":"knip","version":"5.0.0","main":"bin/knip.js"}');
+    `{"name":"knip","version":"${version}","main":"bin/knip.js"}`);
   await writeFile(join(root, 'app/node_modules/knip/bin/knip.js'), writeReport(envelope()));
 }
 
@@ -167,4 +167,42 @@ test('a wrapper script outside an installed Knip carries no version to judge', a
   await writeFile(join(root, 'wrapper.mjs'), writeReport(envelope()));
   const outcome = await knip({ cli: 'wrapper.mjs', rules }).check.run({ root, rules: ['knip/unused-exports'] });
   assert.equal(outcome.verdict, 'pass', JSON.stringify(outcome));
+}));
+
+for (const version of ['6.35.0', '7.0.0']) test(`installed Knip ${version} sits outside the range and REFUSES`, async () => withProject(async root => {
+  await installOldKnip(root, version);
+  const outcome = await knip({ cwd: 'app', rules }).check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
+  if (outcome.verdict === 'refuse') {
+    assert.equal(outcome.why.code, 'knip-version-unsupported');
+    assert.equal(outcome.why.detail, `Installed: ${version}`);
+  }
+}));
+
+test('a cli path that does not exist REFUSES as unavailable', async () => withProject(async root => {
+  const outcome = await knip({ cli: 'absent.mjs', rules }).check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
+  if (outcome.verdict === 'refuse') assert.equal(outcome.why.code, 'knip-unavailable');
+}));
+
+test('an evidence file larger than maxOutputBytes REFUSES before it is parsed', async () => withProject(async root => {
+  await writeFile(join(root, 'cli.mjs'), writeReport({ ...envelope(), padding: 'x'.repeat(6_000) }));
+  const outcome = await knip({ cli: 'cli.mjs', rules, maxOutputBytes: 5_000 }).check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
+  if (outcome.verdict === 'refuse') {
+    assert.equal(outcome.why.code, 'knip-report-unavailable');
+    assert.match(outcome.why.detail ?? '', /exceeds maxOutputBytes/u);
+  }
+}));
+
+test('every boolean flag and the workspace selector reach the CLI argv', async () => withProject(async root => {
+  await writeFile(join(root, 'cli.mjs'), `${writeReport(envelope())} writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));`);
+  const adapter = knip({ cli: 'cli.mjs', rules, workspace: 'packages/app', production: true, strict: true,
+    includeEntryExports: true, treatConfigHintsAsErrors: true });
+  const outcome = await adapter.check.run({ root, rules: ['knip/unused-exports'] });
+  assert.equal(outcome.verdict, 'pass', JSON.stringify(outcome));
+  const argv = JSON.parse(await readFile(join(root, 'argv.json'), 'utf8')) as string[];
+  for (const flag of ['--workspace=packages/app', '--production', '--strict', '--include-entry-exports', '--treat-config-hints-as-errors']) {
+    assert.ok(argv.includes(flag), `${flag} missing from ${JSON.stringify(argv)}`);
+  }
 }));
