@@ -1,0 +1,17 @@
+{
+  "name": "redproof-istanbul-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@redproof/istanbul": "file:../../packages/istanbul",
+    "redproof": "file:../../packages/redproof"
+  },
+  "devDependencies": {
+    "c8": "^10.1.3"
+  },
+  "scripts": {
+    "redproof:check": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts check --config redproof.config.ts",
+    "redproof:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts prove --config redproof.config.ts",
+    "redproof:describe": "node --disable-warning=ExperimentalWarning --experimental-strip-types ../../packages/redproof/src/cli.ts describe --config redproof.config.ts"
+  }
+}

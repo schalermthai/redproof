@@ -1,0 +1,44 @@
+{
+  "name": "@redproof/istanbul",
+  "version": "0.10.0",
+  "description": "Redproof adapter for fresh Istanbul coverage evidence and nyc.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "redproof": "0.10.0"
+  },
+  "devDependencies": {
+    "@redproof/adapter-tck": "0.10.0",
+    "istanbul-lib-coverage": "3.2.2",
+    "nyc": "17.1.0"
+  },
+  "peerDependencies": {
+    "nyc": ">=15 <19"
+  },
+  "peerDependenciesMeta": {
+    "nyc": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schalermthai/redproof.git",
+    "directory": "packages/istanbul"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "Apache-2.0"
+}

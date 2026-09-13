@@ -106,7 +106,7 @@ jobs:
           set -euo pipefail
 
           MISSING_PACKAGES=()
-          for READY_PACKAGE in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/knip; do
+          for READY_PACKAGE in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/istanbul @redproof/knip; do
             if LOOKUP=$(npm view "$READY_PACKAGE" name --json 2>&1); then
               continue
             fi
@@ -154,7 +154,7 @@ jobs:
           set -euo pipefail
 
           PUBLISHED_PACKAGES=()
-          for PKG in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/knip; do
+          for PKG in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/istanbul @redproof/knip; do
             if npm view "${PKG}@${VERSION}" version --json >/dev/null 2>&1; then
               echo "Skipping ${PKG}@${VERSION}: already published"
               continue
