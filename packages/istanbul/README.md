@@ -106,5 +106,4 @@ test discovery remain producer responsibilities. `expectedFiles` detects missing
 files, not silently omitted statements within a file. Coverage measures execution,
 not assertion quality or correctness; combine it with testing and mutation Gates.
 
-The package owns its TCK and real nyc regressions. See the repository's
-`docs/istanbul-expert-dogfood.md` for native experiments and their limitations.
+The package owns its TCK and real nyc regressions.

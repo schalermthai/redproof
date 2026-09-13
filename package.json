@@ -59,7 +59,9 @@
     "demo:dependency-cruiser:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-proof-fixture.ts dependency-cruiser-project",
     "demo:stryker": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-fixture.ts stryker-project",
     "demo:stryker:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-proof-fixture.ts stryker-project",
-    "demo:adapters": "npm run demo:eslint && npm run demo:eslint:prove && npm run demo:dependency-cruiser && npm run demo:dependency-cruiser:prove && npm run demo:stryker && npm run demo:stryker:prove && npm run demo:testing:vitest && npm run demo:testing:vitest:prove",
+    "demo:istanbul": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-fixture.ts istanbul-project",
+    "demo:istanbul:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-proof-fixture.ts istanbul-project",
+    "demo:adapters": "npm run demo:eslint && npm run demo:eslint:prove && npm run demo:dependency-cruiser && npm run demo:dependency-cruiser:prove && npm run demo:stryker && npm run demo:stryker:prove && npm run demo:istanbul && npm run demo:istanbul:prove && npm run demo:testing:vitest && npm run demo:testing:vitest:prove",
     "test:testing": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test 'tests/adapters/testing*.test.ts'",
     "demo:testing:vitest": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-fixture.ts testing-vitest",
     "demo:testing:vitest:prove": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-proof-fixture.ts testing-vitest",
@@ -77,8 +79,6 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "c8": "^10.1.3",
-    "nyc": "17.1.0",
     "typescript": "^5.9.0"
   },
   "license": "Apache-2.0"

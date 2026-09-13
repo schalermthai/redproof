@@ -68,15 +68,22 @@ test('empty reports are subject to Gate emptyEvidence policy', () => withWorkspa
   assert.equal((await runGate(defineGate({ id: 'empty', adapter, policies: { emptyEvidence: 'allow' } }), root)).verdict, 'pass');
 }));
 test('report size, symlinks, outside source paths and throwing plans REFUSE', () => withWorkspace(async root => {
-  const bodies = [
-    writer('x'.repeat(201)),
-    `require('node:fs').symlinkSync(${JSON.stringify(join(root, 'old.json'))}, process.env.REDPROOF_COVERAGE_REPORT)`,
-    writer(JSON.stringify(sample('/outside.js'))),
+  // Each case names the reason it expects. Asserting only the verdict hides a
+  // deleted guard: the same input still REFUSES, but for an accidental reason
+  // such as a JSON parse error further down.
+  const untrusted = 'Coverage report must be a private bounded regular file.';
+  const bodies: readonly (readonly [string, string | undefined])[] = [
+    [writer('x'.repeat(201)), untrusted],
+    [`require('node:fs').symlinkSync(${JSON.stringify(join(root, 'old.json'))}, process.env.REDPROOF_COVERAGE_REPORT)`, untrusted],
+    [`require('node:fs').linkSync(${JSON.stringify(join(root, 'old.json'))}, process.env.REDPROOF_COVERAGE_REPORT)`, untrusted],
+    [writer(JSON.stringify(sample('/outside.js'))), undefined],
   ];
   await writeFile(join(root, 'old.json'), '{}');
-  for (const [index, body] of bodies.entries()) {
+  for (const [index, [body, detail]] of bodies.entries()) {
     const adapter = istanbul({ command: process.execPath, args: () => ['-e', body], rules, maxReportBytes: index === 0 ? 200 : 5000 });
-    assert.equal((await adapter.check.run({ root, rules: [adapter.rules.lines.id] })).verdict, 'refuse');
+    const outcome = await adapter.check.run({ root, rules: [adapter.rules.lines.id] });
+    assert.equal(outcome.verdict, 'refuse');
+    if (outcome.verdict === 'refuse' && detail) assert.equal(outcome.why.detail, detail);
   }
   const throwing = istanbul({ command: process.execPath, args: () => { throw new Error('broken plan'); }, rules });
   assert.equal((await throwing.check.run({ root, rules: [throwing.rules.lines.id] })).verdict, 'refuse');

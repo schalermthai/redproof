@@ -17,7 +17,7 @@ defect, running the same Gate, and requiring the expected Rule to breach. A
 green check is useful. A green check whose detection has also been demonstrated
 is much stronger evidence.
 
-Redproof currently protects itself with seven Gates.
+Redproof currently protects itself with six Gates.
 These are the controls used by the real CI and release workflows, not a separate
 showcase suite.
 
@@ -70,7 +70,6 @@ all of them.
 | [`architecture`](../gates/architecture.ts) | Dependencies point inward and the functional core remains pure. | dependency-cruiser plus TypeScript syntax analysis | Introduce a dependency cycle, import a shell from the core, or read ambient process state. |
 | [`static-contracts`](../gates/static-contracts.ts) | Source and checked documentation compile, while unchecked fragment debt cannot grow. | TypeScript and documentation commands | Add a type error, an invalid documentation example, or one unbudgeted fragment. |
 | [`test-health`](../gates/test-health.ts) | Every collected test passes and none is skipped. | Structured JUnit evidence through `@redproof/testing` | Add a failing test or a skipped test. |
-| [`coverage`](../gates/coverage.ts) | The coverage model retains its statement, branch, function and line thresholds. | Fresh Istanbul-format evidence from c8 | Add unexecuted statements, branches, functions or lines; fail the producer. |
 | [`adapter-contracts`](../gates/adapter-contracts.ts) | Built-in Adapters validate configuration, handle unavailable execution honestly, preserve pure evidence models, respect report capabilities, and attribute structured findings correctly. | Original contract suites plus package-owned `@redproof/adapter-tck` suites | Remove option validation, corrupt runner mapping, add an effect to a pure model, or drop a selected finding. |
 | [`repository-policy`](../gates/repository-policy.ts) | Every package is complete, aligned, documented, and verified before release. | Package manifests, workflows, source inventory, and documentation links | Omit a package from release automation, diverge a version, remove verification, or add a broken link. |
 | [`unused-code`](../gates/unused-code.ts) | Files, exports, dependencies and imports stay connected to real consumers. | Knip structured findings and inspection metadata | Add an unused file, export or dependency; introduce an undeclared dependency or unresolved import. |
