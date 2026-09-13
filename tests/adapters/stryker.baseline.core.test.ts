@@ -4,11 +4,11 @@ import test from 'node:test';
 import {
   assessStrykerBaseline,
   parseAcceptedStrykerMutants,
-  relativizeStrykerMutants,
   strykerMutantIdentity,
   type AcceptedStrykerMutant,
-} from '../../packages/stryker/src/baseline.ts';
-import type { StrykerMutantResult } from '../../packages/stryker/src/model.ts';
+} from '../../packages/stryker/src/core/baseline.ts';
+import type { StrykerMutantResult } from '../../packages/stryker/src/core/model.ts';
+import { relativizeStrykerMutants } from '../../packages/stryker/src/core/paths.ts';
 
 const workingDirectory = join('/', 'gate', 'project');
 

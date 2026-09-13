@@ -160,7 +160,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     rules.pureParsers,
     'detects ambient process state inside a pure evidence model',
-    mutate.appendText('packages/stryker/src/model.ts', '\nvoid process.cwd();\n'),
+    mutate.appendText('packages/stryker/src/core/model.ts', '\nvoid process.cwd();\n'),
   ),
   proof.red(
     rules.pureParsers,

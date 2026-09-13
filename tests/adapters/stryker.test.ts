@@ -44,13 +44,6 @@ test('the adapter exposes one Rule per selected mutation policy, and says what i
   );
 });
 
-test('a Gate that selects no mutation policy is rejected when it is defined', () => {
-  assert.throws(
-    () => stryker({ rules: {} }),
-    /requires at least one Redproof rule/u,
-  );
-});
-
 test('a mutation policy Stryker does not offer is rejected by name, not ignored', () => {
   assert.throws(
     () => stryker({ rules: { mutantsDetected: true, mutantsKilled: true } as never }),

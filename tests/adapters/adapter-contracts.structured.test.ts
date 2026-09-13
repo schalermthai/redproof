@@ -10,7 +10,7 @@ import { eslintBreaches } from '../../packages/eslint/src/core/model.ts';
 import {
   undetectedMutantBreaches,
   type StrykerMutantResult,
-} from '../../packages/stryker/src/model.ts';
+} from '../../packages/stryker/src/core/model.ts';
 import {
   report,
   testing,
