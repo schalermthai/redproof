@@ -1,6 +1,6 @@
 import { runAdapterTck, type AdapterTckSpec, type EvidenceProbe } from '@redproof/adapter-tck';
 import { istanbul, nyc } from '../src/index.ts';
-import { coverageBreaches, parseCoverage, type Metric } from '../src/model.ts';
+import { coverageBreaches, parseCoverage, type Metric } from '../src/core/model.ts';
 import { sample } from './support/workspace.ts';
 
 const selected = { statements: { minimum: 100 }, branches: { minimum: 100 }, functions: { minimum: 100 }, lines: { minimum: 100 } };
@@ -37,7 +37,8 @@ runAdapterTck([{
   },
   unavailable: [{ name: 'refuses unavailable working directory', code: 'istanbul-evidence-unavailable', run: () => create().check.run({ root: '/redproof-nonexistent-coverage-root', rules: [] }) }],
   evidence: [metricProbe('statements'), metricProbe('branches'), metricProbe('functions'), metricProbe('lines')],
-  purity: { kind: 'sources', files: ['packages/istanbul/src/model.ts'], allowedExternalImports: ['redproof', 'node:path'] },
+  purity: { kind: 'sources', files: ['packages/istanbul/src/core/model.ts', 'packages/istanbul/src/core/options.ts', 'packages/istanbul/src/core/report.ts'],
+    allowedExternalImports: ['redproof', 'redproof/command', 'node:path'] },
   capabilities: { kind: 'not-applicable', reason: 'Only full Istanbul coverage maps are supported; summaries are explicitly rejected.' },
 } satisfies AdapterTckSpec, {
   name: 'istanbul-command', kind: 'istanbul',

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { defineRule } from 'redproof';
-import { coverageBreaches, metrics, parseCoverage } from '../src/model.ts';
+import { coverageBreaches, metrics, parseCoverage } from '../src/core/model.ts';
 import { sample } from './support/workspace.ts';
 const require = createRequire(import.meta.url);
 const native = require('istanbul-lib-coverage');
