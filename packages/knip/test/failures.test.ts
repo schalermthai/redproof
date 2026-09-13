@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { chmod, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -92,6 +93,15 @@ const lockReportDirectory = "import {chmodSync as lockMode, writeFileSync as loc
   + " const locked = lockDir(process.env.REDPROOF_KNIP_REPORT);"
   + " lockNote(lockJoin(process.env.REDPROOF_KNIP_ROOT, 'locked.txt'), locked); lockMode(locked, 0o500);";
 
+/**
+ * A timeout that fires before the fake CLI locks the directory still REFUSES with
+ * `command-timeout`, so the assertions below would pass with nothing locked. This
+ * budget must outlast the CLI's start, measured at 26-54 ms on an idle 14-core
+ * Mac and 36-53 ms under 42 busy loops; the `locked.txt` assertion makes a lost
+ * race a named failure instead of a silent pass.
+ */
+const LOCK_THEN_HANG_TIMEOUT_MS = 2_000;
+
 /** Release the directory the fake CLI locked, so the run leaves no undeletable temporary tree. */
 async function releaseLocked(root: string): Promise<void> {
   const locked = await readFile(join(root, 'locked.txt'), 'utf8');
@@ -123,9 +133,12 @@ test('an undeletable evidence directory cannot erase a real breach', async () =>
 
 test('an undeletable evidence directory cannot relabel a timeout', async () => withProject(async root => {
   await writeFile(join(root, 'slow.mjs'), `${writeReport(envelope())} ${lockReportDirectory} setInterval(() => {}, 1_000);`);
-  const outcome = await knip({ cli: 'slow.mjs', rules, timeoutMs: 200 }).check.run({ root, rules: ['knip/unused-exports'] });
+  const outcome = await knip({ cli: 'slow.mjs', rules, timeoutMs: LOCK_THEN_HANG_TIMEOUT_MS })
+    .check.run({ root, rules: ['knip/unused-exports'] });
   assert.equal(outcome.verdict, 'refuse', JSON.stringify(outcome));
   if (outcome.verdict === 'refuse') assert.equal(outcome.why.code, 'command-timeout');
+  assert.ok(existsSync(join(root, 'locked.txt')),
+    'the fake CLI was killed before it locked the evidence directory; raise LOCK_THEN_HANG_TIMEOUT_MS');
   await releaseLocked(root);
 }));
 
