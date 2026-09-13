@@ -88,7 +88,7 @@ export function parseKnownViolations(path: string, text: string): KnownViolation
 }
 
 // dependency-cruiser returns a JSON string for outputType 'json'.
-export function readCruiseOutput(output: unknown): CruiseOutputLike | null {
+function readCruiseOutput(output: unknown): CruiseOutputLike | null {
   if (typeof output === 'string') {
     try {
       return JSON.parse(output) as CruiseOutputLike;
