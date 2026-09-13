@@ -13,6 +13,7 @@ const PACKAGE_DIRS = [
   'packages/dependency-cruiser',
   'packages/stryker',
   'packages/testing',
+  'packages/istanbul',
 ] as const;
 
 const INTERNAL_DEPENDENCIES = new Set([

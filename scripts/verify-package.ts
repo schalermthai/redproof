@@ -21,6 +21,7 @@ const PACKAGES = [
   { name: '@redproof/stryker', tarballPrefix: 'redproof-stryker-', probe: 'stryker' },
   { name: '@redproof/knip', tarballPrefix: 'redproof-knip-', probe: 'knip' },
   { name: '@redproof/testing', tarballPrefix: 'redproof-testing-', probe: 'testing' },
+  { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
 ] as const;
 
 // Node refuses to strip types under node_modules, so shipped source is unusable.
@@ -178,6 +179,24 @@ try {
   const commandImport = tryRun('node', ['probe-command.mjs'], consumer);
   report(commandImport.ok, 'redproof/command imports at run time', commandImport.ok ? '' : commandImport.output.slice(0, 300));
 
+  const coverageInstall = tryRun('npm', ['install', '--no-audit', '--no-fund', 'nyc@17.1.0'], consumer);
+  report(coverageInstall.ok, 'install native coverage producer', coverageInstall.ok ? '' : coverageInstall.output.slice(0, 300));
+  await writeFile(join(consumer, 'coverage-smoke.mjs'), `
+import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { nyc } from '@redproof/istanbul';
+await writeFile('subject.cjs', 'module.exports = x => x ? 1 : 2;');
+await writeFile('exercise.cjs', "const fn = require('./subject.cjs'); fn(true); fn(false);");
+const adapter = nyc({ command: process.execPath, args: ['exercise.cjs'], include: ['subject.cjs'], expectedFiles: ['subject.cjs'], rules: { branches: { minimum: 100 } } });
+const run = () => adapter.check.run({ root: process.cwd(), rules: [adapter.rules.branches.id] });
+assert.equal((await run()).verdict, 'pass');
+await writeFile('exercise.cjs', "require('./subject.cjs')(true);");
+const red = await run();
+assert.equal(red.verdict, 'fail');
+assert.equal(red.breaches[0].rule, 'istanbul/branches-coverage');
+`);
+  const coverageSmoke = tryRun('node', ['coverage-smoke.mjs'], consumer);
+  report(coverageSmoke.ok, '@redproof/istanbul: native packaged GREEN/RED', coverageSmoke.ok ? '' : coverageSmoke.output.slice(0, 500));
   await writeFile(join(consumer, 'probe-knip.mjs'), `
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, appendFile } from 'node:fs/promises';
@@ -282,6 +301,9 @@ assert.equal(red.breaches[0].rule, 'knip/unused-exports');
     + "import { adapterTckCases, type AdapterTckSpec } from '@redproof/adapter-tck';\n"
     + "import { stryker } from '@redproof/stryker';\n"
     + "import { vitest } from '@redproof/testing';\n"
+    + "import { nyc } from '@redproof/istanbul';\n"
+    + "export const coverage = nyc({ command: 'node', rules: { lines: { minimum: 90, perFile: true } } });\n"
+    + "export const coverageId: 'istanbul/lines-coverage' = coverage.rules.lines.id;\n"
     + "import { knip } from '@redproof/knip';\n"
     + "export const unused = knip({ rules: { files: 'files', unusedExports: 'exports' }, timeoutMs: 1000 });\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"

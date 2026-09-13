@@ -38,6 +38,7 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/redproof/src/workspace/shell/copy.ts',
   'packages/stryker/src/index.ts',
   'packages/testing/src/index.ts',
+  'packages/istanbul/src/index.ts',
   'packages/testing/src/runner.ts',
   'packages/testing/src/shell/vitest-runner.ts',
 ]);
