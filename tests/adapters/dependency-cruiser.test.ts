@@ -159,6 +159,31 @@ test('the configured files reach dependency-cruiser as the modules to cruise', a
   });
 });
 
+test('configured files are snapshotted when the adapter is constructed', async () => {
+  await withWorkspace(async root => {
+    await writeFakeDependencyCruiser(root, {
+      cruise: cruiseReporting(`{
+    totalCruised: 1,
+    violations: JSON.stringify(files) === JSON.stringify(['src'])
+      ? []
+      : [{ rule: { name: 'no-new-debt' }, from: 'files', to: JSON.stringify(files) }],
+  }`),
+    });
+
+    const files = ['src'];
+    const adapter = adapterFor({ files });
+    files[0] = 'test';
+
+    const result = await run(adapter, root);
+
+    assert.equal(result.verdict, 'pass', JSON.stringify(result));
+    assert.equal(
+      adapter.check.description,
+      'run dependency-cruiser against src and report configured rule breaches',
+    );
+  });
+});
+
 test('without configFile the adapter reads .dependency-cruiser.cjs from the Gate root', async () => {
   await withWorkspace(async root => {
     await writeFakeDependencyCruiser(root, {

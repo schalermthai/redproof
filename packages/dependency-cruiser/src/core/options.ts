@@ -59,7 +59,7 @@ export function settingsOf(
   options: DependencyCruiserAdapterOptions<DependencyCruiserRuleInput>,
 ): DependencyCruiserSettings {
   return {
-    files: options.files ?? ['src'],
+    files: [...(options.files ?? ['src'])],
     configFile: options.configFile ?? '.dependency-cruiser.cjs',
     knownViolationsFile: options.knownViolationsFile,
     foreignRules: Object.values(options.rules),
