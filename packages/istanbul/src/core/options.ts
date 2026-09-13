@@ -39,10 +39,10 @@ export type CoverageConfig = {
 };
 
 export const commonKeys = ['rules', 'cwd', 'expectedFiles', 'timeoutMs', 'maxOutputBytes', 'maxReportBytes'] as const;
-export const ruleIds = { statements: 'istanbul/statements-coverage', branches: 'istanbul/branches-coverage',
+const ruleIds = { statements: 'istanbul/statements-coverage', branches: 'istanbul/branches-coverage',
   functions: 'istanbul/functions-coverage', lines: 'istanbul/lines-coverage' } as const;
 
-export function pathOption(name: string, path: unknown): asserts path is string {
+function pathOption(name: string, path: unknown): asserts path is string {
   if (typeof path !== 'string' || !path.trim() || path.includes('\0') || isAbsolute(path)
     || /^[A-Za-z]:/u.test(path) || path.split(/[\\/]/u).includes('..')) throw new Error(`${name} must be a confined relative path.`);
 }
