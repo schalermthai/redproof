@@ -27,6 +27,7 @@ import {
   mutationScoreBreach,
   strykerProgrammaticOptions,
   undetectedMutantBreaches,
+  type RunMutationTest,
   type StrykerMutantResult,
 } from './model.ts';
 import { confineCanonicalStrykerCwd, resolveStrykerCwd } from './cwd.ts';
@@ -132,6 +133,13 @@ const BASELINE_INVALID_MESSAGES = {
   'stryker-mutant-identity-ambiguous': 'Stryker reported two undetected mutants with one identity.',
 } as const satisfies Record<Extract<StrykerBaselineAssessment, { kind: 'invalid' }>['code'], string>;
 
+// Stryker's generated type uses a nominal string enum for values
+// that its public configuration schema accepts as string literals.
+const runStrykerEngine: RunMutationTest = async options => {
+  const engine = new Stryker(options as ConstructorParameters<typeof Stryker>[0]);
+  return await engine.runMutationTest() as readonly StrykerMutantResult[];
+};
+
 const STRYKER_RULE_NAMES = [
   'mutantsDetected',
   'noNewUndetectedMutants',
@@ -142,6 +150,8 @@ export function stryker<const O extends StrykerAdapterOptions<StrykerRuleOptions
   options: O
     & NoUnknownKeys<O, StrykerAdapterOptions<StrykerRuleOptions>>
     & { readonly rules: NoUnknownKeys<O['rules'], StrykerRuleOptions> },
+  /** Internal seam: a test replaces the Stryker engine here. */
+  runMutationTest: RunMutationTest = runStrykerEngine,
 ): Adapter<StrykerRuleCatalog<O['rules']>> {
   rejectUnknownKeys(options, ['cwd', 'configFile', 'rules'], 'Stryker adapter');
   rejectUnknownKeys(options.rules, STRYKER_RULE_NAMES, 'Stryker rule');
@@ -251,12 +261,7 @@ export function stryker<const O extends StrykerAdapterOptions<StrykerRuleOptions
               acceptedMutants = loaded.accepted;
             }
 
-            // Stryker's generated type uses a nominal string enum for values
-            // that its public configuration schema accepts as string literals.
-            const engine = new Stryker(
-              strykerProgrammaticOptions(configFile) as ConstructorParameters<typeof Stryker>[0],
-            );
-            const producerMutants = await engine.runMutationTest() as readonly StrykerMutantResult[];
+            const producerMutants = await runMutationTest(strykerProgrammaticOptions(configFile));
             const mutants = relativizeStrykerMutants(
               canonicalRoot,
               workingDirectory.path,
