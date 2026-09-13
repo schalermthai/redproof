@@ -168,6 +168,7 @@ const policyRules = {
   publicFiles: defineRule({ id: 'probe/public-files', description: 'Public files are declared.' }),
   automationVerification: defineRule({ id: 'probe/automation', description: 'Automation verifies.' }),
   docsLinks: defineRule({ id: 'probe/docs-links', description: 'Links resolve.' }),
+  lockfileIntegrity: defineRule({ id: 'probe/lockfile', description: 'Lockfile resolves optional dependencies.' }),
 } as const;
 
 const policyRuleIds = Object.values(policyRules).map(rule => rule.id);
@@ -205,6 +206,13 @@ async function seedRepository(root: string, extra: Readonly<Record<string, strin
     'packages/redproof/schema/prove-report-v1.schema.json': '{}',
     'scripts/set-version.ts': "const dirs = ['packages/redproof'];\n",
     'scripts/verify-package.ts': "const packages = [{ name: 'redproof' }];\n",
+    'package-lock.json': JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        'node_modules/native': { optionalDependencies: { 'native-linux-x64': '1.0.0' } },
+        'node_modules/native-linux-x64': { optional: true, os: ['linux'] },
+      },
+    }),
     '.github/workflows/ci.yml': ciWorkflow,
     '.github/workflows/publish.yml': `${publishWorkflow}for READY_PACKAGE in redproof; do\nTARBALL="artifacts/\${TARBALL_STEM}-\${VERSION}.tgz"\nfor PKG in redproof; do\nTARBALL="artifacts/\${TARBALL_STEM}-\${VERSION}.tgz"\nnpm publish "$TARBALL" --tag "$NPM_TAG"\n`,
     'README.md': '[docs](docs/guide.md)\n',
@@ -220,7 +228,7 @@ test('repositoryPolicy passes a healthy repository and counts the manifests and 
     const result = await policyCheck().run({ root, rules: policyRuleIds });
 
     assert.equal(result.verdict, 'pass', JSON.stringify(result));
-    assert.equal(result.scan.inspected, 3, 'one manifest plus two documents');
+    assert.equal(result.scan.inspected, 4, 'one manifest, two documents, one package declaring optional dependencies');
     assert.equal(result.scan.source, 'repository policy');
   });
 });
@@ -250,6 +258,25 @@ test('repositoryPolicy reports each policy finding against its own Rule and file
   });
 });
 
+test('a dropped optional platform entry breaches against the lockfile with the parent path as detail', async () => {
+  await withWorkspace(async root => {
+    await seedRepository(root, {
+      'package-lock.json': JSON.stringify({
+        lockfileVersion: 3,
+        packages: { 'node_modules/native': { optionalDependencies: { 'native-linux-x64': '1.0.0' } } },
+      }),
+    });
+
+    const result = await policyCheck().run({ root, rules: policyRuleIds });
+
+    assert.equal(result.verdict, 'fail');
+    if (result.verdict !== 'fail') throw new Error('expected fail');
+    assert.deepEqual(result.breaches.map(item => [item.rule, item.code, item.location?.file, item.detail]), [
+      ['probe/lockfile', 'optional-dependency-unresolved', 'package-lock.json', 'node_modules/native'],
+    ]);
+  });
+});
+
 test('a document matched by two patterns is read once', async () => {
   await withWorkspace(async root => {
     await seedRepository(root);
@@ -262,7 +289,7 @@ test('a document matched by two patterns is read once', async () => {
     const result = await check.run({ root, rules: policyRuleIds });
 
     assert.equal(result.verdict, 'pass');
-    assert.equal(result.scan.inspected, 2, 'one manifest plus one document');
+    assert.equal(result.scan.inspected, 3, 'one manifest, one document, one package declaring optional dependencies');
   });
 });
 
