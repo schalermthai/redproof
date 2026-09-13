@@ -153,25 +153,49 @@ jobs:
         run: |
           set -euo pipefail
 
+          PUBLISHED_PACKAGES=()
           for PKG in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/istanbul @redproof/knip; do
             if npm view "${PKG}@${VERSION}" version --json >/dev/null 2>&1; then
               echo "Skipping ${PKG}@${VERSION}: already published"
               continue
             fi
 
-            case "$PKG" in
-              redproof) TARBALL="artifacts/redproof-${VERSION}.tgz" ;;
-              @redproof/adapter-tck) TARBALL="artifacts/redproof-adapter-tck-${VERSION}.tgz" ;;
-              @redproof/eslint) TARBALL="artifacts/redproof-eslint-${VERSION}.tgz" ;;
-              @redproof/dependency-cruiser) TARBALL="artifacts/redproof-dependency-cruiser-${VERSION}.tgz" ;;
-              @redproof/stryker) TARBALL="artifacts/redproof-stryker-${VERSION}.tgz" ;;
-              @redproof/knip) TARBALL="artifacts/redproof-knip-${VERSION}.tgz" ;;
-              @redproof/testing) TARBALL="artifacts/redproof-testing-${VERSION}.tgz" ;;
-              @redproof/istanbul) TARBALL="artifacts/redproof-istanbul-${VERSION}.tgz" ;;
-            esac
+            TARBALL_STEM="${PKG#@}"
+            TARBALL_STEM="${TARBALL_STEM/\//-}"
+            TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"
 
-            echo "Publishing $TARBALL"
-            npm publish "$TARBALL" --tag "$NPM_TAG" --provenance
+            if [ ! -f "$TARBALL" ]; then
+              echo "::error title=Verified tarball missing::$PKG has no verified tarball at $TARBALL. Package verification and this loop disagree about the release inventory."
+              exit 1
+            fi
+
+            echo "Publishing $PKG from $TARBALL"
+            PUBLISH_STATUS=0
+            npm publish "$TARBALL" --tag "$NPM_TAG" --provenance || PUBLISH_STATUS=$?
+
+            if [ "$PUBLISH_STATUS" -eq 0 ]; then
+              PUBLISHED_PACKAGES+=("$PKG")
+              continue
+            fi
+
+            echo "::error title=Publication stopped::$PKG could not be published at $VERSION."
+            echo
+            if [ "${#PUBLISHED_PACKAGES[@]}" -gt 0 ]; then
+              echo "This release is now partial. Published in this run: ${PUBLISHED_PACKAGES[*]}"
+            else
+              echo "Nothing was published in this run."
+            fi
+            echo
+            echo "A permission failure here usually means this workflow is not yet a"
+            echo "trusted publisher for $PKG. Package existence was checked before"
+            echo "publication began; authorization was not."
+            echo
+            echo "Run this while signed in to npm with package write access and 2FA:"
+            echo "   npm trust github \"$PKG\" --repo schalermthai/redproof --file publish.yml --allow-publish"
+            echo
+            echo "Then re-run this workflow. Already-published package versions are skipped,"
+            echo "so the rerun completes the release rather than repeating it."
+            exit 1
           done
 
       - name: Report a dry run

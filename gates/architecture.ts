@@ -22,6 +22,7 @@ const dependencies = dependencyCruiser({
     compositionNoRuntimeOrReporters: 'composition-no-runtime-or-reporters',
     adaptersPublicCoreApiOnly: 'adapters-public-core-api-only',
     productionNoTestFixtureDependencies: 'production-no-test-fixture-dependencies',
+    productionNoAdapterTckDependency: 'production-no-adapter-tck-dependency',
     contextsImportThroughIndex: 'contexts-import-through-index',
     entrypointsImportThroughIndex: 'entrypoints-import-through-index',
   },
@@ -121,6 +122,14 @@ export const proofs = defineProofs(gate, [
     mutate.appendText(
       'packages/redproof/src/domain/rule.ts',
       "\nimport '../../../../fixtures/pass-single/src/parser.ts';\n",
+    ),
+  ),
+  proof.red(
+    rules.productionNoAdapterTckDependency,
+    'keeps the Adapter test kit out of publishable Adapter source',
+    mutate.appendText(
+      'packages/eslint/src/model.ts',
+      "\nimport '../../adapter-tck/src/index.ts';\n",
     ),
   ),
   proof.red(

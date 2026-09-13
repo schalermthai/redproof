@@ -56,10 +56,6 @@ function escaped(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function tarballStem(packageName: string): string {
-  return packageName.replace(/^@/, '').replaceAll('/', '-');
-}
-
 function scriptInvokes(
   scripts: Readonly<Record<string, string>>,
   from: string,
@@ -112,11 +108,6 @@ function packageInventory(snapshot: RepositorySnapshot): RepositoryPolicyFinding
         file: '.github/workflows/publish.yml',
         ok: readinessLoop.includes(pkg.name),
         stage: 'npm package readiness check',
-      },
-      {
-        file: '.github/workflows/publish.yml',
-        ok: snapshot.publishWorkflow.includes(`artifacts/${tarballStem(pkg.name)}-\${VERSION}.tgz`),
-        stage: 'verified tarball publish',
       },
       {
         file: '.github/workflows/publish.yml',
@@ -325,6 +316,31 @@ function automationVerification(snapshot: RepositorySnapshot): RepositoryPolicyF
       rule: 'automationVerification',
       code: 'workflow-verification-missing',
       message: '.github/workflows/publish.yml must publish the retained verified tarballs.',
+      file: '.github/workflows/publish.yml',
+    });
+  }
+
+  // A per-package tarball table can pair a package with another package's
+  // tarball. Deriving the name from the loop variable makes that impossible.
+  // Both the readiness guidance and the publish loop must derive it, so one
+  // step alone cannot satisfy this rule for the other.
+  const derivations = snapshot.publishWorkflow
+    .match(/^\s*TARBALL="artifacts\/\$\{TARBALL_STEM\}-\$\{VERSION\}\.tgz"\s*$/gm)
+    ?.length ?? 0;
+  if (derivations < 2) {
+    findings.push({
+      rule: 'automationVerification',
+      code: 'workflow-verification-missing',
+      message: '.github/workflows/publish.yml must derive each tarball name from the package being published.',
+      file: '.github/workflows/publish.yml',
+    });
+  }
+
+  if (/case\s+"\$PKG"\s+in/.test(snapshot.publishWorkflow)) {
+    findings.push({
+      rule: 'automationVerification',
+      code: 'workflow-verification-missing',
+      message: '.github/workflows/publish.yml must not map packages to tarballs by hand.',
       file: '.github/workflows/publish.yml',
     });
   }
