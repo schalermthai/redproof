@@ -1,11 +1,6 @@
-import {
-  isAbsolute,
-  posix,
-  relative,
-  resolve,
-  sep,
-} from 'node:path';
+import { posix } from 'node:path';
 import type { StrykerMutantResult } from './model.ts';
+import { relativeFileInsideRoot } from './paths.ts';
 
 type Position = {
   readonly line: number;
@@ -36,29 +31,6 @@ export type StrykerBaselineAssessment =
         | 'stryker-accepted-mutants-stale';
       readonly detail: string;
     };
-
-/** Make producer paths stable and meaningful after a Redproof Gate copy is released. */
-export function relativizeStrykerMutants(
-  gateRoot: string,
-  workingDirectory: string,
-  mutants: readonly StrykerMutantResult[],
-): readonly StrykerMutantResult[] {
-  const absoluteGateRoot = resolve(gateRoot);
-  const absoluteWorkingDirectory = resolve(workingDirectory);
-
-  return mutants.map((mutant) => {
-    if (!mutant.fileName) return mutant;
-    const absoluteFile = isAbsolute(mutant.fileName)
-      ? resolve(mutant.fileName)
-      : resolve(absoluteWorkingDirectory, mutant.fileName);
-    const relativeFile = relative(absoluteGateRoot, absoluteFile);
-    if (relativeFile === '' || relativeFile === '..'
-      || relativeFile.startsWith(`..${sep}`) || isAbsolute(relativeFile)) {
-      return mutant;
-    }
-    return { ...mutant, fileName: relativeFile.split(sep).join('/') };
-  });
-}
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -172,17 +144,11 @@ function currentIdentity(
     return new Error(`Stryker mutant ${mutant.id} is missing stable identity fields.`);
   }
 
-  const absoluteRoot = resolve(workingDirectory);
-  const absoluteFile = isAbsolute(mutant.fileName)
-    ? resolve(mutant.fileName)
-    : resolve(absoluteRoot, mutant.fileName);
-  const relativeFile = relative(absoluteRoot, absoluteFile);
-  if (relativeFile === '' || relativeFile === '..'
-    || relativeFile.startsWith(`..${sep}`) || isAbsolute(relativeFile)) {
+  const fileName = relativeFileInsideRoot(workingDirectory, workingDirectory, mutant.fileName);
+  if (fileName === null) {
     return new Error(`Stryker mutant ${mutant.id} points outside the working directory: ${mutant.fileName}.`);
   }
 
-  const fileName = relativeFile.split(sep).join('/');
   const entry = {
     fileName,
     mutatorName: mutant.mutatorName,
@@ -198,7 +164,7 @@ function currentIdentity(
   };
 }
 
-/** Compare current undetected mutants with an exact, identity-based baseline. File names are relative to the Stryker working directory. */
+/** Compare current undetected mutants with an exact, identity-based baseline. The working directory must be absolute. */
 export function assessStrykerBaseline(
   workingDirectory: string,
   mutants: readonly StrykerMutantResult[],

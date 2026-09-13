@@ -4,7 +4,7 @@ import { stryker } from '../src/index.ts';
 import {
   undetectedMutantBreaches,
   type StrykerMutantResult,
-} from '../src/model.ts';
+} from '../src/core/model.ts';
 import { withWorkspace } from './support/workspace.ts';
 
 const rule = defineRule({
@@ -60,9 +60,11 @@ const spec = {
   purity: {
     kind: 'sources',
     files: [
-      'packages/stryker/src/baseline.ts',
-      'packages/stryker/src/cwd.ts',
-      'packages/stryker/src/model.ts',
+      'packages/stryker/src/core/baseline.ts',
+      'packages/stryker/src/core/model.ts',
+      'packages/stryker/src/core/options.ts',
+      'packages/stryker/src/core/paths.ts',
+      'packages/stryker/src/core/verdict.ts',
     ],
     allowedExternalImports: ['node:path', 'redproof'],
   },

@@ -7,7 +7,7 @@ import {
   undetectedMutantBreaches,
   type MutationMetrics,
   type StrykerMutantResult,
-} from '../../packages/stryker/src/model.ts';
+} from '../../packages/stryker/src/core/model.ts';
 
 test('the programmatic producer cannot write beside the Redproof reporter', () => {
   assert.deepEqual(strykerProgrammaticOptions('stryker.config.mjs'), {

@@ -53,6 +53,11 @@ export type StrykerProgrammaticOptions = {
   readonly fileLogLevel: 'off';
 };
 
+/** The mutation engine as the adapter needs it: options in, every mutant result out. */
+export type RunMutationTest = (
+  options: StrykerProgrammaticOptions,
+) => Promise<readonly StrykerMutantResult[]>;
+
 /** Keep Stryker as an evidence producer while Redproof owns the reporting stream. */
 export function strykerProgrammaticOptions(
   configFile?: string,
