@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { jestJson, parseJestJson } from '../../packages/testing/src/reports/jest-json.ts';
-import { junitXml, parseJunitXml } from '../../packages/testing/src/reports/junit-xml.ts';
+import { jestJson, parseJestJson } from '../../packages/testing/src/core/reports/jest-json.ts';
+import { junitXml, parseJunitXml } from '../../packages/testing/src/core/reports/junit-xml.ts';
 
 type Assertion = Record<string, unknown>;
 

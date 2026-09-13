@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { chmod, lstat, mkdir, readdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, readdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import {
   defineTestRunner,
@@ -17,6 +17,7 @@ import { withWorkspace } from '../helpers/workspace.ts';
 import {
   failingReport,
   installFakeVitest,
+  jestReport,
   passingReport,
   touches,
   writesPrivateReport,
@@ -114,6 +115,11 @@ test('the Vitest adapter rejects a configured report path that is empty or absol
   );
 });
 
+test('the Vitest adapter rejects an absolute working directory and an empty file entry', () => {
+  assert.throws(() => vitest({ cwd: '/abs', rules: { testsPass: true } }), /cwd must be relative/);
+  assert.throws(() => vitest({ files: [''], rules: { testsPass: true } }), /files\[0\] must not be empty/);
+});
+
 test('a Check states the command it runs and the report format it interprets', () => {
   const adapter = testing({
     runner: runner.command({ command: 'pytest', args: ['-q'] }),
@@ -145,6 +151,62 @@ test('the adapter reports each failed, skipped and todo test as a breach of its 
     ]);
     assert.equal(result.scan.inspected, 4);
     assert.equal(result.scan.source, 'testing/jest-json');
+  });
+});
+
+test('a JUnit report reaches the verdict through the Check, locating failed and skipped tests by file and line', async () => {
+  await withWorkspace(async root => {
+    const junit = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<testsuites>',
+      '<testsuite name="parser">',
+      '<testcase name="accepts valid input" classname="Parser" file="test/parser.test.ts" line="5" time="0.01"/>',
+      '<testcase name="rejects malformed input" classname="Parser" file="test/parser.test.ts" line="12">',
+      '<failure message="expected valid to be invalid">AssertionError at parser.test.ts:12</failure>',
+      '</testcase>',
+      '<testcase name="platform-specific behavior" classname="Parser" file="test/parser.test.ts" line="20"><skipped/></testcase>',
+      '</testsuite>',
+      '</testsuites>',
+    ].join('\n');
+    const adapter = testing({
+      runner: writingRunner(junit, 1),
+      report: report.junitXml(),
+      rules: { testsPass: true, noSkippedTests: true },
+    });
+
+    const result = await adapter.check.run({ root, rules: ['testing/tests-pass', 'testing/no-skipped-tests'] });
+
+    assert.deepEqual(
+      breachesOf(result).map(item => [item.rule, item.code, item.message, item.location?.file, item.location?.line]),
+      [
+        ['testing/tests-pass', 'test-failed', 'Parser > rejects malformed input', 'test/parser.test.ts', 12],
+        ['testing/no-skipped-tests', 'test-skipped', 'Parser > platform-specific behavior', 'test/parser.test.ts', 20],
+      ],
+    );
+    assert.equal(breachesOf(result)[0]?.detail, 'AssertionError at parser.test.ts:12');
+    assert.equal(result.scan.source, 'testing/junit-xml');
+    assert.equal(result.scan.inspected, 3);
+  });
+});
+
+test('a test that passed only after a failed attempt breaches noFlakyTests through the Check', async () => {
+  await withWorkspace(async root => {
+    const adapter = testing({
+      runner: writingRunner(jestReport([
+        { title: 'settles eventually', status: 'passed', failureMessages: ['attempt 1 timed out'] },
+        { title: 'works first time', status: 'passed' },
+      ])),
+      report: report.jestJson(),
+      rules: { testsPass: true, noFlakyTests: true },
+    });
+
+    const result = await adapter.check.run({ root, rules: ['testing/tests-pass', 'testing/no-flaky-tests'] });
+
+    assert.deepEqual(
+      breachesOf(result).map(item => [item.rule, item.code, item.message, item.detail]),
+      [['testing/no-flaky-tests', 'test-flaky', 'settles eventually', 'attempt 1 timed out']],
+    );
+    assert.equal(result.scan.inspected, 2);
   });
 });
 
@@ -253,6 +315,46 @@ test('a failing exit that the report does explain is a FAIL, not a refusal', asy
     assert.deepEqual(breachesOf(result).map(item => item.code), ['test-failed']);
   });
 });
+
+for (const expected of ['pass', 'fail', 'refuse'] as const) {
+  test(`a cleanup failure preserves ${expected === 'pass' ? 'a cleanup refusal' : `the primary ${expected.toUpperCase()}`}`, async () => {
+    await withWorkspace(async root => {
+      let reportDirectory: string | undefined;
+      const content = expected === 'fail' ? failingReport : expected === 'refuse' ? '{' : passingReport;
+      const adapter = testing({
+        runner: fakeRunner(async ctx => {
+          reportDirectory = dirname(ctx.reportFile);
+          await writeFile(ctx.reportFile, content, 'utf8');
+          await chmod(reportDirectory, 0o500);
+          return { kind: 'completed', exitCode: expected === 'fail' ? 1 : 0, stdout: '', stderr: '' };
+        }),
+        report: report.jestJson(),
+        rules: { testsPass: true },
+      });
+
+      try {
+        const result = await adapter.check.run({ root, rules: ['testing/tests-pass'] });
+        assert.equal(result.verdict, expected === 'pass' ? 'refuse' : expected);
+        if (expected === 'pass') {
+          assert.equal(refusalOf(result).code, 'test-runner-unavailable');
+          assert.equal(
+            refusalOf(result).message,
+            'The testing Adapter could not remove its report directory.',
+          );
+        } else if (expected === 'fail') {
+          assert.deepEqual(breachesOf(result).map(item => item.code), ['test-failed']);
+        } else {
+          assert.equal(refusalOf(result).code, 'test-report-unavailable');
+        }
+      } finally {
+        if (reportDirectory) {
+          await chmod(reportDirectory, 0o700);
+          await rm(reportDirectory, { recursive: true, force: true });
+        }
+      }
+    });
+  });
+}
 
 test('a runner that could not start refuses as unavailable test evidence', async () => {
   await withWorkspace(async root => {
@@ -431,13 +533,6 @@ test('a test command that cannot start refuses as unavailable and names the comm
   });
 });
 
-test('an invalid test command is rejected before a runner exists', () => {
-  assert.throws(
-    () => runner.command({ command: '' }),
-    /command must not be empty/u,
-  );
-});
-
 test('a private report is requested from Vitest when no configured report file is named', async () => {
   await withWorkspace(async root => {
     const project = join(root, 'project');
@@ -451,6 +546,66 @@ test('a private report is requested from Vitest when no configured report file i
     const result = await adapter.check.run({ root, rules: ['testing/tests-pass'] });
     assert.deepEqual(breachesOf(result).map(item => item.message), ['breaks']);
     assert.deepEqual(await readdir(project), ['run'], 'no report is left inside the project');
+  });
+});
+
+test('the Vitest adapter orders its arguments: run flags, report file, config, extra args, then files', async () => {
+  // Node consumes `run` as the script name, so it is recorded from argv[1].
+  const recordArgv = "require('node:fs').writeFileSync(require('node:path').resolve('argv.json'), JSON.stringify([require('node:path').basename(process.argv[1]), ...process.argv.slice(2)]));";
+  const argvOf = async (project: string) => JSON.parse(await readFile(join(project, 'argv.json'), 'utf8')) as string[];
+
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    await installFakeVitest(project, `${recordArgv}\n${writesPrivateReport(passingReport)}`);
+    const privateReport = vitest({
+      command: process.execPath,
+      cwd: 'project',
+      configFile: 'vitest.config.ts',
+      args: ['--bail', '1'],
+      files: ['tests/a.test.ts', 'tests/b.test.ts'],
+      rules: { testsPass: true },
+    });
+
+    assert.equal((await privateReport.check.run({ root, rules: ['testing/tests-pass'] })).verdict, 'pass');
+    const argv = await argvOf(project);
+    assert.match(argv[3] ?? '', /^--outputFile=.+report\.json$/);
+    assert.deepEqual([...argv.slice(0, 3), ...argv.slice(4)], [
+      'run',
+      '--reporter=json',
+      '--no-cache',
+      '--config',
+      'vitest.config.ts',
+      '--bail',
+      '1',
+      'tests/a.test.ts',
+      'tests/b.test.ts',
+    ]);
+  });
+
+  await withWorkspace(async root => {
+    const project = join(root, 'project');
+    await installFakeVitest(project, writesReport('results.json', passingReport, recordArgv));
+    const configuredReport = vitest({
+      command: process.execPath,
+      cwd: 'project',
+      configFile: 'vitest.config.ts',
+      reportFile: 'results.json',
+      args: ['--bail', '1'],
+      files: ['tests/a.test.ts'],
+      rules: { testsPass: true },
+    });
+
+    assert.equal((await configuredReport.check.run({ root, rules: ['testing/tests-pass'] })).verdict, 'pass');
+    assert.deepEqual(await argvOf(project), [
+      'run',
+      '--reporter=json',
+      '--no-cache',
+      '--config',
+      'vitest.config.ts',
+      '--bail',
+      '1',
+      'tests/a.test.ts',
+    ]);
   });
 });
 

@@ -101,10 +101,14 @@ const testingSpec = {
   purity: {
     kind: 'sources',
     files: [
+      'packages/testing/src/core/check.ts',
+      'packages/testing/src/core/command-plan.ts',
+      'packages/testing/src/core/model.ts',
+      'packages/testing/src/core/normalize.ts',
       'packages/testing/src/core/paths.ts',
-      'packages/testing/src/model.ts',
-      'packages/testing/src/reports/jest-json.ts',
-      'packages/testing/src/reports/junit-xml.ts',
+      'packages/testing/src/core/reports/jest-json.ts',
+      'packages/testing/src/core/reports/junit-xml.ts',
+      'packages/testing/src/core/vitest-options.ts',
     ],
     allowedExternalImports: ['node:path', 'redproof'],
   },

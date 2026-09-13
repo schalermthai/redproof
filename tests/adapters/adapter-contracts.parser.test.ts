@@ -18,10 +18,14 @@ const pureAdapterSources = [
   'packages/stryker/src/core/options.ts',
   'packages/stryker/src/core/paths.ts',
   'packages/stryker/src/core/verdict.ts',
+  'packages/testing/src/core/check.ts',
+  'packages/testing/src/core/command-plan.ts',
+  'packages/testing/src/core/model.ts',
+  'packages/testing/src/core/normalize.ts',
   'packages/testing/src/core/paths.ts',
-  'packages/testing/src/model.ts',
-  'packages/testing/src/reports/jest-json.ts',
-  'packages/testing/src/reports/junit-xml.ts',
+  'packages/testing/src/core/reports/jest-json.ts',
+  'packages/testing/src/core/reports/junit-xml.ts',
+  'packages/testing/src/core/vitest-options.ts',
 ] as const;
 
 const pureAdapterSourceSet = new Set<string>(pureAdapterSources);

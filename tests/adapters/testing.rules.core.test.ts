@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRule } from 'redproof';
-import { testCounts, testRunBreaches, type TestCase, type TestRun } from '../../packages/testing/src/model.ts';
+import { testCounts, testRunBreaches, type TestCase, type TestRun } from '../../packages/testing/src/core/model.ts';
 
 const testsPass = defineRule({ id: 'testing/tests-pass', description: 'tests pass' });
 const noFlakyTests = defineRule({ id: 'testing/no-flaky-tests', description: 'no flaky' });

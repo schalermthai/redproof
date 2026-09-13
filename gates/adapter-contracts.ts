@@ -146,7 +146,7 @@ export const proofs = defineProofs(gate, [
     'detects a runner exception mapped to the wrong evidence lane',
     mutate.replaceText(
       locate.text({
-        files: 'packages/testing/src/index.ts',
+        files: 'packages/testing/src/shell/check.ts',
         find: "kind: 'unavailable' as const",
       }),
       "kind: 'completed' as const",
@@ -172,7 +172,7 @@ export const proofs = defineProofs(gate, [
     'detects a report format that overstates what it can observe',
     mutate.replaceText(
       locate.text({
-        files: 'packages/testing/src/reports/junit-xml.ts',
+        files: 'packages/testing/src/core/reports/junit-xml.ts',
         find: 'capabilities: { todo: false, flaky: false }',
       }),
       'capabilities: { todo: true, flaky: true }',
