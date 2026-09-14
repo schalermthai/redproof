@@ -56,7 +56,7 @@ function snapshot(overrides: Partial<RepositorySnapshot> = {}): RepositorySnapsh
       'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
       'for PKG in redproof; do',
       'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
-      'npm publish "$TARBALL" --tag "$NPM_TAG"',
+      'npm publish "./$TARBALL" --tag "$NPM_TAG"',
     ].join('\n'),
     existingPaths: new Set([
       'README.md',
@@ -179,7 +179,7 @@ test('a second package is accepted once every release stage names it', () => {
       'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
       'for PKG in redproof @redproof/extra; do',
       'TARBALL="artifacts/${TARBALL_STEM}-${VERSION}.tgz"',
-      'npm publish "$TARBALL" --tag "$NPM_TAG"',
+      'npm publish "./$TARBALL" --tag "$NPM_TAG"',
     ].join('\n'),
     existingPaths: new Set([...clean.existingPaths, 'packages/extra/src/index.ts']),
   });
@@ -377,10 +377,10 @@ test('CI and publishing must keep their complete verification portfolios', () =>
 
   const workspacePublish = evaluateRepositoryPolicy({
     ...clean,
-    publishWorkflow: clean.publishWorkflow.replace('npm publish "$TARBALL"', 'npm publish -w "$PKG"'),
+    publishWorkflow: clean.publishWorkflow.replace('npm publish "./$TARBALL"', 'npm publish -w "$PKG"'),
   });
   assert.deepEqual(workspacePublish.map(item => [item.file, item.message]), [
-    ['.github/workflows/publish.yml', '.github/workflows/publish.yml must publish the retained verified tarballs.'],
+    ['.github/workflows/publish.yml', '.github/workflows/publish.yml must publish each retained tarball as "./$TARBALL".'],
   ]);
 });
 
