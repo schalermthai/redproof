@@ -321,11 +321,13 @@ function automationVerification(snapshot: RepositorySnapshot): RepositoryPolicyF
     }
   }
 
-  if (!workflowShellRuns(snapshot.publishWorkflow, 'npm publish "$TARBALL"')) {
+  // The "./" is required. npm reads a bare `a/b` argument as the GitHub shorthand
+  // `github:a/b`, and npm 11.19 refuses it with EALLOWGIT, publishing nothing.
+  if (!workflowShellRuns(snapshot.publishWorkflow, 'npm publish "./$TARBALL"')) {
     findings.push({
       rule: 'automationVerification',
       code: 'workflow-verification-missing',
-      message: '.github/workflows/publish.yml must publish the retained verified tarballs.',
+      message: '.github/workflows/publish.yml must publish each retained tarball as "./$TARBALL".',
       file: '.github/workflows/publish.yml',
     });
   }

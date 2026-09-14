@@ -94,6 +94,14 @@ export const proofs = defineProofs(gate, [
     ),
   ),
   proof.red(
+    rules.automationVerification,
+    'detects a publish command npm would read as a GitHub shorthand',
+    mutate.replaceText(
+      locate.text({ files: '.github/workflows/publish.yml', find: 'npm publish "./$TARBALL"' }),
+      'npm publish "$TARBALL"',
+    ),
+  ),
+  proof.red(
     rules.docsLinks,
     'detects a broken relative documentation link',
     mutate.createFile(
