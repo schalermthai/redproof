@@ -1,6 +1,6 @@
 {
   "name": "@redproof/testing",
-  "version": "0.10.0",
+  "version": "0.12.0",
   "description": "Redproof adapter for test suites and JUnit XML reports.",
   "type": "module",
   "exports": {
@@ -17,10 +17,10 @@
     "node": ">=24"
   },
   "dependencies": {
-    "redproof": "0.10.0"
+    "redproof": "0.12.0"
   },
   "devDependencies": {
-    "@redproof/adapter-tck": "0.10.0"
+    "@redproof/adapter-tck": "0.12.0"
   },
   "repository": {
     "type": "git",
