@@ -566,69 +566,10 @@ The proof report puts the claim and the outcome side by side:
 ✓ repository-policy / accepts the current repository contracts expected=green actual=pass
 ```
 
-## Guardrails for agent-written code
-
-A coding agent writes code fast. In one pass it can change source files,
-configuration, and documentation. It can also make a mistake in each of them
-at the same speed. So the checks that run after each change matter more, not
-less. The agent reads a failed check and fixes the code. That loop only works
-when the check still fails on a real mistake.
-
-A check can stop working without anyone noticing. Three examples:
-
-```text
-the file pattern in a lint config no longer matches a new source directory
-a test report changed its format, and the reader now sees zero failures
-a tool crashes, and the script that reads its output reports success
-```
-
-In each case the check still prints green. The agent sees green and moves on.
-The mistake ships.
-
-The RED proofs on this page catch this. A RED proof plants a known mistake and
-expects the check to fail. When the check has stopped working, the RED proof
-fails instead. The team learns that the guardrail is broken before the agent
-relies on it.
-
-Run `redproof check` when the agent ends a turn, for example from a Stop hook.
-In this repository the full check takes about 16 seconds. Do not run it after
-every file edit. Run `redproof prove` in CI, and run it for one Gate file when
-the agent has edited that file:
-
-```bash
-npx redproof prove gates/architecture.ts
-```
-
-This repository ships that hook for Claude Code in
-[`.claude/settings.json`](../.claude/settings.json):
-
-```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 120,
-            "command": "input=$(cat); case \"$input\" in *'\"stop_hook_active\":true'*|*'\"stop_hook_active\": true'*) exit 0;; esac; out=$(npm run -s self:check 2>&1) && exit 0; printf '%s\\n' \"$out\" >&2; exit 2"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-The hook exits 0 when every Gate passes, and the turn ends. When a Gate
-fails, the hook prints the Redproof report to stderr and exits 2. Exit 2 keeps
-the turn open and hands the report to the agent, so it sees the breached Rule
-and its location. The first line reads the `stop_hook_active` field. When that
-field is true, the hook exits at once, so a blocked stop does not run the check
-a second time.
-
 ## Next
 
+- **[Guardrails for agent-written code](agent-guardrails.md)** for the Stop
+  hook and the two agent skills.
 - **[The Contract-to-Gate method](contract-to-gate.md)** to turn a quality idea
   into a Rule, a Check, and Proofs.
 - **[Gating Adapter contracts](adapter-contract-gates.md)** for the design of
