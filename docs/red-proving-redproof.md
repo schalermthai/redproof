@@ -216,9 +216,30 @@ that something went wrong.
 
 ## Two tools, one Check
 
-dependency-cruiser sees the import graph. It cannot see `process.cwd()`
-inside a function body. A TypeScript syntax scan can. The architecture Gate
-uses both, in one Check, under one set of Rules:
+The architecture Gate has 16 Rules. Thirteen come from dependency-cruiser.
+Three are native:
+
+```text
+R14 Functional-core modules receive ambient values from the shell.
+R15 Filesystem, process, clock, randomness, and subprocess effects stay in approved boundary modules.
+R16 Functional-core tests use plain values rather than filesystem, subprocess, or workspace fixtures.
+```
+
+dependency-cruiser is the right tool for the first thirteen. It sees the
+import graph, and an import is where a module boundary is crossed. It is the
+wrong tool for the last three. A core module can leak without an import. It
+can call `process.cwd()` or `Date.now()` in a function body. dependency-cruiser
+never looks inside a function body. A TypeScript syntax scan does.
+
+The easy answer is two Gates. One runs dependency-cruiser. One runs the scan.
+That answer has a cost. The promise is one promise, "the functional core is
+pure", and a reader would find it split across two files with two verdicts.
+A proof for R14 would live away from the proof for R2, although both plant a
+leak in the same file.
+
+So the Gate keeps one Rule catalogue and one Check. The Adapter's Rules spread
+into the catalogue beside the native ones. The native Check takes the Adapter
+as an option and runs it first:
 
 ```text
 const dependencies = dependencyCruiser({ configFile: '.dependency-cruiser.cjs', ... });
@@ -237,10 +258,19 @@ defineGate({
 });
 ```
 
-An Adapter's Rules spread into a native Rule catalogue. The
-[`effectBoundaries`](../gates/checks/effect-boundaries.ts) Check runs the
-Adapter first and carries its breaches. Then the syntax scan adds its own. A
-REFUSE from either side wins.
+[`effectBoundaries`](../gates/checks/effect-boundaries.ts) is built on the
+[`scanning`](../gates/support/scanning.ts) helper. That helper has one
+optional `delegate`. Here the delegate is the dependency-cruiser Check. Its
+breaches are carried into the result. Then the syntax scan adds its own. A
+REFUSE from either side wins, because a half-answer about purity is not an
+answer.
+
+`redproof describe` prints the two as one:
+
+```text
+Check:
+  enforce source dependencies and functional-core effect boundaries
+```
 
 The approved effect boundaries are a list of 28 files in
 [`effects-model.ts`](../gates/support/effects-model.ts). A new file that reads
