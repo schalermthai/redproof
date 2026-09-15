@@ -35,25 +35,29 @@ unused-code          files, exports, and dependencies stay connected       6 Rul
 Each Gate is one file under [`gates/`](../gates). The sections below show one
 pattern each:
 
-- [Describing a Gate](#describing-a-gate). `redproof describe` prints the
+- [Executable specification](#executable-specification). `redproof describe` prints the
   Rules, the Check, and every Proof before anything runs.
-- [The static-contracts Gate](#the-static-contracts-gate). `commands()` turns
+- [Script as a Rule](#script-as-a-rule). `commands()` turns
   a script with an exit code into a Rule with a name and a proof.
-- [The architecture Gate](#the-architecture-gate). One mutation per boundary,
-  and each proof must breach the one Rule it names.
+- [One mutation per boundary](#one-mutation-per-boundary). Each boundary has
+  a mutation that crosses it, and each proof must breach the one Rule it names.
 - [Multiple checks composition](#multiple-checks-composition). One Check runs
   another Check first and carries its result, so one Gate holds Rules from
   several sources and gives one verdict.
-- [The test-health Gate](#the-test-health-gate). A runner builds its
+- [Self-describing runner](#self-describing-runner). A runner builds its
   arguments per run, and its description comes from the same option.
-- [The adapter-contracts Gate](#the-adapter-contracts-gate). Mutations edit
+- [Mutating the guard itself](#mutating-the-guard-itself). Mutations edit
   the production source of an Adapter to prove the contract suite notices.
-- [The repository-policy Gate](#the-repository-policy-gate). Release mistakes
+- [Release policy as Rules](#release-policy-as-rules). Release mistakes
   become mutations, including one from a real incident.
-- [Gate discovery in CI](#gate-discovery-in-ci). CI lists the Gate files
+- [Gate discovery](#gate-discovery). CI lists the Gate files
   itself, and a Rule pins the command each leg runs.
 
-## Describing a Gate
+## Executable specification
+
+Executable specification is the pattern where the Gate file is the
+specification. The same file that runs the Check also prints the promise, the
+defect, and the expected verdict, so the two cannot drift apart.
 
 `npm run self:describe` prints every Gate before anything runs. The output
 below describes the [`unused-code`](../gates/unused-code.ts) Gate, which is
@@ -101,10 +105,14 @@ The Gate file is 31 lines. The description puts the promise, the defect, and
 the expected verdict together. A reviewer reads what the Gate guards from this
 output alone, without the Knip documentation.
 
-## The static-contracts Gate
+## Script as a Rule
 
-The [`static-contracts`](../gates/static-contracts.ts) Gate makes three
-promises:
+Script as a Rule is the pattern where a script with an exit code becomes a
+named Rule. `commands()` wraps the script, so it gains a proof and a REFUSE
+when it cannot run.
+
+The [`static-contracts`](../gates/static-contracts.ts) Gate uses this pattern.
+It makes three promises:
 
 ```text
 R1 Workspace source, tests, fixtures, and self-hosted Gates must type-check.
@@ -203,10 +211,14 @@ Every `ts` block in `README.md` and `docs/` compiles. The budget for
 `ts fragment` blocks is 37, and it cannot grow. This page is under `docs/`, so
 the same Gate checks the examples on it.
 
-## The architecture Gate
+## One mutation per boundary
 
-The [`architecture`](../gates/architecture.ts) Gate protects a functional core
-and an imperative shell. Core modules make decisions from values. Shell modules
+One mutation per boundary is the pattern where every architectural rule has a
+proof that crosses that exact boundary. The proof names one Rule, so the Gate
+must tell the boundaries apart.
+
+The [`architecture`](../gates/architecture.ts) Gate uses this pattern. It
+protects a functional core and an imperative shell. Core modules make decisions from values. Shell modules
 read files, watch the clock, and supervise processes. A written convention is
 easy to break by accident, so each boundary has a mutation that crosses it.
 Three of those mutations touch the same file:
@@ -309,10 +321,14 @@ The approved effect boundaries are a list of 28 files in
 the filesystem must join that list in a reviewed change. The proof creates such
 a file and expects R15 to breach.
 
-## The test-health Gate
+## Self-describing runner
 
-The [`test-health`](../gates/test-health.ts) Gate runs every test file under
-`node --test`. It reads the JUnit report through `@redproof/testing`. The file
+Self-describing runner is the pattern where a runner builds its description
+and its arguments from the same option. `redproof describe` then prints a
+sentence that always matches the real command.
+
+The [`test-health`](../gates/test-health.ts) Gate uses this pattern. It runs
+every test file under `node --test`. It reads the JUnit report through `@redproof/testing`. The file
 list depends on the workspace, so the Gate builds the arguments per run:
 
 ```ts
@@ -351,7 +367,11 @@ Proof R2:
 
 A skipped test is not a passing test. The Rule `noSkippedTests` breaches on it.
 
-## The adapter-contracts Gate
+## Mutating the guard itself
+
+Mutating the guard itself is the pattern where a proof edits the production
+source of a guardrail, not the code it guards. The proof shows that the
+guardrail's own contract suite notices when the guardrail goes wrong.
 
 An Adapter can return the right TypeScript shape and still be unsafe. It can
 accept invalid options, turn a crashed tool into PASS, or drop a finding it
@@ -405,10 +425,15 @@ Two of those statements have a proof. The architecture Gate plants a TCK import
 in Adapter source, and the repository-policy Gate adds the TCK to the redproof
 dependencies. Both proofs expect a breach.
 
-## The repository-policy Gate
+## Release policy as Rules
 
-The [`repository-policy`](../gates/repository-policy.ts) Gate extends the
-checks from the source code to the packages that users install. It reads the
+Release policy as Rules is the pattern where package manifests, workflows, and
+the lockfile are inputs to a Check. Each release mistake a team can make is a
+Rule with a proof.
+
+The [`repository-policy`](../gates/repository-policy.ts) Gate uses this
+pattern. It extends the checks from the source code to the packages that users
+install. It reads the
 package manifests, the release scripts, both workflows, every Markdown link,
 and the lockfile. Its mutations are the release mistakes a team makes:
 
@@ -435,7 +460,11 @@ behaviour, package contents, and internal links. The same verified tarballs are
 attached to the workflow run and passed to `npm publish`. Nothing is rebuilt
 afterward. See the [publish workflow](../.github/workflows/publish.yml).
 
-## Gate discovery in CI
+## Gate discovery
+
+Gate discovery is the pattern where CI finds the Gate files itself instead of
+keeping a list. A new Gate cannot be left out of CI, and a Rule pins the
+command that each CI leg runs.
 
 The [CI workflow](../.github/workflows/ci.yml) does not keep a list of Gates. A
 `discover` job lists `gates/*.ts`, and a matrix job then runs the proofs of one
