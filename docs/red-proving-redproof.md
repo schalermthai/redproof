@@ -1,17 +1,15 @@
 # Redproof proves Redproof
 
 This repository runs Redproof on itself. Six Gates hold 39 Rules and 61 Proofs.
-
-The real CI and release workflows use these Gates. They are not a separate showcase suite.
-
-Every push asks two questions:
+The real CI and release workflows use these Gates. They are not a separate
+showcase suite. Every push asks two questions:
 
 ```text
 npm run self:check   does the repository satisfy its guardrails now?
 npm run self:prove   can each guardrail still detect the defect it names?
 ```
 
-The important model is:
+The model behind every proof is:
 
 ```text
 healthy repository   ──▶ same Gate ──▶ PASS
@@ -19,11 +17,9 @@ controlled defect    ──▶ same Gate ──▶ FAIL the targeted Rule
 unavailable evidence ──▶ same Gate ──▶ REFUSE
 ```
 
-A RED proof only succeeds when the Rule it names breaches. Any other failure is not enough.
-
-A GREEN proof shows the healthy repository passes.
-
-A REFUSE proof shows the Check declines to guess when its evidence is missing.
+A RED proof succeeds only when the Rule it names breaches. Any other failure
+does not count. A GREEN proof shows that the healthy repository passes. A REFUSE
+proof shows that the Check declines to guess when its evidence is missing.
 
 ## The six Gates
 
@@ -36,13 +32,14 @@ repository-policy    packages, versions, CI, documentation links, lockfile 7 Rul
 unused-code          files, exports, and dependencies stay connected       6 Rules    9 Proofs
 ```
 
-Each Gate is one file under [`gates/`](../gates). This page shows what those files make possible.
+Each Gate is one file under [`gates/`](../gates). The sections below explain
+what each file does.
 
-## A Gate reads as a specification
+## Describing a Gate
 
-`npm run self:describe` prints every Gate before anything runs.
-
-This is the [`unused-code`](../gates/unused-code.ts) Gate. It is built on the Knip Adapter:
+`npm run self:describe` prints every Gate before anything runs. The output
+below describes the [`unused-code`](../gates/unused-code.ts) Gate, which is
+built on the Knip Adapter:
 
 ```text
 Gate: unused-code
@@ -82,13 +79,14 @@ Proof GREEN:
   expect Gate PASS
 ```
 
-The Gate file is 31 lines.
+The Gate file is 31 lines. The description puts the promise, the defect, and
+the expected verdict together. A reviewer reads what the Gate guards from this
+output alone, without the Knip documentation.
 
-A reviewer reads the promise, the defect, and the expected verdict together. Nobody has to open the Knip documentation to know what the Gate guards.
+## The static-contracts Gate
 
-## A Gate for something no tool checks
-
-The [`static-contracts`](../gates/static-contracts.ts) Gate makes three promises:
+The [`static-contracts`](../gates/static-contracts.ts) Gate makes three
+promises:
 
 ```text
 R1 Workspace source, tests, fixtures, and self-hosted Gates must type-check.
@@ -96,33 +94,25 @@ R2 Standalone TypeScript examples in the documentation must compile.
 R3 The number of documentation fragments excluded from compilation must not grow.
 ```
 
-R1 is ordinary. `tsc` checks it.
+R1 is ordinary, and `tsc` checks it. R2 and R3 have no ready-made tool, because
+no linter compiles a `ts` block inside a Markdown file. Without R2, an API
+changes and the example on the page does not. Nobody notices until a user
+copies the example. R2 requires every standalone example to compile.
 
-R2 and R3 are not ordinary. No linter compiles a `ts` block inside a Markdown file.
+R3 limits the exclusion that R2 allows. A block that cannot stand alone is
+marked `ts fragment`, and the compiler skips it. If a fragment costs nothing to
+add, every hard example becomes a fragment and R2 checks fewer blocks over
+time. R3 counts the fragments against a budget, so that number cannot grow.
 
-Documentation examples rot. An API changes and the example on the page does not. Nobody notices until a user copies it.
+The check for R2 is the script `scripts/typecheck-docs.ts`. It extracts every
+`ts` block, writes each one to a file, and runs `tsc` over them. The check for
+R3 is a 30-line script that counts `ts fragment` blocks against a budget. Both
+scripts already exit non-zero when they find a problem. They lack a Rule with a
+name, a REFUSE lane, and a proof.
 
-R3 guards the escape hatch of R2. A block that cannot stand alone is marked `ts fragment`, and the compiler skips it.
-
-That marker is useful. It is also the easy way out.
-
-If it is free to add, every hard example becomes a fragment. R2 then slowly guards nothing.
-
-The check for R2 is the script `scripts/typecheck-docs.ts`. It extracts every `ts` block, writes each one to a file, and runs `tsc` over them.
-
-The check for R3 is a 30-line script. It counts `ts fragment` blocks against a budget.
-
-Both scripts already exit non-zero when they find a problem. They lack three things:
-
-```text
-a Rule with a name
-a REFUSE lane
-a proof
-```
-
-`commands()` adds exactly those three. Each script becomes one entry.
-
-The entry names its Rule. A failure is then a breach of that Rule, not a generic red job:
+`commands()` adds those three things. Each script becomes one entry, and the
+entry names its Rule. A failure is then a breach of that Rule, not a generic
+red job:
 
 ```ts
 import { defineGate, defineRules } from 'redproof';
@@ -164,11 +154,12 @@ export default defineGate({
 });
 ```
 
-`commands()` also gives each script a timeout, an output limit, and the REFUSE lane.
+`commands()` also gives each script a timeout, an output limit, and the REFUSE
+lane. A script that cannot start becomes REFUSE, not PASS, and the Gate says
+which entry could not run.
 
-A script that cannot start becomes REFUSE, not PASS. The Gate says which entry could not run.
-
-The proofs are Markdown files. One holds a bad example, and one holds one more fragment than the budget allows:
+The proofs are Markdown files. One holds a bad example, and one holds one more
+fragment than the budget allows:
 
 ```text
 Proof R2:
@@ -184,21 +175,16 @@ Proof R3:
   expect Gate FAIL
 ```
 
-Every `ts` block in `README.md` and `docs/` compiles. The budget for `ts fragment` blocks is 37, and it cannot grow.
+Every `ts` block in `README.md` and `docs/` compiles. The budget for
+`ts fragment` blocks is 37, and it cannot grow. This page is under `docs/`, so
+the same Gate checks the examples on it.
 
-The Gate that this page describes also checks this page.
+## The architecture Gate
 
-## The mutation is the specification
-
-The [`architecture`](../gates/architecture.ts) Gate protects a functional core and an imperative shell.
-
-```text
-core modules    make decisions from values
-shell modules   read files, watch the clock, and supervise processes
-```
-
-A written convention is easy to break by accident. So each boundary has a mutation that crosses it.
-
+The [`architecture`](../gates/architecture.ts) Gate protects a functional core
+and an imperative shell. Core modules make decisions from values. Shell modules
+read files, watch the clock, and supervise processes. A written convention is
+easy to break by accident, so each boundary has a mutation that crosses it.
 Three of those mutations touch the same file:
 
 ```text
@@ -223,13 +209,14 @@ void process.cwd();                    → R14 core-no-ambient-inputs
 import '../shell/worker-process.ts';   → R3  core-no-shell
 ```
 
-Each proof names one Rule. If the change breaches a different Rule, the proof fails.
+Each proof names one Rule. If the change breaches a different Rule, the proof
+fails. The Gate therefore has to tell the three kinds of boundary crossing
+apart. A report that something went wrong does not satisfy the proof.
 
-The Gate must know the difference between three kinds of leak. It is not enough to know that something went wrong.
+## Two tools in one Check
 
-## Two tools, one Check
-
-The architecture Gate has 16 Rules. Thirteen come from dependency-cruiser, and three are native:
+The architecture Gate has 16 Rules. Thirteen come from dependency-cruiser, and
+three are native:
 
 ```text
 R14 Functional-core modules receive ambient values from the shell.
@@ -237,26 +224,25 @@ R15 Filesystem, process, clock, randomness, and subprocess effects stay in appro
 R16 Functional-core tests use plain values rather than filesystem, subprocess, or workspace fixtures.
 ```
 
-dependency-cruiser is the right tool for the first thirteen. It sees the import graph, and an import is where a module boundary is crossed.
-
-It is the wrong tool for the last three. A core module can leak without an import:
+dependency-cruiser checks the first thirteen. It sees the import graph, and an
+import is where a module boundary is crossed. It cannot check the last three,
+because a core module can read ambient state without an import:
 
 ```text
 process.cwd()   in a function body
 Date.now()      in a function body
 ```
 
-dependency-cruiser never looks inside a function body. A TypeScript syntax scan does.
+dependency-cruiser never looks inside a function body. A TypeScript syntax scan
+does, so the Gate runs both.
 
-The easy answer is two Gates. One runs dependency-cruiser, and one runs the scan.
+The Gate keeps one Rule catalogue and one Check for both tools. The promise is
+one promise, "the functional core is pure", and one Gate gives it one verdict.
+The proof for R14 then sits beside the proof for R2, and both plant a change in
+the same file.
 
-That answer has a cost. The promise is one promise, "the functional core is pure". Two Gates split it across two files with two verdicts.
-
-A proof for R14 would then live away from the proof for R2. Both plant a leak in the same file.
-
-So the Gate keeps one Rule catalogue and one Check.
-
-The Adapter Rules spread into the catalogue beside the native ones. The native Check takes the Adapter as an option and runs it first:
+The Adapter Rules spread into the catalogue beside the native ones. The native
+Check takes the Adapter as an option and runs it first:
 
 ```text
 const dependencies = dependencyCruiser({ configFile: '.dependency-cruiser.cjs', ... });
@@ -275,11 +261,12 @@ defineGate({
 });
 ```
 
-[`effectBoundaries`](../gates/checks/effect-boundaries.ts) is built on the [`scanning`](../gates/support/scanning.ts) helper. That helper has one optional `delegate`.
-
-Here the delegate is the dependency-cruiser Check. The result carries its breaches. Then the syntax scan adds its own.
-
-A REFUSE from either side wins. A half-answer about purity is not an answer.
+[`effectBoundaries`](../gates/checks/effect-boundaries.ts) is built on the
+[`scanning`](../gates/support/scanning.ts) helper, which has one optional
+`delegate`. Here the delegate is the dependency-cruiser Check. The result
+carries its breaches, and then the syntax scan adds its own. A REFUSE from
+either side wins, so the Gate does not give a verdict from half of the
+evidence.
 
 `redproof describe` prints the two as one:
 
@@ -288,15 +275,16 @@ Check:
   enforce source dependencies and functional-core effect boundaries
 ```
 
-The approved effect boundaries are a list of 28 files in [`effects-model.ts`](../gates/support/effects-model.ts).
+The approved effect boundaries are a list of 28 files in
+[`effects-model.ts`](../gates/support/effects-model.ts). A new file that reads
+the filesystem must join that list in a reviewed change. The proof creates such
+a file and expects R15 to breach.
 
-A new file that reads the filesystem must join that list on purpose, in a reviewed change. The proof creates such a file and expects R15 to breach.
+## The test-health Gate
 
-## The test runner describes itself
-
-The [`test-health`](../gates/test-health.ts) Gate runs every test file under `node --test`. It reads the JUnit report through `@redproof/testing`.
-
-The file list depends on the workspace. So the Gate builds the arguments per run:
+The [`test-health`](../gates/test-health.ts) Gate runs every test file under
+`node --test`. It reads the JUnit report through `@redproof/testing`. The file
+list depends on the workspace, so the Gate builds the arguments per run:
 
 ```ts
 import { globSync } from 'node:fs';
@@ -318,8 +306,8 @@ export function nodeTestSuite(options: { readonly files: string }): TestRunner {
 ```
 
 The description and the arguments come from the same `files` option.
-
-`redproof describe` prints the description. The sentence cannot drift from the real command:
+`redproof describe` prints the description, so the sentence cannot drift from
+the real command:
 
 ```text
 Check:
@@ -334,19 +322,14 @@ Proof R2:
 
 A skipped test is not a passing test. The Rule `noSkippedTests` breaches on it.
 
-## The guards are guarded
+## The adapter-contracts Gate
 
-An Adapter can return the right TypeScript shape and still be unsafe:
-
-```text
-it accepts invalid options
-it turns a crashed tool into PASS
-it drops a finding it should report
-```
-
-The [`adapter-contracts`](../gates/adapter-contracts.ts) Gate holds five promises for every built-in Adapter.
-
-Its mutations edit the production source of an Adapter with `locate.text`. Then they expect the contract suite to notice:
+An Adapter can return the right TypeScript shape and still be unsafe. It can
+accept invalid options, turn a crashed tool into PASS, or drop a finding it
+should report. The [`adapter-contracts`](../gates/adapter-contracts.ts) Gate
+holds five promises for every built-in Adapter. Its mutations edit the
+production source of an Adapter with `locate.text`, and then they expect the
+contract suite to notice:
 
 ```text
 Proof R1:
@@ -370,13 +353,15 @@ Proof REFUSE:
   mutation: append text to tests/adapters/adapter-contracts.constructor.test.ts
 ```
 
-Each promise runs twice. The original contract suite runs, and the package-owned [`@redproof/adapter-tck`](../packages/adapter-tck/README.md) registration runs beside it.
+Each promise runs twice. The original contract suite runs, and the
+package-owned [`@redproof/adapter-tck`](../packages/adapter-tck/README.md)
+registration runs beside it. That is ten commands for five Rules, in parallel.
+The REFUSE proof writes 4 MB of output against a 1 MB budget, and the Gate
+refuses instead of reading a partial result.
 
-That is ten commands for five Rules, in parallel.
-
-The REFUSE proof writes 4 MB of output against a 1 MB budget. The Gate refuses instead of reading a partial result.
-
-Real-tool fixtures then prove the same promises with ESLint, dependency-cruiser, Stryker, and Vitest against representative projects. The dependency direction stays clean:
+Real-tool fixtures then prove the same promises with ESLint, dependency-cruiser,
+Stryker, and Vitest against representative projects. The dependency direction
+stays clean:
 
 ```text
 Adapter production ──▶ redproof
@@ -384,33 +369,19 @@ Adapter tests      ──▶ @redproof/adapter-tck ──peer/types──▶ red
 root Gate          ──▶ package-owned TCK tests
 ```
 
-The diagram states three things:
+The diagram states three things. Redproof does not depend on the TCK. Adapter
+production does not import the TCK. The TCK does not import built-in Adapters.
 
-```text
-Redproof does not depend on the TCK.
-Adapter production does not import the TCK.
-The TCK does not import built-in Adapters.
-```
+Two of those statements have a proof. The architecture Gate plants a TCK import
+in Adapter source, and the repository-policy Gate adds the TCK to the redproof
+dependencies. Both proofs expect a breach.
 
-Two of those statements have a proof. The architecture Gate plants a TCK import in Adapter source. The repository-policy Gate adds the TCK to the redproof dependencies.
+## The repository-policy Gate
 
-Both must breach.
-
-## The release is a Rule
-
-Dogfooding is not convincing if it protects source code but not what users install.
-
-The [`repository-policy`](../gates/repository-policy.ts) Gate reads:
-
-```text
-the package manifests
-the release scripts
-both workflows
-every Markdown link
-the lockfile
-```
-
-Its mutations are the release mistakes a team makes:
+The [`repository-policy`](../gates/repository-policy.ts) Gate extends the
+checks from the source code to the packages that users install. It reads the
+package manifests, the release scripts, both workflows, every Markdown link,
+and the lockfile. Its mutations are the release mistakes a team makes:
 
 ```text
 rename 'packages/testing' in the version setter              → R1 a package leaves the inventory
@@ -424,29 +395,22 @@ delete lightningcss-linux-x64-gnu from package-lock.json      → R7 a platform 
 rename .github/workflows/ci.yml                               → REFUSE, not PASS
 ```
 
-The `npm publish` mutation records a real incident. The 0.12.0 release published nothing.
+The `npm publish` mutation records a real incident. The 0.12.0 release
+published nothing, because npm reads a bare `artifacts/x.tgz` as the GitHub
+shorthand `github:artifacts/x.tgz`. The Rule now pins
+`npm publish "./$TARBALL"`.
 
-npm reads a bare `artifacts/x.tgz` as the GitHub shorthand `github:artifacts/x.tgz`. The Rule now pins `npm publish "./$TARBALL"`.
+The release workflow packs every publishable package and installs the tarballs
+into a clean consumer. It then verifies runtime imports, published types, CLI
+behaviour, package contents, and internal links. The same verified tarballs are
+attached to the workflow run and passed to `npm publish`. Nothing is rebuilt
+afterward. See the [publish workflow](../.github/workflows/publish.yml).
 
-The release workflow packs every publishable package and installs the tarballs into a clean consumer. It then verifies:
+## Gate discovery in CI
 
-```text
-runtime imports
-published types
-CLI behaviour
-package contents
-internal links
-```
-
-The same verified tarballs are attached to the workflow run and passed to `npm publish`. Nothing is rebuilt afterward.
-
-See the [publish workflow](../.github/workflows/publish.yml).
-
-## CI discovers the Gates
-
-The [CI workflow](../.github/workflows/ci.yml) does not keep a list of Gates.
-
-A `discover` job lists `gates/*.ts`. A matrix job then runs the proofs of one Gate per leg:
+The [CI workflow](../.github/workflows/ci.yml) does not keep a list of Gates. A
+`discover` job lists `gates/*.ts`, and a matrix job then runs the proofs of one
+Gate per leg:
 
 ```text
 discover ──▶ proofs (architecture)
@@ -457,17 +421,18 @@ discover ──▶ proofs (architecture)
          ──▶ proofs (unused-code)
 ```
 
-A new Gate file joins CI by existing. There is no hand-written list to forget.
-
-The `repository-policy` Gate then checks the run line of each leg. It must be exactly:
+The `discover` job picks up a new Gate file on the next run. There is no
+hand-written list to update. The `repository-policy` Gate then checks the run
+line of each leg, which must be exactly:
 
 ```text
 npm run check:proofs -- gates/${{ matrix.gate }}.ts
 ```
 
-Quality checks, the proof legs, and clean-consumer package verification start together and report separately. A slow proof does not hold the other layers.
+Quality checks, the proof legs, and clean-consumer package verification start
+together and report separately. A slow proof does not hold the other layers.
 
-## REFUSE is a first-class outcome
+## REFUSE proofs
 
 Three Gates carry a REFUSE proof. Each removes the evidence the Check needs:
 
@@ -477,11 +442,10 @@ repository-policy    rename  .github/workflows/ci.yml
 adapter-contracts    write 4 MB to stdout inside a 1 MB budget
 ```
 
-None of those becomes PASS. None becomes a false product defect.
+None of those becomes PASS, and none becomes a false product defect. The Gate
+reports that it could not decide.
 
-The Gate says it could not decide.
-
-## Proofs run in copies
+## Isolated proof copies
 
 Proofs run in isolated project copies. `redproof.config.ts` sets:
 
@@ -489,9 +453,10 @@ Proofs run in isolated project copies. `redproof.config.ts` sets:
 execution: { mode: 'copies', maxAtOnce: 4 }
 ```
 
-A mutation can delete a workflow, corrupt a lockfile, or edit Adapter source. The working tree stays untouched.
-
-Redproof checks that each copy returns to its baseline before it is reused. A proof that leaves a file behind refuses with `workspace-not-restored`.
+A mutation can delete a workflow, corrupt a lockfile, or edit Adapter source,
+and the working tree stays untouched. Redproof checks that each copy returns to
+its baseline before it is reused. A proof that leaves a file behind refuses
+with `workspace-not-restored`.
 
 ## Run it
 
@@ -513,7 +478,8 @@ Run every controlled defect, healthy baseline, and refusal:
 npm run self:prove
 ```
 
-The complete delivery check adds types, documentation examples, native tests, and the real-tool fixtures:
+The complete delivery check adds types, documentation examples, native tests,
+and the real-tool fixtures:
 
 ```bash
 npm run check
@@ -527,21 +493,18 @@ The proof report puts the claim and the outcome side by side:
 ✓ repository-policy / accepts the current repository contracts expected=green actual=pass
 ```
 
-## Why this matters when agents write code
+## Guardrails for agent-written code
 
-An agent can change more code, configuration, and documentation in one pass than a person usually touches at once. It can also make plausible mistakes at the same speed.
+An agent can change more code, configuration, and documentation in one pass
+than a person usually touches at once. It can also make plausible mistakes at
+the same speed. A guardrail that still works tells the agent what crossed a
+boundary, and the agent can act on that evidence. A guardrail that has stopped
+working tells it nothing.
 
-A guardrail that still works tells the agent what crossed a boundary. It gives evidence the agent can act on.
-
-A guardrail that has quietly stopped working tells it nothing. Each of these makes a pipeline confidently wrong:
-
-```text
-a stale glob
-an ignored report field
-a parser that turns a crash into PASS
-```
-
-The proofs on this page exist so that cannot happen in silence.
+A stale glob, an ignored report field, or a parser that turns a crash into PASS
+each breaks a guardrail this way. The pipeline then reports success while a
+defect is present. The proofs on this page detect a guardrail in that state,
+because its RED proof no longer breaches the Rule it names.
 
 ## Next
 
