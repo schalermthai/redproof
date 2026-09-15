@@ -94,25 +94,30 @@ R2 Standalone TypeScript examples in the documentation must compile.
 R3 The number of documentation fragments excluded from compilation must not grow.
 ```
 
-R1 is ordinary, and `tsc` checks it. R2 and R3 have no ready-made tool, because
-no linter compiles a `ts` block inside a Markdown file. Without R2, an API
-changes and the example on the page does not. Nobody notices until a user
-copies the example. R2 requires every standalone example to compile.
+The first promise is the normal TypeScript build. `tsc` checks it.
 
-R3 limits the exclusion that R2 allows. A block that cannot stand alone is
-marked `ts fragment`, and the compiler skips it. If a fragment costs nothing to
-add, every hard example becomes a fragment and R2 checks fewer blocks over
-time. R3 counts the fragments against a budget, so that number cannot grow.
+The other two promises are about the code examples in the documentation.
+`README.md` and every page under `docs/` contain TypeScript examples in `ts`
+code blocks. When the API changes, an example can stop compiling, and nobody
+notices until a reader copies it. No linter checks that. So the repository has
+its own script, `scripts/typecheck-docs.ts`. It copies every `ts` block into a
+file and runs `tsc` over those files. That is R2.
 
-The check for R2 is the script `scripts/typecheck-docs.ts`. It extracts every
-`ts` block, writes each one to a file, and runs `tsc` over them. The check for
-R3 is a 30-line script that counts `ts fragment` blocks against a budget. Both
-scripts already exit non-zero when they find a problem. They lack a Rule with a
-name, a REFUSE lane, and a proof.
+Some examples are only a few lines and cannot compile on their own. Such a
+block is marked `ts fragment`, and the script skips it. The marker is needed,
+but each fragment is one example the script does not check. A second script,
+`gates/support/check-doc-fragment-budget.ts`, is 30 lines long. It counts the
+fragments and fails when the count is above 37. That is R3. The count can go
+down but not up.
 
-`commands()` adds those three things. Each script becomes one entry, and the
-entry names its Rule. A failure is then a breach of that Rule, not a generic
-red job:
+Both scripts print a message and exit with a non-zero code when they find a
+problem. That is all a script can do. It has no Rule with a name, no proof
+that it still fails on a bad example, and no way to say that it could not run
+at all.
+
+`commands()` turns each script into one entry of the Check. The entry names
+the Rule that the script guards. When the script exits non-zero, the Gate
+reports a breach of that Rule:
 
 ```ts
 import { defineGate, defineRules } from 'redproof';
@@ -154,12 +159,13 @@ export default defineGate({
 });
 ```
 
-`commands()` also gives each script a timeout, an output limit, and the REFUSE
-lane. A script that cannot start becomes REFUSE, not PASS, and the Gate says
-which entry could not run.
+`commands()` also gives each script a timeout and an output limit. A script
+that cannot start does not become PASS. The Gate reports REFUSE and says which
+entry could not run.
 
-The proofs are Markdown files. One holds a bad example, and one holds one more
-fragment than the budget allows:
+The proofs are two Markdown files that the mutation creates. One holds an
+example that does not compile. The other holds one more fragment than the
+budget allows:
 
 ```text
 Proof R2:
