@@ -557,16 +557,27 @@ The proof report puts the claim and the outcome side by side:
 
 ## Guardrails for agent-written code
 
-An agent can change more code, configuration, and documentation in one pass
-than a person usually touches at once. It can also make plausible mistakes at
-the same speed. A guardrail that still works tells the agent what crossed a
-boundary, and the agent can act on that evidence. A guardrail that has stopped
-working tells it nothing.
+A coding agent writes code fast. In one pass it can change source files,
+configuration, and documentation. It can also make a mistake in each of them
+at the same speed. So the checks that run after each change matter more, not
+less. The agent reads a failed check and fixes the code. That loop only works
+when the check still fails on a real mistake.
 
-A stale glob, an ignored report field, or a parser that turns a crash into PASS
-each breaks a guardrail this way. The pipeline then reports success while a
-defect is present. The proofs on this page detect a guardrail in that state,
-because its RED proof no longer breaches the Rule it names.
+A check can stop working without anyone noticing. Three examples:
+
+```text
+the file pattern in a lint config no longer matches a new source directory
+a test report changed its format, and the reader now sees zero failures
+a tool crashes, and the script that reads its output reports success
+```
+
+In each case the check still prints green. The agent sees green and moves on.
+The mistake ships.
+
+The RED proofs on this page catch this. A RED proof plants a known mistake and
+expects the check to fail. When the check has stopped working, the RED proof
+fails instead. The team learns that the guardrail is broken before the agent
+relies on it.
 
 ## Next
 
