@@ -59,12 +59,14 @@ function routeName(entry: DependencyCruiserRouteEntry): string {
   return typeof entry === 'string' ? entry : entry.name;
 }
 
+function routeDetail(violation: DependencyCruiserViolation): string | undefined {
+  if (violation.cycle?.length) return `Cycle: ${violation.cycle.map(routeName).join(' -> ')}`;
+  if (violation.via?.length) return `Via: ${violation.via.map(routeName).join(' -> ')}`;
+  return undefined;
+}
+
 export function violationDiagnostic(violation: DependencyCruiserViolation): Diagnostic {
-  const route = violation.cycle?.length
-    ? `Cycle: ${violation.cycle.map(routeName).join(' -> ')}`
-    : violation.via?.length
-      ? `Via: ${violation.via.map(routeName).join(' -> ')}`
-      : undefined;
+  const route = routeDetail(violation);
 
   return {
     code: violation.rule.name,
