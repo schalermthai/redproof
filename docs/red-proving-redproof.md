@@ -144,15 +144,20 @@ problem. That is all a script can do. It has no Rule with a name, no proof
 that it still fails on a bad example, and no way to say that it could not run
 at all.
 
-`commands()` turns each script into one entry of the Check. The entry names
-the Rule that the script guards. When the script exits non-zero, the Gate
-reports a breach of that Rule:
+`commands()` turns each command into one entry of the Check. The entry names
+the Rule that the command guards. When the command exits non-zero, the Gate
+reports a breach of that Rule. The Gate has three entries, one per Rule. The
+first runs `tsc`, and the other two run the scripts:
 
 ```ts
 import { defineGate, defineRules } from 'redproof';
 import { commands } from 'redproof/command';
 
 const rules = defineRules({
+  workspaceCompiles: {
+    id: 'static/workspace-compiles',
+    description: 'Workspace source, tests, fixtures, and self-hosted Gates must type-check.',
+  },
   docsExamplesCompile: {
     id: 'static/docs-examples-compile',
     description: 'Standalone TypeScript examples in the documentation must compile.',
@@ -168,9 +173,15 @@ export default defineGate({
   rules,
   check: commands({
     mode: 'parallel',
-    maxAtOnce: 2,
-    label: 'documentation contracts',
+    maxAtOnce: 3,
+    label: 'workspace types and documentation contracts',
     entries: [
+      {
+        rule: rules.workspaceCompiles,
+        label: 'workspace TypeScript',
+        command: process.execPath,
+        args: ['node_modules/typescript/bin/tsc', '--noEmit'],
+      },
       {
         rule: rules.docsExamplesCompile,
         label: 'documentation examples',
