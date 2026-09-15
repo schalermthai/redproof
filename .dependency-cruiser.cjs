@@ -115,7 +115,7 @@ module.exports = {
     {
       name: 'core-tests-no-shell',
       severity: 'error',
-      comment: 'A functional-core test imports core code and pure helpers, never shell code. The public redproof entry point is not shell.',
+      comment: 'A functional-core test does not directly import a shell module. The public redproof entry point is not counted as shell.',
       from: { path: '[.]core[.]test[.]ts$' },
       to: {
         path: '^packages/(?:redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|cli[.]ts$)|(?!redproof/)[^/]+/src/(?!core/))',
