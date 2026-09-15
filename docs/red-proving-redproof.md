@@ -67,7 +67,7 @@ all of them.
 
 | Gate | Promise | Evidence | Representative controlled defect |
 | --- | --- | --- | --- |
-| [`architecture`](../gates/architecture.ts) | Dependencies point inward and the functional core remains pure. | dependency-cruiser plus TypeScript syntax analysis | Introduce a dependency cycle, import a shell from the core, or read ambient process state. |
+| [`architecture`](../gates/architecture.ts) | Dependencies point inward, and the functional core and its tests remain pure. | dependency-cruiser plus TypeScript syntax analysis | Introduce a dependency cycle, import a shell from the core, read ambient process state, or import a shell from a core test. |
 | [`static-contracts`](../gates/static-contracts.ts) | Source and checked documentation compile, while unchecked fragment debt cannot grow. | TypeScript and documentation commands | Add a type error, an invalid documentation example, or one unbudgeted fragment. |
 | [`test-health`](../gates/test-health.ts) | Every collected test passes and none is skipped. | Structured JUnit evidence through `@redproof/testing` | Add a failing test or a skipped test. |
 | [`adapter-contracts`](../gates/adapter-contracts.ts) | Built-in Adapters validate configuration, handle unavailable execution honestly, preserve pure evidence models, respect report capabilities, and attribute structured findings correctly. | Original contract suites plus package-owned `@redproof/adapter-tck` suites | Remove option validation, corrupt runner mapping, add an effect to a pure model, or drop a selected finding. |
@@ -88,8 +88,8 @@ observe time, and supervise processes.
 
 The architecture Gate makes that design executable. It prevents contexts from
 reaching through each other's private modules, keeps domain types independent,
-restricts effects to reviewed boundary files, and keeps filesystem helpers out
-of functional-core tests.
+restricts effects to reviewed boundary files, and keeps filesystem helpers and shell
+code out of functional-core tests.
 
 The corresponding proofs do more than assert that dependency-cruiser or the
 syntax scanner ran. They introduce the forbidden relationships:
@@ -100,6 +100,7 @@ append a filesystem import to a core module
 make a core module import its shell
 read process.cwd() inside the functional core
 make an Adapter import Redproof internals
+make a core test import a shell
 ```
 
 Each mutation must breach the Rule that names that boundary. This matters as

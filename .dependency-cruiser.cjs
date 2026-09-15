@@ -4,7 +4,7 @@ module.exports = {
       name: 'no-cycles',
       severity: 'error',
       comment: 'Production source must remain acyclic.',
-      from: {},
+      from: { path: '^packages/[^/]+/src/' },
       to: { circular: true },
     },
     {
@@ -111,6 +111,16 @@ module.exports = {
       comment: 'The Adapter TCK is test infrastructure. Publishable source must not depend on it, whatever the manifests declare.',
       from: { path: '^packages/(?!adapter-tck/)[^/]+/src/' },
       to: { path: '^packages/adapter-tck/' },
+    },
+    {
+      name: 'core-tests-no-shell',
+      severity: 'error',
+      comment: 'A functional-core test imports core code and pure helpers, never shell code. The public redproof entry point is not shell.',
+      from: { path: '[.]core[.]test[.]ts$' },
+      to: {
+        path: '^packages/(?:redproof/src/(?:[^/]+/shell/|[^/]+/index[.]ts$|cli[.]ts$)|(?!redproof/)[^/]+/src/(?!core/))',
+        pathNot: '^packages/redproof/src/domain/index[.]ts$',
+      },
     },
   ],
   options: {
