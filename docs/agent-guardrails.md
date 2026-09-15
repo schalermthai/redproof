@@ -197,22 +197,62 @@ not as a diff.
 A code change is not proof that the intended outcome happened. A passing test
 is not proof that the test can detect the failure it guards against. So the
 skill starts with the PR description, separates the goal from the
-implementation, and lists the claims worth checking:
-
-```text
-C1  Domain no longer imports infrastructure.
-C2  Existing API behavior remains compatible.
-C3  Retry logic cannot produce duplicate processing.
-```
-
-For each important claim the agent asks what observable condition would have to
-be true, and then tries to disprove it. Where a Gate exists, the agent plants
-the smallest fault, confirms the Gate goes red for that claim, reverts, and
-confirms green. Where no evidence is available, such as a claim about
+implementation, and lists the claims worth checking. For each important claim
+the agent asks what observable condition would have to be true, and then tries
+to disprove it. Where no evidence is available, such as a claim about
 production latency, the agent reports the claim as unverified and says what
 evidence would be needed. The skill also treats the reviewer's own suggestions
 as claims. A suggested refactor is tested in a separate worktree before it is
 recommended.
+
+An example from a run. A fresh agent got the skill file as its only
+instruction and a small Node project with two branches. The pull request
+branch moves a save call out of the domain module into the application
+service and injects a repository. The one existing test passes on both
+branches. The PR description makes three claims, and the agent listed them:
+
+```text
+C1  The order domain no longer depends on infrastructure.
+C2  Existing behaviour is unchanged. All tests pass.
+C3  placeOrder can be tested without the database by passing a fake repository.
+```
+
+C1 was false on purpose. The change removed the database import from the
+domain module but left a second import from the same infrastructure folder.
+The diff looks clean and the test is green, so a reviewer who reads only the
+diff accepts it. The agent did not know this. It read the diff, then checked
+the claim against the repository and reported:
+
+```text
+Claim: C1  The order domain no longer depends on infrastructure
+Verdict: Not proven. Counterexample found.
+Severity: Blocking
+
+Evidence (branch decouple-domain):
+src/domain/order.js:1:import { nowIso } from '../infrastructure/clock.js';
+
+Impact:
+The PR removes one of two domain -> infrastructure edges. The main claim, as
+written, is false.
+
+Suggestion:
+Pass the timestamp, or a clock function, into createOrder from placeOrder.
+Add a check that fails when src/domain imports src/infrastructure, so this
+cannot return.
+```
+
+For C2 and C3 the agent made a worktree, planted one fault per claim, and
+read the result. For C2 it removed the `repository.save(order)` line. The
+existing test went from `pass 1` to `fail 1`, and back to `pass 1` after the
+revert. For C3 it wrote a test with a fake repository, then made `placeOrder`
+ignore the injected repository. That test went red, `actual: 0, expected: 1`,
+and green again after the revert. Both worktrees were removed and nothing was
+committed.
+
+The agent also listed four risks it did not turn into findings. One of them is
+the reason the false claim survived the author's own test run: no check in the
+project goes red when the domain imports infrastructure. The suggestion under
+C1 is that check. It is a Gate.
 
 ## How the three fit together
 
