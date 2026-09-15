@@ -441,28 +441,25 @@ technology compatibility kit. An Adapter author installs it, registers the
 Adapter with `runAdapterTck`, and gets the five contracts as tests beside the
 Adapter's own tests.
 
-Each promise therefore runs twice in this repository. The original contract
-suite runs, and the package-owned TCK registration runs beside it. That is ten
-commands for five Rules, in parallel. The REFUSE proof writes 4 MB of output
-against a 1 MB budget, and the Gate refuses instead of reading a partial
-result.
+This repository checks each built-in Adapter in both ways. The contract suites
+in `tests/adapters/` are the first way. The TCK registration that each Adapter
+package keeps beside its own tests is the second. The Gate runs both, so it
+has ten commands for five Rules, and they run in parallel.
 
-Real-tool fixtures then prove the same promises with ESLint, dependency-cruiser,
-Stryker, and Vitest against representative projects. The dependency direction
-stays clean:
+The REFUSE proof targets the Gate itself. It makes one contract suite print
+4 MB of output. The output budget is 1 MB, so the Gate refuses instead of
+reading a partial result.
 
-```text
-Adapter production ──▶ redproof
-Adapter tests      ──▶ @redproof/adapter-tck ──peer/types──▶ redproof
-root Gate          ──▶ package-owned TCK tests
-```
+The Gate is quick, and it does not prove that an Adapter handles a real tool
+correctly. Slower fixtures do that. They run real ESLint, dependency-cruiser,
+Stryker, and Vitest against small example projects and prove the same five
+guidelines there.
 
-The diagram states three things. Redproof does not depend on the TCK. Adapter
-production does not import the TCK. The TCK does not import built-in Adapters.
-
-Two of those statements have a proof. The architecture Gate plants a TCK import
-in Adapter source, and the repository-policy Gate adds the TCK to the redproof
-dependencies. Both proofs expect a breach.
+The TCK is a test dependency only. Redproof does not depend on it, and the
+production source of an Adapter does not import it. Two proofs guard that.
+The architecture Gate adds a TCK import to Adapter source. The
+repository-policy Gate adds the TCK to the redproof dependencies. Both proofs
+expect a breach.
 
 ## Release policy as Rules
 
