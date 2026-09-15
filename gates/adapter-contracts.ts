@@ -25,8 +25,8 @@ const rules = defineRules({
   },
 });
 
-function contract(file: string): string[] {
-  return stripTypes('--test', file);
+function contract(...files: readonly string[]): string[] {
+  return stripTypes('--test', ...files);
 }
 
 function tck(contractName: string): string[] {
@@ -84,7 +84,10 @@ const gate = defineGate({
         rule: rules.structuredBreaches,
         label: 'structured-evidence contracts',
         command: node,
-        args: contract('tests/adapters/adapter-contracts.structured.test.ts'),
+        args: contract(
+          'tests/adapters/adapter-contracts.structured.core.test.ts',
+          'tests/adapters/adapter-contracts.structured.test.ts',
+        ),
         timeoutMs: contractTimeoutMs,
         maxOutputBytes: contractMaxOutputBytes,
       },

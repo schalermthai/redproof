@@ -1,7 +1,7 @@
 import { runAdapterTck, type AdapterTckSpec, type EvidenceProbe } from '@redproof/adapter-tck';
 import { istanbul, nyc } from '../src/index.ts';
 import { coverageBreaches, parseCoverage, type Metric } from '../src/core/model.ts';
-import { sample } from './support/workspace.ts';
+import { sample } from './support/sample.ts';
 
 const selected = { statements: { minimum: 100 }, branches: { minimum: 100 }, functions: { minimum: 100 }, lines: { minimum: 100 } };
 const create = () => nyc({ command: 'node', rules: selected });
