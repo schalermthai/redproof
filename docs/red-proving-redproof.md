@@ -86,9 +86,33 @@ what the Gate guards.
 
 ## A Gate for something no tool checks
 
-No linter counts the documentation examples that are excluded from
-compilation. So the [`static-contracts`](../gates/static-contracts.ts) Gate
-runs a 30-line script and makes its exit code a Rule:
+The [`static-contracts`](../gates/static-contracts.ts) Gate makes three
+promises:
+
+```text
+R1 Workspace source, tests, fixtures, and self-hosted Gates must type-check.
+R2 Standalone TypeScript examples in the documentation must compile.
+R3 The number of documentation fragments excluded from compilation must not grow.
+```
+
+R1 is ordinary. `tsc` checks it. R2 and R3 are not ordinary. Documentation
+examples rot. An API changes, the example on the page does not, and nobody
+notices until a user copies it. No linter compiles a `ts` block inside a
+Markdown file.
+
+R3 guards the escape hatch of R2. A block that cannot stand alone is marked
+`ts fragment`, and the compiler skips it. That marker is useful. It is also
+the easy way out. If it is free to add, every hard example becomes a fragment
+and R2 slowly guards nothing.
+
+The check for R2 is a script, `scripts/typecheck-docs.ts`. It extracts every
+`ts` block, writes each one to a file, and runs `tsc` over them. The check for
+R3 is a 30-line script that counts `ts fragment` blocks against a budget. Both
+already exit non-zero when they find a problem. What they lack is a Rule with
+a name, a REFUSE lane, and a proof.
+
+`commands()` adds exactly that. Each script becomes one entry. The entry names
+its Rule, so a failure is a breach of that Rule, not a generic red job:
 
 ```ts
 import { defineGate, defineRules } from 'redproof';
@@ -130,12 +154,20 @@ export default defineGate({
 });
 ```
 
-`commands()` gives each script a Rule, a timeout, an output limit, and the
-REFUSE lane. A script that cannot start does not become PASS.
+`commands()` also gives each script a timeout, an output limit, and the REFUSE
+lane. A script that cannot start does not become PASS. It becomes REFUSE, and
+the Gate says which entry could not run.
 
-The proof is a Markdown file with one more fragment than the budget allows:
+The proofs are Markdown files. One holds a bad example. One holds one more
+fragment than the budget allows:
 
 ```text
+Proof R2:
+  rejects an invalid checked documentation example
+  mutation: create docs/redproof-doc-example-proof.md
+  run the same Check
+  expect Gate FAIL
+
 Proof R3:
   rejects growth in unchecked documentation fragments
   mutation: create docs/redproof-doc-fragment-proof.md
