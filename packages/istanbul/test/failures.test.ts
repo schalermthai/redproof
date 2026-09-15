@@ -4,7 +4,8 @@ import { chmod, mkdir, readFile, rm, writeFile, symlink } from 'node:fs/promises
 import { join } from 'node:path';
 import { defineGate, runGate } from 'redproof';
 import { istanbul, nyc } from '../src/index.ts';
-import { sample, withWorkspace } from './support/workspace.ts';
+import { sample } from './support/sample.ts';
+import { withWorkspace } from './support/workspace.ts';
 
 const rules = { lines: { minimum: 100 } } as const;
 const writer = (text: string, extra = '') => `require('node:fs').writeFileSync(process.env.REDPROOF_COVERAGE_REPORT, ${JSON.stringify(text)}); ${extra}`;

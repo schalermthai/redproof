@@ -3,6 +3,7 @@ import {
   type SourceEffect,
   type SourceInput,
 } from '@redproof/adapter-tck';
+import * as ts from 'typescript';
 
 export type EffectFinding = SourceEffect;
 
@@ -57,6 +58,18 @@ export function analyzeEffects(sources: readonly SourceInput[]): EffectAnalysis 
   };
 }
 
+const PACKAGE_WORKSPACE_HELPER = /(?:^|\/)support\/workspace(?:[.]ts)?$/;
+
+function packageWorkspaceHelperImports(source: SourceInput): EffectFinding[] {
+  const file = ts.createSourceFile(source.file, source.content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  return file.statements.flatMap(statement => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return [];
+    if (!PACKAGE_WORKSPACE_HELPER.test(statement.moduleSpecifier.text)) return [];
+    const { line, character } = file.getLineAndCharacterOfPosition(statement.getStart(file));
+    return [{ file: source.file, line: line + 1, column: character + 1, effect: 'temporary workspace helper', category: 'import' as const }];
+  });
+}
+
 export function analyzePureTestEffects(sources: readonly SourceInput[]): readonly EffectFinding[] {
-  return analyzeSourceEffects(sources);
+  return [...analyzeSourceEffects(sources), ...sources.flatMap(packageWorkspaceHelperImports)];
 }

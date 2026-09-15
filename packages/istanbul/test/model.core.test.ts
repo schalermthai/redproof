@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createRequire } from 'node:module';
 import { defineRule } from 'redproof';
 import { coverageBreaches, metrics, parseCoverage } from '../src/core/model.ts';
-import { sample } from './support/workspace.ts';
+import { sample } from './support/sample.ts';
 const require = createRequire(import.meta.url);
 const native = require('istanbul-lib-coverage');
 const root = '/project';
