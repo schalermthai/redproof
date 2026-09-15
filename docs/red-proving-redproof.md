@@ -46,8 +46,9 @@ pattern each:
   several sources and gives one verdict.
 - [Self-describing runner](#self-describing-runner). A runner builds its
   arguments per run, and its description comes from the same option.
-- [Mutating the guard itself](#mutating-the-guard-itself). Mutations edit
-  the production source of an Adapter to prove the contract suite notices.
+- [Guidelines as guardrails](#guidelines-as-guardrails). The five custom
+  Adapter guidelines become five Rules with proofs, and a TCK makes them
+  reusable by any Adapter.
 - [Release policy as Rules](#release-policy-as-rules). Release mistakes
   become mutations, including one from a real incident.
 - [Gate discovery](#gate-discovery). CI lists the Gate files
@@ -382,18 +383,31 @@ Proof R2:
 
 A skipped test is not a passing test. The Rule `noSkippedTests` breaches on it.
 
-## Mutating the guard itself
+## Guidelines as guardrails
 
-Mutating the guard itself is the pattern where a proof edits the production
-source of a guardrail, not the code it guards. The proof shows that the
-guardrail's own contract suite notices when the guardrail goes wrong.
+Guidelines as guardrails is the pattern where a written guideline becomes a
+Rule with a proof. Without Redproof, a guideline stays in a playbook. A
+reviewer may remember it or not, and nothing fails when new code ignores it.
+As a Gate, the guideline runs on every check and has a proof that it still
+detects a violation.
 
-An Adapter can return the right TypeScript shape and still be unsafe. It can
-accept invalid options, turn a crashed tool into PASS, or drop a finding it
-should report. The [`adapter-contracts`](../gates/adapter-contracts.ts) Gate
-holds five promises for every built-in Adapter. Its mutations edit the
-production source of an Adapter with `locate.text`, and then they expect the
-contract suite to notice:
+The [Custom Adapter](custom-adapter.md#guidelines) page lists five guidelines
+for an Adapter author:
+
+```text
+1. Validate options in the constructor and throw
+2. Give your runner a result union with an unavailable case
+3. Keep the parser pure and let it throw on untrusted structure
+4. Declare capabilities on the report format
+5. Emit a Breach only from structured evidence
+```
+
+An Adapter can return the right TypeScript shape and still break one of them.
+It can accept invalid options, turn a crashed tool into PASS, or drop a finding
+it should report. The [`adapter-contracts`](../gates/adapter-contracts.ts) Gate
+turns the five guidelines into five Rules. Its mutations edit the production
+source of an Adapter with `locate.text`, and then they expect the contract
+suite to notice:
 
 ```text
 Proof R1:
@@ -417,11 +431,19 @@ Proof REFUSE:
   mutation: append text to tests/adapters/adapter-contracts.constructor.test.ts
 ```
 
-Each promise runs twice. The original contract suite runs, and the
-package-owned [`@redproof/adapter-tck`](../packages/adapter-tck/README.md)
-registration runs beside it. That is ten commands for five Rules, in parallel.
-The REFUSE proof writes 4 MB of output against a 1 MB budget, and the Gate
-refuses instead of reading a partial result.
+The contract suites in `tests/adapters/` check the built-in Adapters of this
+repository. An Adapter written elsewhere cannot use them. So the same five
+contracts are also packaged as
+[`@redproof/adapter-tck`](../packages/adapter-tck/README.md). A TCK is a
+technology compatibility kit. An Adapter author installs it, registers the
+Adapter with `runAdapterTck`, and gets the five contracts as tests beside the
+Adapter's own tests.
+
+Each promise therefore runs twice in this repository. The original contract
+suite runs, and the package-owned TCK registration runs beside it. That is ten
+commands for five Rules, in parallel. The REFUSE proof writes 4 MB of output
+against a 1 MB budget, and the Gate refuses instead of reading a partial
+result.
 
 Real-tool fixtures then prove the same promises with ESLint, dependency-cruiser,
 Stryker, and Vitest against representative projects. The dependency direction
