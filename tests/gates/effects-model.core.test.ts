@@ -117,6 +117,7 @@ test('pure-test analysis reports every effect in a test regardless of its path',
     { file: 'tests/gates/model.core.test.ts', content: "import { mkdtemp } from 'node:fs/promises';\nvoid process.env;\n" },
     { file: 'tests/clean.core.test.ts', content: "import assert from 'node:assert/strict';\nimport { join } from 'node:path';\n" },
     { file: 'packages/istanbul/test/model.core.test.ts', content: "import { sample } from './support/workspace.ts';\nconst text = \"import './support/workspace.ts';\";\n" },
+    { file: 'packages/knip/test/barrel.core.test.ts', content: "export * from './support/workspace.ts';\n" },
   ]);
 
   assert.deepEqual(findings.map(item => [item.file, item.effect, item.category]), [
@@ -125,5 +126,6 @@ test('pure-test analysis reports every effect in a test regardless of its path',
     ['tests/gates/model.core.test.ts', 'node:fs/promises', 'import'],
     ['tests/gates/model.core.test.ts', 'process', 'ambient'],
     ['packages/istanbul/test/model.core.test.ts', 'temporary workspace helper', 'import'],
+    ['packages/knip/test/barrel.core.test.ts', 'temporary workspace helper', 'import'],
   ]);
 });
