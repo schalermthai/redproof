@@ -145,21 +145,30 @@ Red-proof: <the rule, in one sentence>
   green     <the check passing again>
 ```
 
-An example. The agent adds a unit test for a function that rounds prices. The
-test passes on its first run. Q1 is yes, because the agent wrote the test and
-has never seen it fail. Q2 is yes, because a test that asserts nothing still
-prints pass. So a proof is owed. The agent breaks the function, not the test:
+An example from a run. A fresh agent got the three skill files as its only
+instructions and a small Node project with no Redproof dependency. The project
+has `applyDiscount(totalCents, percent)`, which clamps the percent to the range
+0 to 100, and two passing tests. The task was to add a test for the clamp at
+100 percent. The agent added the test, and the suite passed on the first run
+with 3 tests. Then it applied the two questions. Q1 was yes, because it wrote
+the test after the code existed and never saw it go red. Q2 was yes, because
+a broken clamp would return a negative total and nothing else in the project
+would report it. So it ran the loop and broke the function, not the test:
 
 ```text
-Red-proof: roundPrice rounds half a cent up
-  break     src/pricing.ts:14, changed Math.round to Math.floor
-  red       FAIL roundPrice rounds 1.005 up to 1.01: expected 1.01, got 1
-  restore   reverted src/pricing.ts, git diff is clean
-  green     the suite passed again
+Red-proof: a percent above 100 must be clamped to 100 before the discount is applied
+  break     src/discount.js:10, changed `Math.min(100, Math.max(0, percent))` to `Math.min(200, Math.max(0, percent))`
+  red       ✖ clamps a percent above 100 to 100 (0.324375ms)
+            AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+            -500 !== 0
+            at test/discount.test.js:14:10
+  restore   git checkout -- src/discount.js; git status --short src/discount.js is empty
+  green     ✔ clamps a percent above 100 to 100 (0.041708ms); tests 3, pass 3, fail 0
 ```
 
-The agent now knows the test detects the bug it names. The next change can
-build on that.
+The red named the new test only. The two existing tests stayed green during
+the break. The agent now knows the test detects the bug it names, and the next
+change can build on that.
 
 Two reference files sit beside the skill.
 [`breaking.md`](../skills/redproof/breaking.md) says how to choose a break that
