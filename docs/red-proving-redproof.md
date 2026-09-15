@@ -34,59 +34,118 @@ repository-policy    packages, versions, CI, documentation links, lockfile 7 Rul
 unused-code          files, exports, and dependencies stay connected       6 Rules    9 Proofs
 ```
 
-Each Gate is one file under [`gates/`](../gates). The rest of this page shows
-the ideas inside those files.
+Each Gate is one file under [`gates/`](../gates). This page shows what those
+files make possible.
 
-## A Gate file is configuration
+## A Gate reads as a specification
 
-Gate files follow three directories:
+`npm run self:describe` prints every Gate before anything runs. This is the
+[`unused-code`](../gates/unused-code.ts) Gate, built on the Knip Adapter:
 
 ```text
-gates/*.ts            what is protected, and how each Rule is broken
-gates/checks/*.ts     how a Check gathers input and reports findings
-gates/support/*.ts    pure models and shared plumbing
+Gate: unused-code
+
+Rules:
+  R1 Files in the configured scan must be reachable from its entrypoints.
+  R2 Exports in the configured scan must be used.
+  R3 Declared dependencies must be used in the configured scan.
+  R4 Development dependencies must be used and not duplicate regular dependencies.
+  R5 Used dependencies must be declared in the applicable package manifest.
+  R6 Import specifiers in the configured scan must resolve.
+
+Check:
+  run Knip and evaluate selected structured issue categories
+
+Proof R1:
+  finds an unreachable file in the root workspace
+  mutation: write gates/support/unused-receipt.ts
+  run the same Check
+  expect Gate FAIL
+
+Proof R3:
+  finds a dependency without consumers
+  mutation: merge $.dependencies
+  run the same Check
+  expect Gate FAIL
+
+Proof REFUSE:
+  refuses incomplete Knip configuration
+  mutation: write knip.json
+  run the same Check
+  expect Gate REFUSE
+
+Proof GREEN:
+  accepts the maintained repository inventory
+  run the same Check
+  expect Gate PASS
 ```
 
-A Gate file states Rules, one Check, and Proofs. Nothing else. The
-[`unused-code`](../gates/unused-code.ts) Gate is the whole idea in one screen:
+The Gate file is 31 lines. A reviewer reads the promise, the defect, and the
+expected verdict together. Nobody has to open Knip's documentation to know
+what the Gate guards.
+
+## A Gate for something no tool checks
+
+No linter counts the documentation examples that are excluded from
+compilation. So the [`static-contracts`](../gates/static-contracts.ts) Gate
+runs a 30-line script and makes its exit code a Rule:
 
 ```ts
-import { knip } from '@redproof/knip';
-import { defineGate, defineProofs, locate, mutate, proof } from 'redproof';
+import { defineGate, defineRules } from 'redproof';
+import { commands } from 'redproof/command';
 
-const adapter = knip({
-  configFile: 'knip.json',
-  rules: { files: 'files', exports: 'exports', dependencies: 'dependencies',
-    devDependencies: 'devDependencies', unlisted: 'unlisted', unresolved: 'unresolved' },
+const rules = defineRules({
+  docsExamplesCompile: {
+    id: 'static/docs-examples-compile',
+    description: 'Standalone TypeScript examples in the documentation must compile.',
+  },
+  docsFragmentDebt: {
+    id: 'static/docs-fragment-debt-does-not-grow',
+    description: 'The number of documentation fragments excluded from compilation must not grow.',
+  },
 });
-const gate = defineGate({ id: 'unused-code', adapter });
 
-export const proofs = defineProofs(gate, [
-  proof.red(adapter.rules.files, 'finds an unreachable file in the root workspace',
-    mutate.writeText('gates/support/unused-receipt.ts', 'export const unusedReceipt = 1;\n')),
-  proof.red(adapter.rules.exports, 'finds an unused internal export in another package',
-    mutate.appendText('packages/eslint/src/core/model.ts', '\nexport const unusedReceipt = 1;\n')),
-  proof.red(adapter.rules.exports, 'finds an export that only its own file still references',
-    mutate.appendText('packages/eslint/src/core/model.ts',
-      '\nexport const selfUsedReceipt = 1;\nvoid selfUsedReceipt;\n')),
-  proof.red(adapter.rules.dependencies, 'finds a dependency without consumers',
-    mutate.jsonMerge(locate.json({ files: 'packages/knip/package.json', path: '$.dependencies' }), { 'unused-receipt': '1.0.0' })),
-  proof.red(adapter.rules.devDependencies, 'finds a dev dependency without consumers',
-    mutate.jsonMerge(locate.json({ files: 'packages/knip/package.json', path: '$.devDependencies' }), { 'unused-receipt': '1.0.0' })),
-  proof.red(adapter.rules.unlisted, 'finds an undeclared external dependency',
-    mutate.appendText('packages/knip/src/core/model.ts', "\nimport 'redproof-undeclared-receipt';\n")),
-  proof.red(adapter.rules.unresolved, 'finds an unresolved internal import',
-    mutate.appendText('packages/knip/src/core/model.ts', "\nimport './redproof-missing-receipt.ts';\n")),
-  proof.refuse('refuses incomplete Knip configuration', mutate.writeText('knip.json', '{ invalid')),
-  proof.green('accepts the maintained repository inventory'),
-]);
-
-export default gate;
+export default defineGate({
+  id: 'static-contracts',
+  rules,
+  check: commands({
+    mode: 'parallel',
+    maxAtOnce: 2,
+    label: 'documentation contracts',
+    entries: [
+      {
+        rule: rules.docsExamplesCompile,
+        label: 'documentation examples',
+        command: process.execPath,
+        args: ['--experimental-strip-types', 'scripts/typecheck-docs.ts'],
+      },
+      {
+        rule: rules.docsFragmentDebt,
+        label: 'documentation fragment budget',
+        command: process.execPath,
+        args: ['--experimental-strip-types', 'gates/support/check-doc-fragment-budget.ts'],
+      },
+    ],
+  }),
+});
 ```
 
-Six Rules, seven controlled defects, one refusal, one healthy baseline. A
-reader can see what the Gate promises and how each promise is tested, without
-opening Knip's documentation.
+`commands()` gives each script a Rule, a timeout, an output limit, and the
+REFUSE lane. A script that cannot start does not become PASS.
+
+The proof is a Markdown file with one more fragment than the budget allows:
+
+```text
+Proof R3:
+  rejects growth in unchecked documentation fragments
+  mutation: create docs/redproof-doc-fragment-proof.md
+  run the same Check
+  expect Gate FAIL
+```
+
+Every `ts` block in `README.md` and `docs/` compiles. The budget for
+`ts fragment` blocks is 37, and it cannot grow. This page is checked by the
+Gate that this page describes.
 
 ## The mutation is the specification
 
@@ -95,99 +154,108 @@ and an imperative shell. Core modules make decisions from values. Shell modules
 read files, watch the clock, and supervise processes.
 
 A written convention is easy to break by accident. So each boundary has a
-mutation that crosses it:
+mutation that crosses it. Three of them touch the same file:
 
 ```text
-create two production modules that import each other
-append a filesystem import to a core module
-read process.cwd() inside the functional core
-make a core module import its shell
-make an Adapter import Redproof internals
-make one Adapter import another
-make a core test import a shell
+Proof R2:
+  keeps effect imports out of the functional core
+  mutation: append text to packages/redproof/src/run/core/exit-code.ts
+
+Proof R14:
+  keeps ambient process state out of the functional core
+  mutation: append text to packages/redproof/src/run/core/exit-code.ts
+
+Proof R3:
+  keeps the imperative shell out of the functional core
+  mutation: append text to packages/redproof/src/run/core/exit-code.ts
 ```
 
-Three of those mutations touch the same file:
+The three appended lines are:
 
 ```text
-packages/redproof/src/run/core/exit-code.ts
-
-+ import 'node:fs/promises';             → R2  core-no-effect-imports
-+ void process.cwd();                    → R14 core-no-ambient-inputs
-+ import '../shell/worker-process.ts';   → R3  core-no-shell
+import 'node:fs/promises';             → R2  core-no-effect-imports
+void process.cwd();                    → R14 core-no-ambient-inputs
+import '../shell/worker-process.ts';   → R3  core-no-shell
 ```
 
-Each proof names one Rule. If the file change breaches a different Rule, the
-proof fails. That is how the Gate shows it knows the difference between three
-kinds of leak, not only that something went wrong.
+Each proof names one Rule. If the change breaches a different Rule, the proof
+fails. The Gate must know the difference between three kinds of leak, not only
+that something went wrong.
 
 ## Two tools, one Check
 
-The architecture Gate needs two kinds of evidence. dependency-cruiser sees the
-import graph. It cannot see `process.cwd()` inside a function body. A
-TypeScript syntax scan can.
-
-The [`effectBoundaries`](../gates/checks/effect-boundaries.ts) Check runs
-both. dependency-cruiser answers first. Its breaches are carried. The syntax
-scan then adds its own.
+dependency-cruiser sees the import graph. It cannot see `process.cwd()`
+inside a function body. A TypeScript syntax scan can. The architecture Gate
+uses both, in one Check, under one set of Rules:
 
 ```text
-scanning({
-  delegate:   run the dependency-cruiser Adapter first
-  gather:     read every source file and every core test
-  inspected:  how many files the scan read
-  breaches:   ambient reads, unapproved effect modules, I/O in core tests
-  whenUnavailable: REFUSE when the sources cannot be read
-})
+const dependencies = dependencyCruiser({ configFile: '.dependency-cruiser.cjs', ... });
+
+const rules = {
+  ...dependencies.rules,
+  coreNoAmbientInputs: defineRule({ id: 'architecture/core-no-ambient-inputs', ... }),
+  effectsAllowlistedBoundaries: defineRule({ ... }),
+  coreTestsNoIoHelpers: defineRule({ ... }),
+};
+
+defineGate({
+  id: 'architecture',
+  rules,
+  check: effectBoundaries({ dependencies, rules, sources: 'packages/*/src/**/*.ts', ... }),
+});
 ```
 
-[`scanning`](../gates/support/scanning.ts) is the shape every native Check in
-this repository repeats. A REFUSE from the delegate wins. A throw in `gather`
-becomes REFUSE with the diagnostic named in `whenUnavailable`. Only findings
-become breaches.
+An Adapter's Rules spread into a native Rule catalogue. The
+[`effectBoundaries`](../gates/checks/effect-boundaries.ts) Check runs the
+Adapter first and carries its breaches. Then the syntax scan adds its own. A
+REFUSE from either side wins.
 
 The approved effect boundaries are a list of 28 files in
 [`effects-model.ts`](../gates/support/effects-model.ts). A new file that reads
 the filesystem must be added to that list, on purpose, in a reviewed change.
 The proof creates such a file and expects R15 to breach.
 
-## The documentation is code
-
-Every `ts` block in `README.md` and `docs/` compiles. The
-[`static-contracts`](../gates/static-contracts.ts) Gate runs the TypeScript
-compiler over them. A block that cannot stand alone is marked `ts fragment`.
-That is debt, and the budget is 37. The budget cannot grow.
-
-The RED proofs write a Markdown file with a bad example:
-
-```text
-create docs/redproof-doc-example-proof.md     with  const value: string = 1;   → R2
-create docs/redproof-doc-fragment-proof.md    with  one more ```ts fragment    → R3
-```
-
-This page is checked by the Gate that this page describes.
-
-## The test runner is described by its own arguments
+## The test runner describes itself
 
 The [`test-health`](../gates/test-health.ts) Gate runs every test file under
-`node --test` and reads the JUnit report through `@redproof/testing`.
+`node --test` and reads the JUnit report through `@redproof/testing`. The file
+list depends on the workspace, so the arguments are built per run:
 
-The file list depends on the workspace. So
-[`nodeTestSuite`](../gates/checks/node-test-suite.ts) builds the arguments per
-run with `runner.command` and an `args` function. The runner exposes that
-builder as `argsFor`, and its description names the glob. `redproof describe`
-prints:
+```ts
+import { globSync } from 'node:fs';
+import { runner, type TestRunner } from '@redproof/testing';
+
+export function nodeTestSuite(options: { readonly files: string }): TestRunner {
+  return runner.command({
+    command: process.execPath,
+    description: `run ${options.files} under node --test with a JUnit report`,
+    args: ctx => [
+      '--experimental-strip-types',
+      '--test',
+      '--test-reporter=junit',
+      `--test-reporter-destination=${ctx.reportFile}`,
+      ...globSync(options.files, { cwd: ctx.root }).sort(),
+    ],
+  });
+}
+```
+
+The description and the arguments come from the same `files` option.
+`redproof describe` prints the description, so the sentence cannot drift from
+the real command:
 
 ```text
 Check:
   run {tests,packages/*/test}/**/*.test.ts under node --test with a JUnit report; interpret junit-xml test results
+
+Proof R2:
+  detects a collected skipped test
+  mutation: create tests/redproof-skipped-proof.test.ts
+  run the same Check
+  expect Gate FAIL
 ```
 
-The description and the arguments are built from the same `files` option, so
-the sentence cannot drift from the real command.
-
-The proofs create one failing test and one skipped test. A skipped test is not
-a passing test. The Rule `noSkippedTests` breaches on it.
+A skipped test is not a passing test. The Rule `noSkippedTests` breaches on it.
 
 ## The guards are guarded
 
@@ -197,22 +265,36 @@ should report.
 
 The [`adapter-contracts`](../gates/adapter-contracts.ts) Gate holds five
 promises for every built-in Adapter. Its mutations edit the production source
-of an Adapter, then expect the contract suite to notice:
+of an Adapter with `locate.text`, then expect the contract suite to notice:
 
 ```text
-remove   rejectUnknownKeys(options, ['files', 'rules'], 'ESLint adapter')   → R1 options validated
-replace  kind: 'unavailable'  with  kind: 'completed'                         → R2 unavailable refuses
-append   import '../index.ts'  to a pure evidence model                       → R3 parsers stay pure
-replace  capabilities: { todo: false, flaky: false }  with  true, true        → R4 capabilities honest
-replace  if (!message.ruleId) continue;  with  if (message.ruleId) continue;  → R5 structured evidence
+Proof R1:
+  detects an Adapter that accepts unknown constructor options
+  mutation: remove "  rejectUnknownKeys(options, ['files', 'rules'], 'ESLint adapter');\n"
+
+Proof R2:
+  detects a runner exception mapped to the wrong evidence lane
+  mutation: replace "kind: 'unavailable' as const"
+
+Proof R4:
+  detects a report format that overstates what it can observe
+  mutation: replace "capabilities: { todo: false, flaky: false }"
+
+Proof R5:
+  detects evidence translation that drops selected structured findings
+  mutation: replace "if (!message.ruleId) continue;"
+
+Proof REFUSE:
+  refuses when a contract suite floods its output budget
+  mutation: append text to tests/adapters/adapter-contracts.constructor.test.ts
 ```
 
 Each promise runs twice. The original contract suite runs, and the
 package-owned [`@redproof/adapter-tck`](../packages/adapter-tck/README.md)
 registration runs beside it. Ten commands, five Rules, in parallel.
 
-The REFUSE proof floods a contract suite with 4 MB of output against a 1 MB
-budget. The Gate refuses. It does not read a partial result.
+The REFUSE proof writes 4 MB of output against a 1 MB budget. The Gate refuses.
+It does not read a partial result.
 
 Real-tool fixtures then prove the same promises with ESLint, dependency-cruiser,
 Stryker, and Vitest against representative projects. The dependency direction
@@ -358,5 +440,6 @@ silence.
   into a Rule, a Check, and Proofs.
 - **[Gating Adapter contracts](adapter-contract-gates.md)** for the design of
   the `adapter-contracts` Gate.
+- **[Command Checks](commands.md)** for everything `commands()` can do.
 - **[Custom Adapter](custom-adapter.md)** for the guidelines those contracts
   enforce.
