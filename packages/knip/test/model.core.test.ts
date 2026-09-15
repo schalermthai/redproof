@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { sep } from 'node:path';
 import test from 'node:test';
-import { knip } from '../src/index.ts';
+import { defineRule } from 'redproof';
 import { checkResult, evaluateExecution, finalOutcome, knipArguments, withinRoot } from '../src/core/decision.ts';
-import { issueTypes, knipBreaches, parseKnipEvidence } from '../src/core/model.ts';
+import { issueTypes, knipBreaches, parseKnipEvidence, ruleDefinitions } from '../src/core/model.ts';
 import { knipPackageRootOf, unsupportedVersion } from '../src/core/version.ts';
 
 // Independent expectations: catch accidental public ID changes, not just internal consistency.
@@ -37,7 +37,7 @@ for (const type of issueTypes) test(`translates ${type} only to the selected Rul
     severity: 'warn', ...(type === 'cycles' || type === 'duplicates'
       ? { symbols: [{ symbol: 'first' }, { symbol: 'second' }] } : {}) }];
   const evidence = parseKnipEvidence(JSON.stringify(data));
-  const rule = knip({ rules: { selected: type } }).rules.selected;
+  const rule = defineRule(ruleDefinitions[type]);
   assert.equal(rule.id, `knip/${expectedNames[type]}`);
   assert.ok(rule.description.includes('must'));
   const breaches = knipBreaches(evidence.findings, new Map([[type, rule]]));
@@ -79,7 +79,7 @@ test('a parent symbol becomes a Namespace prefix ahead of the member list', () =
   const evidence = parseKnipEvidence(withFinding('namespaceMembers',
     { parentSymbol: 'Config', symbols: [{ symbol: 'timeout', line: 2, col: 3 }, { symbol: 'retries' }] }));
   assert.deepEqual(evidence.findings[0]?.symbols, ['Namespace: Config', 'timeout:2:3', 'retries']);
-  const rule = knip({ rules: { members: 'namespaceMembers' } }).rules.members;
+  const rule = defineRule(ruleDefinitions.namespaceMembers);
   assert.equal(knipBreaches(evidence.findings, new Map([['namespaceMembers', rule]]))[0]?.detail,
     'Namespace: Config -> timeout:2:3 -> retries');
 });
@@ -121,7 +121,7 @@ test('knipArguments carries every option as its native flag', () => {
     '--production', '--strict', '--include-entry-exports', '--treat-config-hints-as-errors']);
 });
 
-const selectedExports = new Map([['exports' as const, knip({ rules: { exports: 'exports' } }).rules.exports]]);
+const selectedExports = new Map([['exports' as const, defineRule(ruleDefinitions.exports)]]);
 const completed = (exitCode: number) => ({ kind: 'completed' as const, exitCode, stdout: '', stderr: 'tool noise' });
 const text = (data: unknown) => ({ kind: 'text' as const, text: JSON.stringify(data) });
 
