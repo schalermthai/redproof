@@ -41,8 +41,9 @@ pattern each:
   a script with an exit code into a Rule with a name and a proof.
 - [The architecture Gate](#the-architecture-gate). One mutation per boundary,
   and each proof must breach the one Rule it names.
-- [Two tools in one Check](#two-tools-in-one-check). An Adapter's Rules and
-  native Rules share one catalogue, and one Check runs both tools.
+- [Multiple checks composition](#multiple-checks-composition). One Check runs
+  another Check first and carries its result, so one Gate holds Rules from
+  several sources and gives one verdict.
 - [The test-health Gate](#the-test-health-gate). A runner builds its
   arguments per run, and its description comes from the same option.
 - [The adapter-contracts Gate](#the-adapter-contracts-gate). Mutations edit
@@ -236,10 +237,15 @@ Each proof names one Rule. If the change breaches a different Rule, the proof
 fails. The Gate therefore has to tell the three kinds of boundary crossing
 apart. A report that something went wrong does not satisfy the proof.
 
-## Two tools in one Check
+## Multiple checks composition
 
-The architecture Gate has 16 Rules. Thirteen come from dependency-cruiser, and
-three are native:
+Multiple checks composition is the pattern where one Check runs other Checks
+and merges their results. The Rules of every source sit in one catalogue, and
+the Gate gives one verdict. A breach from any source is a breach of the Gate,
+and a REFUSE from any source is a REFUSE of the Gate.
+
+The architecture Gate uses this pattern. It has 16 Rules. Thirteen come from
+dependency-cruiser, and three are native:
 
 ```text
 R14 Functional-core modules receive ambient values from the shell.
