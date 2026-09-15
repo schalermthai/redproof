@@ -579,6 +579,15 @@ expects the check to fail. When the check has stopped working, the RED proof
 fails instead. The team learns that the guardrail is broken before the agent
 relies on it.
 
+Run `redproof check` when the agent ends a turn, for example from a Stop hook.
+In this repository the full check takes about 16 seconds. Do not run it after
+every file edit. Run `redproof prove` in CI, and run it for one Gate file when
+the agent has edited that file:
+
+```bash
+npx redproof prove gates/architecture.ts
+```
+
 ## Next
 
 - **[The Contract-to-Gate method](contract-to-gate.md)** to turn a quality idea
