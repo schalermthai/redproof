@@ -24,8 +24,9 @@ coverage/
 .env.*
 !.env.example
 
-# Agent worktrees (Knip walks them as source otherwise)
-.claude/
+# Agent worktrees (Knip walks them as source otherwise); the shared hook file stays
+.claude/*
+!.claude/settings.json
 
 # Editor and OS files
 .DS_Store
