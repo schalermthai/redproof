@@ -301,7 +301,7 @@ function automationVerification(snapshot: RepositorySnapshot): RepositoryPolicyF
     [
       '.github/workflows/ci.yml',
       snapshot.ciWorkflow,
-      ['npm run check:quality', 'npm run check:proofs', 'npm run build', 'npm run verify:package'],
+      ['npm run check:quality', 'npm run check:proofs -- gates/${{ matrix.gate }}.ts', 'npm run build', 'npm run verify:package'],
     ],
     [
       '.github/workflows/publish.yml',

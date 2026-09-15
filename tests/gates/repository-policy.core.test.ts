@@ -9,7 +9,7 @@ import {
 
 const ciWorkflow = [
   'run: npm run check:quality',
-  'run: npm run check:proofs',
+  'run: npm run check:proofs -- gates/${{ matrix.gate }}.ts',
   'run: npm run build',
   'run: npm run verify:package',
 ].join('\n');
@@ -353,10 +353,10 @@ test('CI and publishing must keep their complete verification portfolios', () =>
 
   const noProofLane = evaluateRepositoryPolicy({
     ...clean,
-    ciWorkflow: clean.ciWorkflow.replace('run: npm run check:proofs\n', ''),
+    ciWorkflow: clean.ciWorkflow.replace('run: npm run check:proofs -- gates/${{ matrix.gate }}.ts\n', 'run: npm run check:proofs -- gates/architecture.ts\n'),
   });
   assert.deepEqual(noProofLane.map(item => [item.file, item.message]), [
-    ['.github/workflows/ci.yml', '.github/workflows/ci.yml must retain npm run check:proofs.'],
+    ['.github/workflows/ci.yml', '.github/workflows/ci.yml must retain npm run check:proofs -- gates/${{ matrix.gate }}.ts.'],
   ]);
 
   const publishWithUnverifiedCommand = evaluateRepositoryPolicy({

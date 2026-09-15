@@ -179,7 +179,7 @@ const policyCheck = () => repositoryPolicy({
   linkTargets: ['README.md', 'docs/**/*', 'packages/**/*'],
 });
 
-const ciWorkflow = 'run: npm run check:quality\nrun: npm run check:proofs\nrun: npm run build\nrun: npm run verify:package\n';
+const ciWorkflow = 'run: npm run check:quality\nrun: npm run check:proofs -- gates/${{ matrix.gate }}.ts\nrun: npm run build\nrun: npm run verify:package\n';
 const publishWorkflow = 'run: npm run check\nrun: npm run build\nrun: npm run verify:package -- --pack-destination artifacts\n';
 
 async function seedRepository(root: string, extra: Readonly<Record<string, string>> = {}): Promise<void> {
@@ -236,7 +236,7 @@ test('repositoryPolicy passes a healthy repository and counts the manifests and 
 test('repositoryPolicy reports each policy finding against its own Rule and file', async () => {
   await withWorkspace(async root => {
     await seedRepository(root, {
-      '.github/workflows/ci.yml': 'run: npm run check:quality\nrun: npm run check:proofs\nrun: npm run build\n',
+      '.github/workflows/ci.yml': 'run: npm run check:quality\nrun: npm run check:proofs -- gates/${{ matrix.gate }}.ts\nrun: npm run build\n',
       'docs/guide.md': '# Guide\n\n[gone](missing.md)\n',
     });
 
