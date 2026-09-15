@@ -328,14 +328,18 @@ and its arguments from the same option. `redproof describe` then prints a
 sentence that always matches the real command.
 
 The [`test-health`](../gates/test-health.ts) Gate uses this pattern. It runs
-every test file under `node --test`. It reads the JUnit report through `@redproof/testing`. The file
-list depends on the workspace, so the Gate builds the arguments per run:
+every test file under `node --test`. It reads the JUnit report through
+`@redproof/testing`. The file list depends on the workspace, so the runner
+builds the arguments per run. The runner lives in
+[`gates/checks/node-test-suite.ts`](../gates/checks/node-test-suite.ts), and
+the Gate file passes it to `testing()`:
 
 ```ts
 import { globSync } from 'node:fs';
-import { runner, type TestRunner } from '@redproof/testing';
+import { report, runner, testing, type TestRunner } from '@redproof/testing';
+import { defineGate } from 'redproof';
 
-export function nodeTestSuite(options: { readonly files: string }): TestRunner {
+function nodeTestSuite(options: { readonly files: string }): TestRunner {
   return runner.command({
     command: process.execPath,
     description: `run ${options.files} under node --test with a JUnit report`,
@@ -348,6 +352,17 @@ export function nodeTestSuite(options: { readonly files: string }): TestRunner {
     ],
   });
 }
+
+const adapter = testing({
+  runner: nodeTestSuite({ files: '{tests,packages/*/test}/**/*.test.ts' }),
+  report: report.junitXml(),
+  rules: {
+    testsPass: true,
+    noSkippedTests: true,
+  },
+});
+
+export default defineGate({ id: 'test-health', adapter });
 ```
 
 The description and the arguments come from the same `files` option.
