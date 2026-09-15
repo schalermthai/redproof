@@ -27,6 +27,7 @@
     "self:describe": "node --disable-warning=ExperimentalWarning --experimental-strip-types packages/redproof/src/cli.ts describe --config redproof.config.ts",
     "check:quality": "npm run typecheck && npm run docs:typecheck && npm test && npm run fixture:check && npm run fixture:prove && npm run fixture:describe && npm run self:check",
     "check:proofs": "npm run self:prove",
+    "check:mutation": "node --disable-warning=ExperimentalWarning --experimental-strip-types packages/redproof/src/cli.ts check --config redproof.mutation.config.ts && node --disable-warning=ExperimentalWarning --experimental-strip-types packages/redproof/src/cli.ts prove --config redproof.mutation.config.ts",
     "check": "npm run check:quality && npm run check:proofs",
     "demo:reports": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/demo-reports.ts",
     "fixture:reports": "node --disable-warning=ExperimentalWarning --experimental-strip-types --test tests/report.test.ts",

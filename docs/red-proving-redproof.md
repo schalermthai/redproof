@@ -17,7 +17,8 @@ defect, running the same Gate, and requiring the expected Rule to breach. A
 green check is useful. A green check whose detection has also been demonstrated
 is much stronger evidence.
 
-Redproof currently protects itself with six Gates.
+Redproof currently protects itself with seven Gates. Six run on every check.
+The test-strength Gate runs in its own CI job, because one Stryker run takes minutes.
 These are the controls used by the real CI and release workflows, not a separate
 showcase suite.
 
@@ -72,6 +73,7 @@ all of them.
 | [`test-health`](../gates/test-health.ts) | Every collected test passes and none is skipped. | Structured JUnit evidence through `@redproof/testing` | Add a failing test or a skipped test. |
 | [`adapter-contracts`](../gates/adapter-contracts.ts) | Built-in Adapters validate configuration, handle unavailable execution honestly, preserve pure evidence models, respect report capabilities, and attribute structured findings correctly. | Original contract suites plus package-owned `@redproof/adapter-tck` suites | Remove option validation, corrupt runner mapping, add an effect to a pure model, or drop a selected finding. |
 | [`repository-policy`](../gates/repository-policy.ts) | Every package is complete, aligned, documented, and verified before release. | Package manifests, workflows, source inventory, documentation links, and the dependency lockfile | Omit a package from release automation, diverge a version, remove verification, add a broken link, or drop a platform binary from the lockfile. |
+| [`test-strength`](../gates/mutation/test-strength.ts) | Functional-core tests detect every mutant they detected before. | Stryker mutants in the core files that core tests import, through `@redproof/stryker` | Delete the assertions that pin a core decision. |
 | [`unused-code`](../gates/unused-code.ts) | Files, exports, dependencies and imports stay connected to real consumers. | Knip structured findings and inspection metadata | Add an unused file, export or dependency; introduce an undeclared dependency or unresolved import. |
 
 Together they protect behavior, architecture, documentation, integrations, and

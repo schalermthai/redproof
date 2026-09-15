@@ -61,6 +61,30 @@ jobs:
       - name: Run the complete proof portfolio
         run: npm run check:proofs
 
+  mutation:
+    name: Functional-core test strength
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the proof runtime
+        run: npm run build
+
+      - name: Run the test-strength Gate and its proofs
+        run: npm run check:mutation
+
   packages:
     name: Package consumer verification
     runs-on: ubuntu-latest
@@ -91,7 +115,7 @@ jobs:
   check:
     name: Check and verify
     if: always()
-    needs: [quality, proofs, packages]
+    needs: [quality, proofs, mutation, packages]
     runs-on: ubuntu-latest
 
     steps:
@@ -99,9 +123,10 @@ jobs:
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
           PROOFS_RESULT: ${{ needs.proofs.result }}
+          MUTATION_RESULT: ${{ needs.mutation.result }}
           PACKAGES_RESULT: ${{ needs.packages.result }}
         run: |
-          if [ "$QUALITY_RESULT" != success ] || [ "$PROOFS_RESULT" != success ] || [ "$PACKAGES_RESULT" != success ]; then
+          if [ "$QUALITY_RESULT" != success ] || [ "$PROOFS_RESULT" != success ] || [ "$MUTATION_RESULT" != success ] || [ "$PACKAGES_RESULT" != success ]; then
             echo "One or more CI confidence layers did not pass."
             exit 1
           fi

@@ -7,8 +7,11 @@
     ".": {
       "entry": [
         "gates/*.ts",
+        "gates/mutation/*.ts",
         "gates/support/check-doc-fragment-budget.ts",
         "redproof.config.ts",
+        "redproof.mutation.config.ts",
+        "stryker.config.mjs",
         "scripts/*.ts",
         "tests/**/*.ts"
       ],

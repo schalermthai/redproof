@@ -43,6 +43,6 @@
     "fixtures/**/*.ts",
     "tests/**/*.ts",
     "gates/**/*.ts",
-    "redproof.config.ts"
+    "redproof.config.ts", "redproof.mutation.config.ts"
   ]
 }

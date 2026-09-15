@@ -18,6 +18,7 @@ yarn-error.log*
 # Test and coverage output
 coverage/
 .nyc_output/
+.stryker-tmp/
 
 # Environment files
 .env

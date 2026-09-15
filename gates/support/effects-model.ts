@@ -3,6 +3,7 @@ import {
   type SourceEffect,
   type SourceInput,
 } from '@redproof/adapter-tck';
+import { posix } from 'node:path';
 import * as ts from 'typescript';
 
 export type EffectFinding = SourceEffect;
@@ -73,4 +74,18 @@ function packageWorkspaceHelperImports(source: SourceInput): EffectFinding[] {
 
 export function analyzePureTestEffects(sources: readonly SourceInput[]): readonly EffectFinding[] {
   return [...analyzeSourceEffects(sources), ...sources.flatMap(packageWorkspaceHelperImports)];
+}
+
+export function coreTestTargets(tests: readonly SourceInput[]): string[] {
+  const targets = new Set<string>();
+  for (const test of tests) {
+    const file = ts.createSourceFile(test.file, test.content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    for (const statement of file.statements) {
+      if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
+      if (!ts.isStringLiteral(statement.moduleSpecifier) || !statement.moduleSpecifier.text.startsWith('.')) continue;
+      const target = posix.normalize(posix.join(posix.dirname(test.file), statement.moduleSpecifier.text));
+      if (CORE_PATH.test(target)) targets.add(target);
+    }
+  }
+  return [...targets].sort();
 }
