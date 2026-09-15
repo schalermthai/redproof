@@ -15,8 +15,10 @@ import {
 import {
   testCounts,
   testRunBreaches,
+  type TestReportFormat,
   type TestRuleCatalog,
   type TestRuleOptions,
+  type TestRunner,
 } from './core/model.ts';
 import { jestJson, parseJestJson } from './core/reports/jest-json.ts';
 import { junitXml, parseJunitXml } from './core/reports/junit-xml.ts';
@@ -24,7 +26,6 @@ import { validateVitestOptions, vitestArgs, type VitestAdapterOptions } from './
 import { testingCheck } from './shell/check.ts';
 import { command } from './shell/command-runner.ts';
 import { configuredVitestReport } from './shell/vitest-runner.ts';
-import type { TestReportFormat, TestRunner } from './core/model.ts';
 
 export function testing<const O extends TestingAdapterOptions<TestRuleOptions>>(
   options: O

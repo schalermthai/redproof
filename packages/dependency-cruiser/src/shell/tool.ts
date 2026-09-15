@@ -70,6 +70,5 @@ export async function readKnownViolations(path: string): Promise<KnownViolations
     (error: NodeJS.ErrnoException) => error,
   );
   if (text instanceof Error) return new Error(`Cannot read ${path}. ${text.message}`);
-  const parsed = parseKnownViolations(path, text);
-  return parsed instanceof Error ? parsed : parsed as KnownViolations;
+  return parseKnownViolations(path, text) as KnownViolations | Error;
 }

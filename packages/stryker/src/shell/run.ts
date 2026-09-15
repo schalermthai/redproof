@@ -106,7 +106,7 @@ export async function runStrykerCheck<R extends string>(
       return refuseCwdOutsideRoot(scan(startedAt, null), workingDirectory.path);
     }
 
-    return await withCwd(workingDirectory.path, async () => withoutTestRunnerEnv(async () => {
+    return await withCwd(workingDirectory.path, () => withoutTestRunnerEnv(async () => {
       const baseline = plan.noNewUndetectedMutants
         ? await loadAcceptedMutants(canonicalRoot, workingDirectory.path, plan.noNewUndetectedMutants.acceptedMutantsFile)
         : undefined;

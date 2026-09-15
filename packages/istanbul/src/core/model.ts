@@ -106,8 +106,7 @@ export function parseCoverage(text: string, root: string): CoverageEvidence {
 export function coverageBreaches<R extends RuleRef>(evidence: CoverageEvidence,
   selected: ReadonlyMap<Metric, { readonly rule: Rule<R>; readonly threshold: Threshold }>): readonly Breach<R>[] {
   return [...selected].flatMap(([metric, { rule, threshold }]) => {
-    const targets = threshold.perFile ? evidence.files.map(file => ({ file: file.file, counts: file.counts }))
-      : [{ file: null, counts: evidence.total }];
+    const targets = threshold.perFile ? evidence.files : [{ file: null, counts: evidence.total }];
     return targets.filter(target => target.counts[metric].pct < threshold.minimum).map(target => {
       const actual = target.counts[metric];
       return breach(rule, { code: `${metric}-coverage-below-minimum`,
