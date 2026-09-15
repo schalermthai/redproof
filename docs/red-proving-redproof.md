@@ -463,38 +463,52 @@ expect a breach.
 
 ## Release policy as Rules
 
-Release policy as Rules is the pattern where package manifests, workflows, and
-the lockfile are inputs to a Check. Each release mistake a team can make is a
-Rule with a proof.
+Release policy as Rules is the pattern where the files that control a release
+are inputs to a Check. Those files are the package manifests, the release
+scripts, the CI and publish workflows, and the lockfile. A release mistake is
+then a Rule with a proof, like a defect in source code.
 
 The [`repository-policy`](../gates/repository-policy.ts) Gate uses this
-pattern. It extends the checks from the source code to the packages that users
-install. It reads the
-package manifests, the release scripts, both workflows, every Markdown link,
-and the lockfile. Its mutations are the release mistakes a team makes:
+pattern. It has seven Rules:
 
 ```text
-rename 'packages/testing' in the version setter              → R1 a package leaves the inventory
-set one package to "0.6.1" while the rest are "0.12.0"       → R2 versions diverge
-add "@redproof/adapter-tck" to redproof's dependencies       → R3 a layer boundary breaks
-rename the "schema" export to "schema-off"                    → R4 a public surface is undeclared
-remove "run: npm run verify:package" from ci.yml              → R5 CI drops verification
-write  npm publish "$TARBALL"  without the "./"              → R5 npm reads a GitHub shorthand
-link ./definitely-missing.md from a document                  → R6 a documentation link breaks
-delete lightningcss-linux-x64-gnu from package-lock.json      → R7 a platform binary vanishes
-rename .github/workflows/ci.yml                               → REFUSE, not PASS
+R1 Every publishable package participates in every build and release stage.
+R2 All packages share one version and internal Redproof dependencies use it exactly.
+R3 Internal package dependencies follow the core, TCK, and Adapter layers.
+R4 Public runtime, type, binary, subpath, and schema surfaces are source-backed and declared.
+R5 CI and publishing retain self-check, proof, build, and consumer verification.
+R6 Repository and skill documentation cannot point to missing local files.
+R7 The lockfile records every optional dependency its packages declare, so no platform binary silently disappears.
 ```
 
-The `npm publish` mutation records a real incident. The 0.12.0 release
-published nothing, because npm reads a bare `artifacts/x.tgz` as the GitHub
-shorthand `github:artifacts/x.tgz`. The Rule now pins
-`npm publish "./$TARBALL"`.
+Each proof makes one release mistake and expects the matching Rule to breach:
 
-The release workflow packs every publishable package and installs the tarballs
-into a clean consumer. It then verifies runtime imports, published types, CLI
-behaviour, package contents, and internal links. The same verified tarballs are
-attached to the workflow run and passed to `npm publish`. Nothing is rebuilt
-afterward. See the [publish workflow](../.github/workflows/publish.yml).
+```text
+R1  misspell 'packages/testing' in the package list of scripts/set-version.ts
+R2  set one package.json to "0.6.1" while the others say "0.12.0"
+R3  add "@redproof/adapter-tck" as a dependency of the redproof package
+R4  rename the "schema" entry in the package.json files list to "schema-off"
+R5  remove the line "run: npm run verify:package" from ci.yml
+R5  write  npm publish "$TARBALL"  instead of  npm publish "./$TARBALL"
+R6  create a Markdown file that links to ./definitely-missing.md
+R7  delete lightningcss-linux-x64-gnu from package-lock.json
+```
+
+The second R5 proof records a real incident. The 0.12.0 release published
+nothing. npm reads a bare path such as `artifacts/x.tgz` as the GitHub
+shorthand `github:artifacts/x.tgz`, so the publish step never opened the
+tarball. The Rule now requires the exact text `npm publish "./$TARBALL"` in the
+publish workflow.
+
+The REFUSE proof renames `.github/workflows/ci.yml`. The Gate cannot read one
+of its inputs, so it refuses instead of passing.
+
+The [publish workflow](../.github/workflows/publish.yml) is what R5 protects.
+It packs every publishable package into a tarball and installs those tarballs
+into an empty project. In that project it checks that the packages import,
+that their types resolve, that the CLI runs, that the package contents are
+right, and that internal links resolve. The same tarballs are attached to the
+workflow run and passed to `npm publish`. Nothing is rebuilt after the checks.
 
 ## Gate discovery
 
