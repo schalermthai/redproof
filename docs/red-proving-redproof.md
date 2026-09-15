@@ -441,26 +441,6 @@ technology compatibility kit. An Adapter author installs it, registers the
 Adapter with `runAdapterTck`, and gets the five contracts as tests beside the
 Adapter's own tests.
 
-This repository checks each built-in Adapter in both ways. The contract suites
-in `tests/adapters/` are the first way. The TCK registration that each Adapter
-package keeps beside its own tests is the second. The Gate runs both, so it
-has ten commands for five Rules, and they run in parallel.
-
-The REFUSE proof targets the Gate itself. It makes one contract suite print
-4 MB of output. The output budget is 1 MB, so the Gate refuses instead of
-reading a partial result.
-
-The Gate is quick, and it does not prove that an Adapter handles a real tool
-correctly. Slower fixtures do that. They run real ESLint, dependency-cruiser,
-Stryker, and Vitest against small example projects and prove the same five
-guidelines there.
-
-The TCK is a test dependency only. Redproof does not depend on it, and the
-production source of an Adapter does not import it. Two proofs guard that.
-The architecture Gate adds a TCK import to Adapter source. The
-repository-policy Gate adds the TCK to the redproof dependencies. Both proofs
-expect a breach.
-
 ## Release policy as Rules
 
 Release policy as Rules is the pattern where the files that control a release
