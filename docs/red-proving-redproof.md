@@ -588,6 +588,34 @@ the agent has edited that file:
 npx redproof prove gates/architecture.ts
 ```
 
+This repository ships that hook for Claude Code in
+[`.claude/settings.json`](../.claude/settings.json):
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 120,
+            "command": "input=$(cat); case \"$input\" in *'\"stop_hook_active\":true'*|*'\"stop_hook_active\": true'*) exit 0;; esac; out=$(npm run -s self:check 2>&1) && exit 0; printf '%s\\n' \"$out\" >&2; exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook exits 0 when every Gate passes, and the turn ends. When a Gate
+fails, the hook prints the Redproof report to stderr and exits 2. Exit 2 keeps
+the turn open and hands the report to the agent, so it sees the breached Rule
+and its location. The first line reads the `stop_hook_active` field. When that
+field is true, the hook exits at once, so a blocked stop does not run the check
+a second time.
+
 ## Next
 
 - **[The Contract-to-Gate method](contract-to-gate.md)** to turn a quality idea
