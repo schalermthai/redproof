@@ -37,10 +37,35 @@ jobs:
       - name: Run quality and integration checks
         run: npm run check:quality
 
+  # Every Gate file under gates/ becomes one proofs job, so a new Gate cannot
+  # miss CI by being absent from a hand-written list.
+  discover:
+    name: Discover Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      gates: ${{ steps.list.outputs.gates }}
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: List the Gate files
+        id: list
+        run: |
+          gates=$(find gates -maxdepth 1 -name '*.ts' | sed 's|^gates/||; s|[.]ts$||' | sort | jq -R . | jq -sc .)
+          test "$gates" != '[]'
+          echo "gates=$gates" >> "$GITHUB_OUTPUT"
+
   proofs:
-    name: Redproof proofs
+    name: Redproof proofs (${{ matrix.gate }})
+    needs: discover
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: ${{ fromJSON(needs.discover.outputs.gates) }}
 
     steps:
       - name: Check out the repository
@@ -58,8 +83,8 @@ jobs:
       - name: Build the proof runtime
         run: npm run build
 
-      - name: Run the complete proof portfolio
-        run: npm run check:proofs
+      - name: Run the proofs of one Gate
+        run: npm run check:proofs -- gates/${{ matrix.gate }}.ts
 
   packages:
     name: Package consumer verification
