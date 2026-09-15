@@ -32,8 +32,25 @@ repository-policy    packages, versions, CI, documentation links, lockfile 7 Rul
 unused-code          files, exports, and dependencies stay connected       6 Rules    9 Proofs
 ```
 
-Each Gate is one file under [`gates/`](../gates). The sections below explain
-what each file does.
+Each Gate is one file under [`gates/`](../gates). The sections below show one
+pattern each:
+
+- [Describing a Gate](#describing-a-gate). `redproof describe` prints the
+  Rules, the Check, and every Proof before anything runs.
+- [The static-contracts Gate](#the-static-contracts-gate). `commands()` turns
+  a script with an exit code into a Rule with a name and a proof.
+- [The architecture Gate](#the-architecture-gate). One mutation per boundary,
+  and each proof must breach the one Rule it names.
+- [Two tools in one Check](#two-tools-in-one-check). An Adapter's Rules and
+  native Rules share one catalogue, and one Check runs both tools.
+- [The test-health Gate](#the-test-health-gate). A runner builds its
+  arguments per run, and its description comes from the same option.
+- [The adapter-contracts Gate](#the-adapter-contracts-gate). Mutations edit
+  the production source of an Adapter to prove the contract suite notices.
+- [The repository-policy Gate](#the-repository-policy-gate). Release mistakes
+  become mutations, including one from a real incident.
+- [Gate discovery in CI](#gate-discovery-in-ci). CI lists the Gate files
+  itself, and a Rule pins the command each leg runs.
 
 ## Describing a Gate
 
@@ -437,32 +454,6 @@ npm run check:proofs -- gates/${{ matrix.gate }}.ts
 
 Quality checks, the proof legs, and clean-consumer package verification start
 together and report separately. A slow proof does not hold the other layers.
-
-## REFUSE proofs
-
-Three Gates carry a REFUSE proof. Each removes the evidence the Check needs:
-
-```text
-unused-code          write  knip.json  as  { invalid
-repository-policy    rename  .github/workflows/ci.yml
-adapter-contracts    write 4 MB to stdout inside a 1 MB budget
-```
-
-None of those becomes PASS, and none becomes a false product defect. The Gate
-reports that it could not decide.
-
-## Isolated proof copies
-
-Proofs run in isolated project copies. `redproof.config.ts` sets:
-
-```text
-execution: { mode: 'copies', maxAtOnce: 4 }
-```
-
-A mutation can delete a workflow, corrupt a lockfile, or edit Adapter source,
-and the working tree stays untouched. Redproof checks that each copy returns to
-its baseline before it is reused. A proof that leaves a file behind refuses
-with `workspace-not-restored`.
 
 ## Run it
 
