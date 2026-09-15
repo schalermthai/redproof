@@ -37,8 +37,9 @@ pattern each:
 
 - [Executable specification](#executable-specification). `redproof describe` prints the
   Rules, the Check, and every Proof before anything runs.
-- [Script as a Rule](#script-as-a-rule). `commands()` turns
-  a script with an exit code into a Rule with a name and a proof.
+- [Custom check for each Rule](#custom-check-for-each-rule). When no tool
+  checks a Rule, a small script does, and `commands()` gives each script a
+  Rule and a proof.
 - [One mutation per boundary](#one-mutation-per-boundary). Each boundary has
   a mutation that crosses it, and each proof must breach the one Rule it names.
 - [Multiple checks composition](#multiple-checks-composition). One Check runs
@@ -106,11 +107,12 @@ The Gate file is 31 lines. The description puts the promise, the defect, and
 the expected verdict together. A reviewer reads what the Gate guards from this
 output alone, without the Knip documentation.
 
-## Script as a Rule
+## Custom check for each Rule
 
-Script as a Rule is the pattern where a script with an exit code becomes a
-named Rule. `commands()` wraps the script, so it gains a proof and a REFUSE
-when it cannot run.
+Custom check for each Rule is the pattern for a Rule that no existing tool
+checks. You write a small script that exits non-zero when the Rule is broken.
+`commands()` then binds each script to its Rule, so the script gains a proof
+and a REFUSE when it cannot run.
 
 The [`static-contracts`](../gates/static-contracts.ts) Gate uses this pattern.
 It makes three promises:
