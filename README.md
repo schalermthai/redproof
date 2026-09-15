@@ -370,6 +370,7 @@ npm run redproof:describe -- gates/no-todo.ts
 - **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**
 - **[Legacy modernization](https://github.com/schalermthai/redproof/blob/main/docs/legacy-modernization.md)**
 - **[Red proving Redproof](https://github.com/schalermthai/redproof/blob/main/docs/red-proving-redproof.md)**
+- **[Guardrails for agent-written code](https://github.com/schalermthai/redproof/blob/main/docs/agent-guardrails.md)**
 
 ## License
 

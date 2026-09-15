@@ -1,31 +1,15 @@
 # Redproof proves Redproof
 
-This repository is not a demonstration project built to make Redproof look
-good. It is one of Redproof's most demanding users.
+This repository runs Redproof on itself. Six Gates hold 39 Rules and 61 Proofs.
+The real CI and release workflows use these Gates. They are not a separate
+showcase suite. Every push asks two questions:
 
-Every pull request and every push to `main` asks two separate questions:
+```text
+npm run self:check   does the repository satisfy its guardrails now?
+npm run self:prove   can each guardrail still detect the defect it names?
+```
 
-1. Does the repository satisfy its guardrails now?
-2. Can those guardrails still detect the defects they claim to protect us
-   from?
-
-The first question is familiar. Tests pass, types compile, dependency rules
-hold, and release metadata is consistent. Most quality pipelines stop there.
-
-Redproof asks the second question by temporarily introducing a controlled
-defect, running the same Gate, and requiring the expected Rule to breach. A
-green check is useful. A green check whose detection has also been demonstrated
-is much stronger evidence.
-
-Redproof currently protects itself with six Gates.
-These are the controls used by the real CI and release workflows, not a separate
-showcase suite.
-
-## The dogfooding loop
-
-Each Gate owns a promise, the Rules that make the promise precise, and the
-Check that evaluates those Rules. Its proofs exercise that same Check under
-three conditions:
+The model behind every proof is:
 
 ```text
 healthy repository   ──▶ same Gate ──▶ PASS
@@ -33,197 +17,521 @@ controlled defect    ──▶ same Gate ──▶ FAIL the targeted Rule
 unavailable evidence ──▶ same Gate ──▶ REFUSE
 ```
 
-A RED proof is not satisfied by any failure. If a proof targets the Rule
-“domain must not import infrastructure” but a different Rule fails, the target
-has not been proven. Redproof reports that distinction instead of treating a
-generically red build as success.
+A RED proof succeeds only when the Rule it names breaches. Any other failure
+does not count. A GREEN proof shows that the healthy repository passes. A REFUSE
+proof shows that the Check declines to guess when its evidence is missing.
 
-A GREEN proof establishes the healthy baseline. It prevents a permanently
-broken Gate from appearing effective merely because every mutation also fails.
-
-A REFUSE proof establishes honest uncertainty. Missing tools, unreadable
-inputs, timeouts, signals, output overflow, or disallowed empty evidence do not
-become PASS. They also do not become a false product defect. Redproof says that
-the Check could not make a trustworthy decision.
-
-Proofs run in isolated project copies. Mutations can create files, remove
-validation, change configuration, break imports, or corrupt evidence
-translation without modifying the developer's working tree. Redproof checks
-that the proof workspace returns to its baseline before it is reused.
-
-The proof report makes the claim and the observed outcome visible together:
+## The six Gates
 
 ```text
-✓ architecture / detects a production dependency cycle expected=red actual=fail
-✓ adapter-contracts / refuses when a contract suite floods its output budget expected=refuse actual=refuse
-✓ repository-policy / accepts the current repository contracts expected=green actual=pass
+architecture         module graph and functional-core effect boundaries   16 Rules   25 Proofs
+static-contracts     types, documentation examples, fragment budget         3 Rules    4 Proofs
+test-health          every test passes, none is skipped                    2 Rules    4 Proofs
+adapter-contracts    five promises every built-in Adapter keeps            5 Rules    9 Proofs
+repository-policy    packages, versions, CI, documentation links, lockfile 7 Rules   10 Proofs
+unused-code          files, exports, and dependencies stay connected       6 Rules    9 Proofs
 ```
 
-## One model for very different guardrails
+Each Gate is one file under [`gates/`](../gates). The sections below show one
+pattern each:
 
-Redproof's self-hosted portfolio covers several different kinds of evidence. The
-value is not the number of Gates; it is that the same proof model works across
-all of them.
+- [Executable specification](#executable-specification). `redproof describe` prints the
+  Rules, the Check, and every Proof before anything runs.
+- [Custom check for each Rule](#custom-check-for-each-rule). When no tool
+  checks a Rule, a small script does, and `commands()` gives each script a
+  Rule and a proof.
+- [One mutation per boundary](#one-mutation-per-boundary). Each boundary has
+  a mutation that crosses it, and each proof must breach the one Rule it names.
+- [Multiple checks composition](#multiple-checks-composition). One Check runs
+  another Check first and carries its result, so one Gate holds Rules from
+  several sources and gives one verdict.
+- [Self-describing runner](#self-describing-runner). A runner builds its
+  arguments per run, and its description comes from the same option.
+- [Guidelines as guardrails](#guidelines-as-guardrails). The five custom
+  Adapter guidelines become five Rules with proofs, and a TCK makes them
+  reusable by any Adapter.
+- [Release policy as Rules](#release-policy-as-rules). Release mistakes
+  become mutations, including one from a real incident.
+- [Gate discovery](#gate-discovery). CI lists the Gate files
+  itself, and a Rule pins the command each leg runs.
 
-| Gate | Promise | Evidence | Representative controlled defect |
-| --- | --- | --- | --- |
-| [`architecture`](../gates/architecture.ts) | Dependencies point inward, the functional core remains pure, and core tests import no shell module directly. | dependency-cruiser plus TypeScript syntax analysis | Introduce a dependency cycle, import a shell from the core, read ambient process state, or import a shell from a core test. |
-| [`static-contracts`](../gates/static-contracts.ts) | Source and checked documentation compile, while unchecked fragment debt cannot grow. | TypeScript and documentation commands | Add a type error, an invalid documentation example, or one unbudgeted fragment. |
-| [`test-health`](../gates/test-health.ts) | Every collected test passes and none is skipped. | Structured JUnit evidence through `@redproof/testing` | Add a failing test or a skipped test. |
-| [`adapter-contracts`](../gates/adapter-contracts.ts) | Built-in Adapters validate configuration, handle unavailable execution honestly, preserve pure evidence models, respect report capabilities, and attribute structured findings correctly. | Original contract suites plus package-owned `@redproof/adapter-tck` suites | Remove option validation, corrupt runner mapping, add an effect to a pure model, or drop a selected finding. |
-| [`repository-policy`](../gates/repository-policy.ts) | Every package is complete, aligned, documented, and verified before release. | Package manifests, workflows, source inventory, documentation links, and the dependency lockfile | Omit a package from release automation, diverge a version, remove verification, add a broken link, or drop a platform binary from the lockfile. |
-| [`unused-code`](../gates/unused-code.ts) | Files, exports, dependencies and imports stay connected to real consumers. | Knip structured findings and inspection metadata | Add an unused file, export or dependency; introduce an undeclared dependency or unresolved import. |
+## Executable specification
 
-Together they protect behavior, architecture, documentation, integrations, and
-the release boundary. Redproof does not require all guardrails to speak the
-same native protocol. Commands, structured reports, dependency graphs, syntax
-trees, and repository metadata are translated into the same PASS, FAIL, and
-REFUSE semantics.
+Executable specification is the pattern where the Gate file is the
+specification. The same file that runs the Check also prints the promise, the
+defect, and the expected verdict, so the two cannot drift apart.
 
-## The architecture Gate protects how Redproof is built
-
-Redproof has a functional core and an imperative shell. Core modules make
-decisions from values. Boundary modules read files, inspect the environment,
-observe time, and supervise processes.
-
-The architecture Gate makes that design executable. It prevents contexts from
-reaching through each other's private modules, keeps domain types independent,
-restricts effects to reviewed boundary files, and keeps filesystem helpers and direct
-shell imports out of functional-core tests.
-
-The corresponding proofs do more than assert that dependency-cruiser or the
-syntax scanner ran. They introduce the forbidden relationships:
+`npm run self:describe` prints every Gate before anything runs. The output
+below describes the [`unused-code`](../gates/unused-code.ts) Gate, which is
+built on the Knip Adapter:
 
 ```text
-create two production modules that import each other
-append a filesystem import to a core module
-make a core module import its shell
-read process.cwd() inside the functional core
-make an Adapter import Redproof internals
-make a core test import a shell
+Gate: unused-code
+
+Rules:
+  R1 Files in the configured scan must be reachable from its entrypoints.
+  R2 Exports in the configured scan must be used.
+  R3 Declared dependencies must be used in the configured scan.
+  R4 Development dependencies must be used and not duplicate regular dependencies.
+  R5 Used dependencies must be declared in the applicable package manifest.
+  R6 Import specifiers in the configured scan must resolve.
+
+Check:
+  run Knip and evaluate selected structured issue categories
+
+Proof R1:
+  finds an unreachable file in the root workspace
+  mutation: write gates/support/unused-receipt.ts
+  run the same Check
+  expect Gate FAIL
+
+Proof R3:
+  finds a dependency without consumers
+  mutation: merge $.dependencies
+  run the same Check
+  expect Gate FAIL
+
+Proof REFUSE:
+  refuses incomplete Knip configuration
+  mutation: write knip.json
+  run the same Check
+  expect Gate REFUSE
+
+Proof GREEN:
+  accepts the maintained repository inventory
+  run the same Check
+  expect Gate PASS
 ```
 
-Each mutation must breach the Rule that names that boundary. This matters as
-the codebase grows: an architectural convention cannot quietly become a
-diagram that no longer matches the implementation.
+The Gate file is 31 lines. The description puts the promise, the defect, and
+the expected verdict together. A reviewer reads what the Gate guards from this
+output alone, without the Knip documentation.
 
-## Redproof also guards the guardrail integrations
+## Custom check for each Rule
 
-An Adapter can return the right TypeScript shape and still be unsafe. It might
-accept invalid options, turn a crashed tool into a false PASS, parse untrusted
-output inside an I/O-heavy shell, claim evidence its report cannot provide, or
-create Breaches from the wrong findings.
+Custom check for each Rule is the pattern for a Rule that no existing tool
+checks. You write a small script that exits non-zero when the Rule is broken.
+`commands()` then binds each script to its Rule, so the script gains a proof
+and a REFUSE when it cannot run.
 
-The [`adapter-contracts`](../gates/adapter-contracts.ts) Gate protects five
-shared promises against ESLint, dependency-cruiser, Stryker, the generic
-testing Adapter, and Vitest. It runs two complementary implementations of each
-contract side by side:
-
-- the original focused contract suites;
-- package-owned registrations executed by
-  [`@redproof/adapter-tck`](../packages/adapter-tck/README.md).
-
-The TCK owns the reusable assertions, while each Adapter owns the scenarios
-that exercise its public behavior. Its self-tests deliberately feed it
-malformed and inconsistent observations, proving those contract checks reject
-bad evidence rather than merely confirming that current registrations pass.
-The Adapter-owned callbacks are still trusted test code; real-tool fixtures
-verify that they cross the actual Adapter boundary.
-
-Real-tool fixtures add the final layer. They run ESLint, dependency-cruiser,
-Stryker, and Vitest against representative projects and prove their actual
-tool boundaries. The fast contract Gate identifies which shared promise broke;
-the integration fixtures show that the promise holds when the external tool is
-really involved.
-
-This dependency direction keeps the production graph clean:
+The [`static-contracts`](../gates/static-contracts.ts) Gate uses this pattern.
+It makes three promises:
 
 ```text
-Adapter production ──▶ redproof
-Adapter tests      ──▶ @redproof/adapter-tck ──peer/types──▶ redproof
-root Gate          ──▶ package-owned TCK tests
+R1 Workspace source, tests, fixtures, and self-hosted Gates must type-check.
+R2 Standalone TypeScript examples in the documentation must compile.
+R3 The number of documentation fragments excluded from compilation must not grow.
 ```
 
-Redproof does not depend on the TCK, Adapter production does not import it, and
-the TCK does not import built-in Adapters.
+The first promise is the normal TypeScript build. `tsc` checks it.
 
-## The release is guarded like product code
+The other two promises are about the code examples in the documentation.
+`README.md` and every page under `docs/` contain TypeScript examples in `ts`
+code blocks. When the API changes, an example can stop compiling, and nobody
+notices until a reader copies it. No linter checks that. So the repository has
+its own script, `scripts/typecheck-docs.ts`. It copies every `ts` block into a
+file and runs `tsc` over those files. That is R2.
 
-Dogfooding stops being convincing if it protects source code but not what users
-install.
+Some examples are only a few lines and cannot compile on their own. Such a
+block is marked `ts fragment`, and the script skips it. The marker is needed,
+but each fragment is one example the script does not check. A second script,
+`gates/support/check-doc-fragment-budget.ts`, is 30 lines long. It counts the
+fragments and fails when the count is above 37. That is R3. The count can go
+down but not up.
 
-The repository-policy Gate reads the package manifests, public exports,
-source inventory, automation workflows, documentation links, and the dependency
-lockfile. It checks that packages share a version, internal dependency pins
-match, package edges follow the core–TCK–Adapter layers, public runtime and type
-surfaces are backed by source, CI cannot silently drop required verification,
-and the lockfile records every optional platform binary its packages declare.
+Both scripts print a message and exit with a non-zero code when they find a
+problem. That is all a script can do. It has no Rule with a name, no proof
+that it still fails on a bad example, and no way to say that it could not run
+at all.
 
-The release workflow then packs all publishable packages and installs those tarballs
-into a clean consumer. It verifies runtime imports, published types, CLI
-behavior, package contents, and exact internal links. The same verified
-tarballs are retained, attached to the workflow run, and passed directly to
-`npm publish`; the release does not rebuild a different artifact afterward.
+`commands()` turns each command into one entry of the Check. The entry names
+the Rule that the command guards. When the command exits non-zero, the Gate
+reports a breach of that Rule. The Gate has three entries, one per Rule. The
+first runs `tsc`, and the other two run the scripts:
 
-CI runs quality and integration checks, the complete proof portfolio, and the
-clean-consumer package verification as independent jobs. They start together,
-so a slow proof no longer makes unrelated verification wait, while the root
-`npm run check` command still composes the complete source and proof portfolio
-for local and release use.
+```ts
+import { defineGate, defineRules } from 'redproof';
+import { commands } from 'redproof/command';
 
-The proofs cover this boundary too. A deliberately omitted package must breach
-the inventory Rule. A divergent version must breach alignment. A forbidden
-runtime dependency from core to the TCK must breach package boundaries. A
-removed CI verification step must breach automation policy. An unreadable
-policy input must REFUSE rather than let an incomplete release inspection pass.
+const rules = defineRules({
+  workspaceCompiles: {
+    id: 'static/workspace-compiles',
+    description: 'Workspace source, tests, fixtures, and self-hosted Gates must type-check.',
+  },
+  docsExamplesCompile: {
+    id: 'static/docs-examples-compile',
+    description: 'Standalone TypeScript examples in the documentation must compile.',
+  },
+  docsFragmentDebt: {
+    id: 'static/docs-fragment-debt-does-not-grow',
+    description: 'The number of documentation fragments excluded from compilation must not grow.',
+  },
+});
 
-See the live [CI workflow](../.github/workflows/ci.yml) and
-[publish workflow](../.github/workflows/publish.yml).
+export default defineGate({
+  id: 'static-contracts',
+  rules,
+  check: commands({
+    mode: 'parallel',
+    maxAtOnce: 3,
+    label: 'workspace types and documentation contracts',
+    entries: [
+      {
+        rule: rules.workspaceCompiles,
+        label: 'workspace TypeScript',
+        command: process.execPath,
+        args: ['node_modules/typescript/bin/tsc', '--noEmit'],
+      },
+      {
+        rule: rules.docsExamplesCompile,
+        label: 'documentation examples',
+        command: process.execPath,
+        args: ['--experimental-strip-types', 'scripts/typecheck-docs.ts'],
+      },
+      {
+        rule: rules.docsFragmentDebt,
+        label: 'documentation fragment budget',
+        command: process.execPath,
+        args: ['--experimental-strip-types', 'gates/support/check-doc-fragment-budget.ts'],
+      },
+    ],
+  }),
+});
+```
 
-## What goes beyond a typical guardrail runner
+`commands()` also gives each script a timeout and an output limit. A script
+that cannot start does not become PASS. The Gate reports REFUSE and says which
+entry could not run.
 
-A command runner can tell you that ESLint, a test suite, or a custom script
-exited successfully. Redproof can use that evidence, but its model adds several
-important guarantees:
+The proofs are two Markdown files that the mutation creates. One holds an
+example that does not compile. The other holds one more fragment than the
+budget allows:
 
-- **The promise has a name.** Failures are attributed to stable Rules, not only
-  to a command or job.
-- **Detection is exercised.** A RED proof supplies a controlled counterexample
-  and requires the targeted Rule to notice it.
-- **The healthy state is exercised.** GREEN proves the Gate is capable of
-  accepting a valid project.
-- **Uncertainty stays visible.** REFUSE prevents missing or insufficient
-  evidence from becoming false confidence.
-- **The real scope is preserved.** Check and prove run the same Gate rather
-  than a weakened proof-only version.
-- **The mechanism is composable.** A new guardrail can begin as an executable,
-  a structured Adapter, or a native Check and still participate in the same
-  proof lifecycle.
-- **The integrations are guarded too.** Adapter contracts, the TCK, real-tool
-  fixtures, and packed-consumer verification test the layers that translate
-  external evidence into Redproof decisions.
+```text
+Proof R2:
+  rejects an invalid checked documentation example
+  mutation: create docs/redproof-doc-example-proof.md
+  run the same Check
+  expect Gate FAIL
 
-This is the practical difference between running guardrails and proving your
-guardrails still work.
+Proof R3:
+  rejects growth in unchecked documentation fragments
+  mutation: create docs/redproof-doc-fragment-proof.md
+  run the same Check
+  expect Gate FAIL
+```
 
-## Why this matters when agents write code
+Every `ts` block in `README.md` and `docs/` compiles. The budget for
+`ts fragment` blocks is 37, and it cannot grow. This page is under `docs/`, so
+the same Gate checks the examples on it.
 
-AI agents can change more code, configuration, and documentation in one pass
-than a person would usually touch at once. They can also produce plausible
-mistakes at the same speed. Reliable guardrails become part of the steering
-loop: they tell the agent what crossed a boundary and give it concrete evidence
-to course-correct.
+## One mutation per boundary
 
-But an agent can only respond to a signal that still works. A stale glob, an
-ignored report field, a missing package in automation, or a parser that turns
-unavailable evidence into PASS can make a pipeline confidently wrong.
+One mutation per boundary is the pattern where every architectural rule has a
+proof that crosses that exact boundary. The proof names one Rule, so the Gate
+must tell the boundaries apart.
 
-Redproof does not decide what a team's standards should be. It lets the team
-compose those standards from the tools and evidence it already trusts, then
-continuously demonstrates that the resulting guardrails remain sensitive to
-the problems they were built to catch.
+The [`architecture`](../gates/architecture.ts) Gate uses this pattern. It
+protects a functional core and an imperative shell. Core modules make decisions from values. Shell modules
+read files, watch the clock, and supervise processes. A written convention is
+easy to break by accident, so each boundary has a mutation that crosses it.
+Three of those mutations touch the same file:
 
-## Run the dogfood portfolio
+```text
+Proof R2:
+  keeps effect imports out of the functional core
+  mutation: append text to packages/redproof/src/run/core/exit-code.ts
+
+Proof R14:
+  keeps ambient process state out of the functional core
+  mutation: append text to packages/redproof/src/run/core/exit-code.ts
+
+Proof R3:
+  keeps the imperative shell out of the functional core
+  mutation: append text to packages/redproof/src/run/core/exit-code.ts
+```
+
+The three appended lines are:
+
+```text
+import 'node:fs/promises';             → R2  core-no-effect-imports
+void process.cwd();                    → R14 core-no-ambient-inputs
+import '../shell/worker-process.ts';   → R3  core-no-shell
+```
+
+Each proof names one Rule. If the change breaches a different Rule, the proof
+fails. The Gate therefore has to tell the three kinds of boundary crossing
+apart. A report that something went wrong does not satisfy the proof.
+
+## Multiple checks composition
+
+Multiple checks composition is the pattern where one Check runs other Checks
+and merges their results. The Rules of every source sit in one catalogue, and
+the Gate gives one verdict. A breach from any source is a breach of the Gate,
+and a REFUSE from any source is a REFUSE of the Gate.
+
+The architecture Gate uses this pattern. It has 16 Rules. Thirteen come from
+dependency-cruiser, and three are native:
+
+```text
+R14 Functional-core modules receive ambient values from the shell.
+R15 Filesystem, process, clock, randomness, and subprocess effects stay in approved boundary modules.
+R16 Functional-core tests use plain values rather than filesystem, subprocess, or workspace fixtures.
+```
+
+dependency-cruiser checks the first thirteen. It sees the import graph, and an
+import is where a module boundary is crossed. It cannot check the last three,
+because a core module can read ambient state without an import:
+
+```text
+process.cwd()   in a function body
+Date.now()      in a function body
+```
+
+dependency-cruiser never looks inside a function body. A TypeScript syntax scan
+does, so the Gate runs both.
+
+The Gate keeps one Rule catalogue and one Check for both tools. The promise is
+one promise, "the functional core is pure", and one Gate gives it one verdict.
+The proof for R14 then sits beside the proof for R2, and both plant a change in
+the same file.
+
+The Adapter Rules spread into the catalogue beside the native ones. The native
+Check takes the Adapter as an option and runs it first:
+
+```text
+const dependencies = dependencyCruiser({ configFile: '.dependency-cruiser.cjs', ... });
+
+const rules = {
+  ...dependencies.rules,
+  coreNoAmbientInputs: defineRule({ id: 'architecture/core-no-ambient-inputs', ... }),
+  effectsAllowlistedBoundaries: defineRule({ ... }),
+  coreTestsNoIoHelpers: defineRule({ ... }),
+};
+
+defineGate({
+  id: 'architecture',
+  rules,
+  check: effectBoundaries({ dependencies, rules, sources: 'packages/*/src/**/*.ts', ... }),
+});
+```
+
+[`effectBoundaries`](../gates/checks/effect-boundaries.ts) is built on the
+[`scanning`](../gates/support/scanning.ts) helper, which has one optional
+`delegate`. Here the delegate is the dependency-cruiser Check. The result
+carries its breaches, and then the syntax scan adds its own. A REFUSE from
+either side wins, so the Gate does not give a verdict from half of the
+evidence.
+
+`redproof describe` prints the two as one:
+
+```text
+Check:
+  enforce source dependencies and functional-core effect boundaries
+```
+
+The approved effect boundaries are a list of 28 files in
+[`effects-model.ts`](../gates/support/effects-model.ts). A new file that reads
+the filesystem must join that list in a reviewed change. The proof creates such
+a file and expects R15 to breach.
+
+## Self-describing runner
+
+Self-describing runner is the pattern where a runner builds its description
+and its arguments from the same option. `redproof describe` then prints a
+sentence that always matches the real command.
+
+The [`test-health`](../gates/test-health.ts) Gate uses this pattern. It runs
+every test file under `node --test`. It reads the JUnit report through
+`@redproof/testing`. The file list depends on the workspace, so the runner
+builds the arguments per run. The runner lives in
+[`gates/checks/node-test-suite.ts`](../gates/checks/node-test-suite.ts), and
+the Gate file passes it to `testing()`:
+
+```ts
+import { globSync } from 'node:fs';
+import { report, runner, testing, type TestRunner } from '@redproof/testing';
+import { defineGate } from 'redproof';
+
+function nodeTestSuite(options: { readonly files: string }): TestRunner {
+  return runner.command({
+    command: process.execPath,
+    description: `run ${options.files} under node --test with a JUnit report`,
+    args: ctx => [
+      '--experimental-strip-types',
+      '--test',
+      '--test-reporter=junit',
+      `--test-reporter-destination=${ctx.reportFile}`,
+      ...globSync(options.files, { cwd: ctx.root }).sort(),
+    ],
+  });
+}
+
+const adapter = testing({
+  runner: nodeTestSuite({ files: '{tests,packages/*/test}/**/*.test.ts' }),
+  report: report.junitXml(),
+  rules: {
+    testsPass: true,
+    noSkippedTests: true,
+  },
+});
+
+export default defineGate({ id: 'test-health', adapter });
+```
+
+The description and the arguments come from the same `files` option.
+`redproof describe` prints the description, so the sentence cannot drift from
+the real command:
+
+```text
+Check:
+  run {tests,packages/*/test}/**/*.test.ts under node --test with a JUnit report; interpret junit-xml test results
+
+Proof R2:
+  detects a collected skipped test
+  mutation: create tests/redproof-skipped-proof.test.ts
+  run the same Check
+  expect Gate FAIL
+```
+
+A skipped test is not a passing test. The Rule `noSkippedTests` breaches on it.
+
+## Guidelines as guardrails
+
+Guidelines as guardrails is the pattern where a written guideline becomes a
+Rule with a proof. Without Redproof, a guideline stays in a playbook. A
+reviewer may remember it or not, and nothing fails when new code ignores it.
+As a Gate, the guideline runs on every check and has a proof that it still
+detects a violation.
+
+The [Custom Adapter](custom-adapter.md#guidelines) page lists five guidelines
+for an Adapter author:
+
+```text
+1. Validate options in the constructor and throw
+2. Give your runner a result union with an unavailable case
+3. Keep the parser pure and let it throw on untrusted structure
+4. Declare capabilities on the report format
+5. Emit a Breach only from structured evidence
+```
+
+An Adapter can return the right TypeScript shape and still break one of them.
+It can accept invalid options, turn a crashed tool into PASS, or drop a finding
+it should report. The [`adapter-contracts`](../gates/adapter-contracts.ts) Gate
+turns the five guidelines into five Rules. Its mutations edit the production
+source of an Adapter with `locate.text`, and then they expect the contract
+suite to notice:
+
+```text
+Proof R1:
+  detects an Adapter that accepts unknown constructor options
+  mutation: remove "  rejectUnknownKeys(options, ['files', 'rules'], 'ESLint adapter');\n"
+
+Proof R2:
+  detects a runner exception mapped to the wrong evidence lane
+  mutation: replace "kind: 'unavailable' as const"
+
+Proof R4:
+  detects a report format that overstates what it can observe
+  mutation: replace "capabilities: { todo: false, flaky: false }"
+
+Proof R5:
+  detects evidence translation that drops selected structured findings
+  mutation: replace "if (!message.ruleId) continue;"
+
+Proof REFUSE:
+  refuses when a contract suite floods its output budget
+  mutation: append text to tests/adapters/adapter-contracts.constructor.test.ts
+```
+
+The contract suites in `tests/adapters/` check the built-in Adapters of this
+repository. An Adapter written elsewhere cannot use them. So the same five
+contracts are also packaged as
+[`@redproof/adapter-tck`](../packages/adapter-tck/README.md). A TCK is a
+technology compatibility kit. An Adapter author installs it, registers the
+Adapter with `runAdapterTck`, and gets the five contracts as tests beside the
+Adapter's own tests.
+
+## Release policy as Rules
+
+Release policy as Rules is the pattern where the files that control a release
+are inputs to a Check. Those files are the package manifests, the release
+scripts, the CI and publish workflows, and the lockfile. A release mistake is
+then a Rule with a proof, like a defect in source code.
+
+The [`repository-policy`](../gates/repository-policy.ts) Gate uses this
+pattern. It has seven Rules:
+
+```text
+R1 Every publishable package participates in every build and release stage.
+R2 All packages share one version and internal Redproof dependencies use it exactly.
+R3 Internal package dependencies follow the core, TCK, and Adapter layers.
+R4 Public runtime, type, binary, subpath, and schema surfaces are source-backed and declared.
+R5 CI and publishing retain self-check, proof, build, and consumer verification.
+R6 Repository and skill documentation cannot point to missing local files.
+R7 The lockfile records every optional dependency its packages declare, so no platform binary silently disappears.
+```
+
+Each proof makes one release mistake and expects the matching Rule to breach:
+
+```text
+R1  misspell 'packages/testing' in the package list of scripts/set-version.ts
+R2  set one package.json to "0.6.1" while the others say "0.12.0"
+R3  add "@redproof/adapter-tck" as a dependency of the redproof package
+R4  rename the "schema" entry in the package.json files list to "schema-off"
+R5  remove the line "run: npm run verify:package" from ci.yml
+R5  write  npm publish "$TARBALL"  instead of  npm publish "./$TARBALL"
+R6  create a Markdown file that links to ./definitely-missing.md
+R7  delete lightningcss-linux-x64-gnu from package-lock.json
+```
+
+The second R5 proof records a real incident. The 0.12.0 release published
+nothing. npm reads a bare path such as `artifacts/x.tgz` as the GitHub
+shorthand `github:artifacts/x.tgz`, so the publish step never opened the
+tarball. The Rule now requires the exact text `npm publish "./$TARBALL"` in the
+publish workflow.
+
+The REFUSE proof renames `.github/workflows/ci.yml`. The Gate cannot read one
+of its inputs, so it refuses instead of passing.
+
+The [publish workflow](../.github/workflows/publish.yml) is what R5 protects.
+It packs every publishable package into a tarball and installs those tarballs
+into an empty project. In that project it checks that the packages import,
+that their types resolve, that the CLI runs, that the package contents are
+right, and that internal links resolve. The same tarballs are attached to the
+workflow run and passed to `npm publish`. Nothing is rebuilt after the checks.
+
+## Gate discovery
+
+Gate discovery is the pattern where CI finds the Gate files itself instead of
+keeping a list. A new Gate cannot be left out of CI, and a Rule pins the
+command that each CI leg runs.
+
+The [CI workflow](../.github/workflows/ci.yml) does not keep a list of Gates. A
+`discover` job lists `gates/*.ts`, and a matrix job then runs the proofs of one
+Gate per leg:
+
+```text
+discover ──▶ proofs (architecture)
+         ──▶ proofs (static-contracts)
+         ──▶ proofs (test-health)
+         ──▶ proofs (adapter-contracts)
+         ──▶ proofs (repository-policy)
+         ──▶ proofs (unused-code)
+```
+
+The `discover` job picks up a new Gate file on the next run. There is no
+hand-written list to update. The `repository-policy` Gate then checks the run
+line of each leg, which must be exactly:
+
+```text
+npm run check:proofs -- gates/${{ matrix.gate }}.ts
+```
+
+Quality checks, the proof legs, and clean-consumer package verification start
+together and report separately. A slow proof does not hold the other layers.
+
+## Run it
 
 Describe the Gates as an executable specification:
 
@@ -237,26 +545,35 @@ Check the current repository:
 npm run self:check
 ```
 
-Run every controlled defect, healthy baseline, and refusal scenario:
+Run every controlled defect, healthy baseline, and refusal:
 
 ```bash
 npm run self:prove
 ```
 
-The complete delivery check runs those self-hosted Gates together with types,
-documentation examples, native tests, and the real-tool fixture portfolio:
+The complete delivery check adds types, documentation examples, native tests,
+and the real-tool fixtures:
 
 ```bash
 npm run check
 ```
 
-The implementation is intentionally readable. Start with the Gate files in
-[`gates/`](../gates), then see the reusable
-[Contract-to-Gate method](contract-to-gate.md), the
-[Adapter contract design](adapter-contract-gates.md), and the
-[custom Adapter guidelines](custom-adapter.md).
+The proof report puts the claim and the outcome side by side:
 
-The repository's claim is not merely that Redproof can run many kinds of
-guardrail. It is that a guardrail is more trustworthy when the project can show
-all three outcomes: the healthy system passes, a representative defect breaches
-the expected Rule, and unavailable evidence is refused.
+```text
+✓ architecture / detects a production dependency cycle expected=red actual=fail
+✓ adapter-contracts / refuses when a contract suite floods its output budget expected=refuse actual=refuse
+✓ repository-policy / accepts the current repository contracts expected=green actual=pass
+```
+
+## Next
+
+- **[Guardrails for agent-written code](agent-guardrails.md)** for the Stop
+  hook and the two agent skills.
+- **[The Contract-to-Gate method](contract-to-gate.md)** to turn a quality idea
+  into a Rule, a Check, and Proofs.
+- **[Gating Adapter contracts](adapter-contract-gates.md)** for the design of
+  the `adapter-contracts` Gate.
+- **[Command Checks](commands.md)** for everything `commands()` can do.
+- **[Custom Adapter](custom-adapter.md)** for the guidelines those contracts
+  enforce.

@@ -41,6 +41,7 @@ const gate = defineGate({
     linkTargets: [
       'README.md',
       'LICENSE',
+      '.claude/settings.json',
       '.github/**/*',
       'docs/**/*',
       'fixtures/**/*',

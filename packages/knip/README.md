@@ -83,6 +83,11 @@ Explicit filesystem paths are confined inside the Gate root, including symlink
 targets. The installed executable may live in shared `node_modules`. This is
 not a sandbox for Knip configuration code or plugin imports.
 
+The adapter reads the installed Knip version from the Knip package manifest and
+REFUSES an unsupported one. The `cli` option does not skip that check when the
+path it names sits inside an installed Knip. A `cli` path outside an installed
+Knip carries no version to read, so no version check runs for it.
+
 The bundled custom reporter records structured issues, processed-file counts,
 enabled categories and incomplete configuration status into a fresh private
 artifact. Plain Knip JSON lacks the metadata needed to distinguish a healthy
