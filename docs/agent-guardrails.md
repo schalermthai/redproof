@@ -6,36 +6,62 @@ at the same speed. So the checks that run after each change matter more, not
 less. The agent reads a failed check and fixes the code. That loop only works
 when the check still fails on a real mistake.
 
-This page covers three things. When an agent should run `redproof check` and
-`redproof prove`. The Stop hook this repository ships for Claude Code. And the
-two skills under [`skills/`](../skills) that teach an agent the same
-discipline by hand.
+This page covers four things. Why a rule written as a prompt does not hold.
+When an agent should run `redproof check` and `redproof prove`. The Stop hook
+this repository ships for Claude Code. And the two skills under
+[`skills/`](../skills) that teach an agent the same discipline by hand.
 
-- [A check can stop working](#a-check-can-stop-working)
+- [A prompt alone does not hold](#a-prompt-alone-does-not-hold)
 - [Run check at the end of a turn](#run-check-at-the-end-of-a-turn)
 - [The Stop hook](#the-stop-hook)
 - [The redproof skill](#the-redproof-skill)
 - [The redproof-pr-review skill](#the-redproof-pr-review-skill)
 - [How the three fit together](#how-the-three-fit-together)
 
-## A check can stop working
+## A prompt alone does not hold
 
-A check can stop working without anyone noticing. Three examples:
+Most teams write their guardrails as prose. The rules go into a `CLAUDE.md`
+file, a system prompt, or a contributing guide. The agent reads them once at
+the start of a session. Then it works.
+
+An agent does not follow prose for a whole session. It drifts. It skips a rule
+to finish a task. It forgets a rule after a long tool output. When the context
+window fills up, the early instructions are the first to lose weight. The
+agent does not announce the drift. It reports that the task is done.
+
+These are rules from this repository that an agent will likely miss when
+written as a prompt:
 
 ```text
-the file pattern in a lint config no longer matches a new source directory
-a test report changed its format, and the reader now sees zero failures
-a tool crashes, and the script that reads its output reports success
+Core modules must not import node:fs or node:child_process.
+Import another context only through its index.ts.
+Do not call process.cwd() inside a core module.
+Every ts code block in the docs must compile.
+Do not mark a test .skip to make the run green.
+Do not leave an export that nothing imports.
+Add every new package to scripts/set-version.ts.
 ```
 
-In each case the check still prints green. The agent sees green and moves on.
-The mistake ships.
+Each rule is short and clear. Each one is also easy to break without noticing.
+A new import looks like every other import. A `.skip` is one word. A missed
+package is an absence, and an absence is invisible in a diff.
 
-A RED proof catches this. It plants a known mistake and expects the check to
-fail. When the check has stopped working, the RED proof fails instead. The
-team learns that the guardrail is broken before the agent relies on it. The
-[Redproof proves Redproof](red-proving-redproof.md) page shows the 61 proofs
-this repository keeps for its own six Gates.
+So this repository does not keep these rules as prose. Each one is a Rule in a
+Gate. The architecture Gate holds the first three. The static-contracts,
+test-health, unused-code, and repository-policy Gates hold the other four. A
+Gate reads the files after every turn. It does not read a prompt, and it does
+not forget.
+
+The Stop hook below closes the loop. When the agent ends a turn, the hook runs
+every Gate. A breach comes back to the agent as a Rule name and a location, and
+the turn stays open until the agent fixes it. The drift is corrected in the
+same turn, not found in review a day later.
+
+A Gate can also stop working without anyone noticing. A file pattern no longer
+matches a new directory, or a tool crashes and the script that reads its output
+reports success. The RED proofs catch that. Each one plants a known mistake and
+expects the Gate to fail. The [Redproof proves Redproof](red-proving-redproof.md)
+page shows the 61 proofs this repository keeps for its own six Gates.
 
 ## Run check at the end of a turn
 
