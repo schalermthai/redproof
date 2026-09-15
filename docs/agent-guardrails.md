@@ -110,6 +110,13 @@ A Gate is a proof that repeats on every commit. Most checks an agent writes in
 a day are not Gates. They are a new test, a lint rule, a CI step, or an
 assertion in a script. The [`redproof`](../skills/redproof/SKILL.md) skill
 teaches the agent to prove one of those by hand, once, before it trusts it.
+The skill works with or without the Redproof library. It needs only a check
+that can go red and a file the agent can change and restore.
+
+The proof is not the point. What the agent builds on afterwards is the point.
+An agent that trusts an unproven check builds on an assumption. An agent that
+has seen the check go red for the right rule builds on a fact. Every decision
+after that rests on evidence, not on the word "pass".
 
 The skill starts with a question: is a proof owed? A proof is owed only when
 both answers are yes.
@@ -138,11 +145,39 @@ Red-proof: <the rule, in one sentence>
   green     <the check passing again>
 ```
 
+An example. The agent adds a unit test for a function that rounds prices. The
+test passes on its first run. Q1 is yes, because the agent wrote the test and
+has never seen it fail. Q2 is yes, because a test that asserts nothing still
+prints pass. So a proof is owed. The agent breaks the function, not the test:
+
+```text
+Red-proof: roundPrice rounds half a cent up
+  break     src/pricing.ts:14, changed Math.round to Math.floor
+  red       FAIL roundPrice rounds 1.005 up to 1.01: expected 1.01, got 1
+  restore   reverted src/pricing.ts, git diff is clean
+  green     the suite passed again
+```
+
+The agent now knows the test detects the bug it names. The next change can
+build on that.
+
 Two reference files sit beside the skill.
 [`breaking.md`](../skills/redproof/breaking.md) says how to choose a break that
 proves the right thing, and lists six more ways a check goes blind.
 [`verdicts.md`](../skills/redproof/verdicts.md) holds 33 worked verdicts for
 borderline cases.
+
+When the project uses the Redproof library, the skill does three things
+differently. First, the agent asks the Check what it inspected before it plants
+a break. `redproof check --reporter=json --outputFile=out.json` writes a scan
+with an `inspected` count. Zero means the check is blind, and no break is
+needed. Redproof refuses that PASS on its own with the `nothing-inspected`
+diagnostic. Second, when a Redproof Proof already targets the Rule, no proof by
+hand is owed. That proof runs on every commit, so the agent runs
+`redproof prove` for the Gate instead of repeating the loop. Third, when the
+guard is permanent, the agent stores the break beside the Gate as a
+`proof.red`. The loop then repeats on every commit, and the check cannot go
+blind next month without anyone noticing.
 
 ## The redproof-pr-review skill
 
@@ -178,10 +213,7 @@ redproof-pr-review skill   proofs for the claims a pull request makes, at review
 Redproof library           a proof stored beside the Gate, repeated on every commit
 ```
 
-The skills teach the discipline. The library makes it permanent. When a
-hand-made proof is for a guard that will stay, the `redproof` skill says to
-move it into a Gate, so the check cannot go blind next month without anyone
-noticing.
+The skills teach the discipline. The library makes it permanent.
 
 Claude Code loads a skill from a `SKILL.md` file under `.claude/skills/` in a
 project, or under `~/.claude/skills/` for every project. Copy the skill
