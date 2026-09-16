@@ -176,8 +176,7 @@ When the project uses the Redproof library, the skill does three things
 differently:
 
 ```text
-1  run  redproof check --reporter=json --outputFile=out.json  and read the inspected count first;
-   zero means the check is blind, and Redproof refuses that PASS as nothing-inspected
+1  run  redproof check --reporter=json --outputFile=out.json and read the inspected count first
 2  when a Proof already targets the Rule, run  redproof prove  instead of the loop by hand
 3  when the guard is permanent, store the break beside the Gate as a proof.red
 ```
