@@ -43,6 +43,43 @@ A **Proof** deliberately violates a Rule and confirms that the same Check detect
 
 If a proof targets R1 but the Gate only fails because of R2, R1 is not proven.
 
+## Guardrails as first-class citizens
+
+We already know that guardrails are important, but they are rarely treated as
+a first-class concept.
+
+Today, guardrails are often scattered across different tools. A lint rule may
+enforce one constraint, a dependency checker may enforce another, and a CI
+script may enforce something else. Each tool works on its own, but the
+guardrail itself is not represented directly. It feels more like
+infrastructure than a concept the project can describe and reason about.
+
+Redproof changes that by putting the Rule and the Gate first.
+
+A Rule describes the constraint we want to enforce. A Gate groups related
+Rules into one logical boundary. The tools used to enforce those Rules become
+implementation details.
+
+This means a single Gate can combine different kinds of checks. For example,
+one Rule might use a linter, another might check dependency boundaries, and
+another might run a custom script. Together, they form one logical Gate that
+represents a single project-level guardrail.
+
+Instead of thinking first about which tool to configure, we can start with the
+guardrail we want:
+
+```text
+What rule should always hold?
+Which rules belong together?
+What should prevent a change from crossing this boundary?
+```
+
+Then we choose the tools needed to enforce it.
+
+Redproof makes guardrails something the repository can name, compose, prove,
+and reason about directly.
+
+
 ## A small Gate
 
 Here is a simple Gate with no external tools.
