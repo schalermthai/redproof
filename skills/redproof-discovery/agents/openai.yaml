@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof Discovery"
+  short_description: "Route work to the right guardrail stage"
+  default_prompt: "Use $redproof-discovery to identify the next stage for introducing Redproof guardrails to this repository."
