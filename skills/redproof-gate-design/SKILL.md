@@ -43,9 +43,34 @@ with empty, partial, or silently skipped evidence is not enough.
 
 ## Compose existing enforcement deliberately
 
-Inventory expert tools and existing controls. Prefer their authoritative output
-over reimplementing weaker analysis. Redproof overlap is justified only when it
-adds concrete value such as:
+Inventory the project's native lint, test, architecture, build, and CI extension
+points as well as its expert tools and existing controls. Before designing a
+custom Check, ask where the project would naturally enforce this Rule without
+Redproof. Prefer adding or improving the Rule in that native slot, then have
+Redproof invoke and prove it.
+
+Choose the smallest honest integration:
+
+1. Use `command()` when the native executable has trustworthy exit semantics and
+   its diagnostics are sufficient for one bounded Rule.
+2. Create or reuse an Adapter when the native tool provides structured findings,
+   maps to several Rules, or needs tool-specific evidence validation and REFUSE
+   semantics.
+3. If the native tool is not safely callable at the required cadence, first try
+   to add a machine-readable mode, expose a reusable decision core, or run its
+   focused native test.
+4. Implement duplicate detection inside a custom Check only as a last resort.
+   Bound it to the smallest literal contract, record why reuse was impossible,
+   and define how drift from the authoritative implementation will be detected.
+
+Do not treat exit code `0` as trustworthy merely because a command ran. Confirm
+that the tool distinguishes compliant, violating, and unavailable or invalid
+evidence. If it cannot, improve the integration or REFUSE rather than translating
+an ambiguous result into PASS.
+
+Redproof should normally govern and prove native enforcement, not become a
+second weaker implementation of it. Redproof overlap is justified when it adds
+concrete value such as:
 
 - explicit PASS, FAIL, and REFUSE semantics;
 - composition across authoritative signals;
@@ -99,6 +124,9 @@ Allowed example:
 Violating example:
 Evidence source and authority:
 Evidence completeness obligation:
+Native enforcement slot:
+Integration choice: command() | Adapter | custom Check
+Why this is the smallest honest integration:
 PASS proves:
 PASS does not prove:
 FAIL means:

@@ -20,6 +20,9 @@ Evidence source:
 Evidence authority:
 Evidence completeness obligation:
 Existing enforcement:
+Native enforcement slot:
+Integration choice: command() | Adapter | custom Check
+Why this is the smallest honest integration:
 Incremental Redproof value:
 
 PASS proves:
@@ -52,6 +55,32 @@ Read the Rule and `PASS proves` side by side.
   than rebuilding its analysis without a demonstrated reason.
 - If a successful producer can emit partial or empty evidence, define how the
   Check proves inspection completeness before PASS.
+
+## Native-enforcement test
+
+Before choosing a custom Check, identify where the project would naturally own
+the Rule: an existing linter, test suite, architecture tool, build check, or CI
+extension point. Prefer implementing the detection there and using Redproof to
+invoke, compose, and prove it.
+
+Use `command()` when a native executable reliably communicates the bounded Rule
+through its exit status and diagnostics. Use an Adapter when the tool emits
+structured evidence, covers multiple Rules, or needs domain-specific validation
+before Redproof can distinguish PASS, FAIL, and REFUSE.
+
+An executable is not reusable merely because it can be spawned. Verify that it:
+
+- runs in the intended environment and cadence;
+- distinguishes compliant and violating states;
+- exposes missing, malformed, partial, or unsafe evidence instead of returning
+  apparent success;
+- produces diagnostics sufficient to identify the targeted Rule.
+
+If it does not, prefer improving its machine contract, extracting a shared
+decision core, or running a focused native test. Duplicate the detection in a
+custom Check only when those options are unavailable and the incremental value
+justifies the maintenance risk. Record the duplicated boundary and how divergence
+from the authoritative implementation will be discovered.
 
 REFUSE is not another form of Rule violation. It says the Check cannot obtain or
 trust enough evidence to decide PASS or FAIL. A Check shared by several Rules may
