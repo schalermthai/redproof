@@ -12,15 +12,18 @@ passing healthy baseline is necessary but insufficient.
 
 Require a Rule evidence contract that defines the bounded promise, evidence
 source and authority, evidence completeness, PASS and FAIL meaning, Check-level
-REFUSE conditions, enforcement frontier, and readiness.
+REFUSE conditions, enforcement frontier, policy status, clause traceability,
+counterevidence considered, and stage authorization.
 
 Return to `$redproof-gate-design` if those are missing, contradictory, or wider
 than the evidence. Return to `$redproof-domain-discovery` if the protected
 outcome itself lacks stakeholder value or authority. Do not silently narrow the
 contract during implementation or review.
 
-Implement a Check only when the user has authorized implementation. Experiments
-remain `experiment-only`; a successful proof does not promote them into policy.
+Implement or certify a Check only with `approved-for-experiment` or
+`approved-for-adoption` authorization from an accountable human. A technically
+`TRUSTED` experiment remains an experiment; successful proof does not confirm
+policy or authorize adoption.
 
 ## Implement an honest Check
 
@@ -81,7 +84,8 @@ Independent attacks:
 Escapes and wrong-reason failures:
 Restoration confirmation:
 Known blind spots:
-Readiness and authority:
+Policy status and authority:
+Stage authorization:
 Decision: TRUSTED | NOT TRUSTED
 Disposition:
 ```
@@ -91,3 +95,7 @@ the proof mutations genuinely create the claimed conditions, the evidence
 completeness obligation is met, adversarial findings are resolved, and the
 working tree is restored. Otherwise use `NOT TRUSTED` and say which earlier
 stage or implementation work is required.
+
+`TRUSTED` is a technical statement about the recorded contract, not permission
+to install, merge, or adopt the Gate. Adoption still requires confirmed policy
+and `approved-for-adoption` authorization.

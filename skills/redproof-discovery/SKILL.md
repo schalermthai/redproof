@@ -16,17 +16,28 @@ Use these questions in order:
 1. **Is the protected domain outcome agreed?**
    - No: use `$redproof-domain-discovery`.
    - Yes: continue.
-2. **Is there a bounded Rule and evidence contract?**
+2. **Has an accountable human authorized Gate design?**
+   - No: return to `$redproof-domain-discovery` and ask for an explicit
+     approve-for-design, approve-for-experiment, defer, or reject decision.
+   - Yes: continue.
+3. **Is there a bounded Rule and evidence contract?**
    - No: use `$redproof-gate-design`.
    - Yes: continue.
-3. **Has the Check earned trust through valid proofs and adversarial review?**
+4. **Are material design decisions settled and is implementation or review
+   authorized?**
+   - No: remain in `$redproof-gate-design`.
+   - Yes: continue.
+5. **Has the Check earned trust through valid proofs and adversarial review?**
    - No: use `$redproof-gate-certification`.
    - Yes: report that the guardrail is already certified for its recorded scope,
      then handle the user's narrower request.
 
 Do not force every engagement to begin at stage one. A repository may already
-have an agreed Gate brief or Rule evidence contract. Do not skip a missing stage
-just because implementation looks straightforward.
+have an agreed Gate brief or Rule evidence contract. An artifact's existence is
+not approval to advance it. Repository policy may confirm intent, but it does not
+authorize the agent to alter enforcement. A broad request to “introduce
+guardrails” does not approve a particular Gate. Do not skip a missing stage just
+because implementation looks straightforward.
 
 ## Handoff boundaries
 
@@ -34,8 +45,8 @@ Each stage produces the input required by the next:
 
 ```text
 domain concern
-  -> agreed Gate brief
-  -> bounded Rule evidence contract
+  -> agreed and authorized Gate brief
+  -> bounded, agreed Rule evidence contract
   -> implemented and certified Gate
 ```
 
@@ -49,6 +60,10 @@ domain concern
 If a later stage exposes a mismatch, return to the owning earlier stage. For
 example, evidence that cannot support the Rule returns to Gate design; a Rule
 that lacks stakeholder value returns to domain discovery.
+
+Do not route to certification while the comparison base, policy scope,
+exceptions, owner, or evidence contract can materially change the Rule and
+remain unresolved. Resolve them in discovery or design first.
 
 ## Report the routing decision
 

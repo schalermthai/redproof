@@ -10,8 +10,11 @@ larger domain concern it came from.
 Domain concern:
 Gate:
 Bounded Rule:
-Readiness:
+Policy status:
+Stage authorization:
 Policy source and strength:
+Policy clause traceability:
+Counterevidence considered:
 
 Allowed example:
 Violating example:
@@ -55,6 +58,19 @@ Read the Rule and `PASS proves` side by side.
   than rebuilding its analysis without a demonstrated reason.
 - If a successful producer can emit partial or empty evidence, define how the
   Check proves inspection completeness before PASS.
+
+## Policy traceability test
+
+Break the bounded Rule into its material clauses: what is included, prohibited,
+allowed, excepted, compared, and owned. For each clause, cite the exact policy or
+evidence source when available. Record repository paths plus sections or line
+ranges for promoted claims. If a clause has no support, keep it under `Open
+questions` rather than making it part of the Rule.
+
+Record the counterevidence considered, including relevant exceptions, waivers,
+deprecations, compatibility windows, lifecycle or retirement rules,
+supersession or replacement behavior, alternate release paths, and available
+history. A plausible implementation category is not itself policy evidence.
 
 ## Native-enforcement test
 
@@ -127,13 +143,14 @@ For example, event publication after commit and migration to typed event payload
 both involve events, but they protect different outcomes and may have different
 owners and lifecycles. They likely belong in different Gates.
 
-## Authority and readiness
+## Authority and stage authorization
 
-Use exactly one readiness state. Record policy-source strength separately so a
-strong source does not make an untested Rule implementation-ready, and a feasible
-experiment does not masquerade as authorized policy.
+Record policy status separately from stage authorization so a strong source does
+not grant permission to implement, and a feasible experiment does not masquerade
+as authorized policy.
 
-Only `confirmed` contracts become production policy. Confirmation may come from
-the user, an accountable maintainer, or an authoritative project policy whose
-meaning is unambiguous. Use `experiment-only` when implementation is useful for
-learning but authority is unresolved.
+Only `confirmed` contracts with `approved-for-adoption` become production
+policy. Confirmation may come from the user, an accountable maintainer, or an
+authoritative project policy whose meaning is unambiguous. An accountable human
+must still authorize the stage. Use `approved-for-experiment` when implementation
+is useful for learning but adoption is unresolved.
