@@ -5,9 +5,9 @@ description: Discover and align the domain, architectural, operational, and mode
 
 # Redproof Domain Discovery
 
-Discover what the project should protect before deciding what can be checked.
-The output is an agreed or explicitly unresolved Gate brief, not implementation
-work and not a list of repository patterns promoted into policy.
+Discover what the project should protect, then assess what protection needs to
+change. Produce a compact protected-outcomes map and ranked recommendations,
+with Gate briefs only where Gate work is justified.
 
 Start with:
 
@@ -45,6 +45,17 @@ were out of scope, or produced no credible candidate. This breadth check prevent
 the easiest written engineering policy from crowding out the project's core
 domain promises.
 
+When the project changes files, copies workspaces, starts processes, deploys, or
+restores state, also inspect the operational boundaries it promises. Trace a
+representative effect from its public entry point through execution and cleanup.
+Consider paths outside the intended root, absolute/parent paths, symlink targets,
+shared or linked dependencies, subprocess lifetime, and whether failed operations
+or restoration leave observable changes. Check relevant assertions and exception
+paths; the presence of an isolation test suite alone does not establish coverage.
+Record deliberate access outside the workspace and limits of the trust model.
+These are inspection prompts, not mandatory policies for every project. Route a
+direct implementation defect to a native fix before proposing additional Gates.
+
 Look for consequential concerns such as:
 
 - user- or business-visible behavior;
@@ -56,6 +67,21 @@ Look for consequential concerns such as:
 
 Do not convert style, popularity, repetition, or incidental consistency into a
 guardrail.
+
+## Research the important promises in depth
+
+For broad repository discovery, read
+[research-depth.md](references/research-depth.md). Research in both directions:
+from consequential promises to their controls, and from existing controls to the
+promises their assertions protect. Inspect the project's verification entry
+points, test groups, native tool configuration (including hidden configuration
+files), and delivery steps before concluding the inventory is sufficient.
+
+Spend depth on likely high-impact failures, common change paths, explicit
+commitments and coverage uncertainty. Preserve distinct promises within broad
+outcomes when their failure cases, evidence or exceptions differ. A list of test
+suite names is not a substitute for describing those promises. This is an 80:20
+prioritization goal, not a claim to have measured 80% of all possible risks.
 
 ## Separate observation from policy
 
@@ -92,10 +118,10 @@ Classify the concern as one of:
 - regression prevention: a known failure that must not return;
 - direction of travel: legacy debt that must not grow while it is removed.
 
-Reject or defer candidates that are low consequence, adequately enforced,
-unsupported by authority, contradicted by legitimate behavior, or too vague to
-describe as a stakeholder-visible outcome. Deferral is a successful discovery
-result.
+Reject outcomes that are incidental, invalidated, or too vague to explain. Keep
+credible outcomes visible even when they are already protected or their coverage
+is unknown. Reject or defer the proposed new control separately when it duplicates
+adequate enforcement or lacks evidence, authority, or value.
 
 ## Converge in Gate language
 
@@ -133,7 +159,7 @@ especially explicit requirements, prohibitions, guarantees, and lifecycle
 commitments. Interpret their meaning; do not promote every sentence containing
 `must`, `never`, or `required`.
 
-For each selected promise, identify the native control that claims to enforce it
+For each selected promise, identify the existing Gate or native control that claims to enforce it
 and inspect the control's actual scope, cadence, exceptions, and failure
 behavior. Classify coverage as:
 
@@ -156,6 +182,24 @@ Choose the smallest appropriate response:
 
 This map is a recall aid, not authorization and not a requirement to turn every
 policy gap into a Gate.
+
+## Separate protected outcomes from recommended changes
+
+Use the policy-to-control map as the **protected-outcomes portfolio**. Retain
+important promises with their policy evidence and coverage, including those
+already protected and those whose enforcement cannot be inspected. Unknown
+coverage means investigate; it does not make the promise unimportant or prove
+that protection is absent.
+
+Create a separate, ranked **action portfolio** linked to those outcomes. For
+each outcome, record: keep existing protection, investigate coverage, improve an
+existing Gate/control, fix a native defect, consider a new Gate, or reject the
+proposed control. Only a concrete gap with incremental Redproof value warrants a
+new Gate brief. When an existing Gate owns the promise, identify the amendment
+instead of presenting a renamed Gate. A change in control recommendation must
+not silently erase the protected outcome.
+
+These can be two short sections in one artifact; do not duplicate the evidence.
 
 ## Use independent review for broad discovery
 
@@ -180,7 +224,7 @@ ceremony.
 
 ## Converge the portfolio
 
-Before asking for approval, compare the surviving candidates rather than
+Before asking for approval, compare the recommended changes rather than
 presenting them as an unranked list. Use evidence-backed `high`, `medium`, or
 `low` judgments for:
 
@@ -207,7 +251,14 @@ Revisit any unmapped or partially covered high-consequence promise when the
 answer might be yes. Do not require a particular candidate or promote a
 low-value technical rule merely because it is easy to scan.
 
-Produce a short ranked portfolio with the recommendation `approve-for-design`,
+Reconcile the research record before finalizing: every consequential promise
+identified by either worker must map to an explicit protected clause or a
+reasoned narrowing, resolution or rejection. Include earlier findings when they
+are supplied in the task; do not search outside the authorized evidence boundary
+for them. Preserve the concrete failure case when grouping findings, and report
+important uninspected areas instead of implying complete coverage.
+
+For Gate additions or amendments in the action portfolio, give the recommendation `approve-for-design`,
 `approve-for-experiment`, `approve-for-adoption`, `defer`, or `reject` and the
 tradeoff that drives it. Recommend adoption only for confirmed policy.
 The recommendation is decision support only; stage authorization remains

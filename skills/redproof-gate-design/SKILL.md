@@ -20,6 +20,31 @@ If those inputs are missing or disputed, return to
 
 Do not let a convenient scanner, command, or file pattern redefine the outcome.
 
+## Recommend a useful first scope
+
+Separate the recommendation into **Do first**, **Decide**, and **Do later**:
+
+- **Do first:** the smallest change that meaningfully protects the selected
+  outcome, not merely the easiest observable signal. Explain its benefit, existing
+  control to reuse, minimum evidence mechanism, effort/maintenance tradeoff, and
+  exclusions. Native tests or an existing Check may be enough; a new Gate is not
+  a required outcome. This is a recommendation, not permission to implement.
+- **Decide:** only unresolved choices requiring accountable judgment about policy,
+  supported behavior, exceptions, ownership, or accepted risk. Recommend an option
+  and tradeoff where possible; say which part depends on the answer. Do not turn
+  parser selection, test mechanics, or ordinary error handling into approval
+  blockers unless they change those choices. If none remain, say so; do not
+  manufacture a decision list. Proposed defaults are not confirmed policy.
+- **Do later:** optional strengthening or broader coverage, with the added benefit
+  and the condition that would make it worthwhile. Do not fully design speculative
+  extensions or make the first increment depend on their evidence inputs.
+
+Evidence needed to trust the first promise belongs in **Do first**, not **Do
+later**. If its minimum mechanism is unresolved, identify the technical question
+or narrow the promise explicitly; do not claim readiness or silently weaken PASS.
+Keep an honest, useful first increment rather than a comprehensive assurance
+system. Continue unaffected design work while material decisions remain open.
+
 ## Design bounded Rules
 
 Use [rule-contract.md](references/rule-contract.md) for every Rule. A bounded
@@ -52,6 +77,12 @@ category—such as treating copies as renames—when the cited policy only discu
 edits and additions. Record counterevidence considered before fixing the Rule's
 meaning.
 
+Cross-check the cited policy's relevant worked examples, exceptions, and nearby
+implementation before calling its meaning confirmed. When they conflict, show
+the conflicting sources and plausible interpretations; do not invent a waiver or
+assume an example is wrong. Isolate the affected clause and the clarification
+needed. This is a targeted consistency check, not exhaustive repository research.
+
 ## Compose existing enforcement deliberately
 
 Inventory the project's native lint, test, architecture, build, and CI extension
@@ -73,6 +104,21 @@ Choose the smallest honest integration:
 4. Implement duplicate detection inside a custom Check only as a last resort.
    Bound it to the smallest literal contract, record why reuse was impossible,
    and define how drift from the authoritative implementation will be detected.
+
+Compare the proposed integration with the simplest plausible alternative:
+extending the existing in-process Check or native test, native enforcement alone,
+or a focused native executable plus `command()`.
+A weakness in today's compound command does not establish that an improved,
+focused command needs an Adapter. If choosing an Adapter, identify the concrete
+evidence or verdict distinction the simpler option cannot preserve, and its
+maintenance cost. Structured output alone is not a reason to parse it in Redproof
+if native validation and a simpler wrapper can preserve the required semantics.
+
+Apply that comparison to the whole first increment, including proposed parsers,
+inventories, snapshot mechanisms, and test protocols—not just its wrapper. State
+what each added mechanism establishes that existing evidence cannot. When old and
+new controls overlap, explain their reuse, replacement, or intentional coexistence;
+do not require a new CLI merely to make existing decision code callable.
 
 Do not treat exit code `0` as trustworthy merely because a command ran. Confirm
 that the tool distinguishes compliant, violating, and unavailable or invalid
@@ -122,6 +168,11 @@ When the executable Rule covers only part of the Gate brief, record the
 with everything stakeholders care about.
 
 ## Produce the handoff
+
+Lead with a concise **Do first / Decide / Do later** recommendation. Keep the
+supporting contracts for the selected first scope below it; share common evidence
+details rather than repeating them for each Rule. Deferred extensions need their
+benefit and boundary, not a full implementation design.
 
 Produce one contract per Rule:
 

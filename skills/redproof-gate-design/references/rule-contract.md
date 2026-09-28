@@ -4,7 +4,29 @@ Complete this contract before implementing a Check. It keeps the executable
 promise bounded by evidence the Check can actually observe while preserving the
 larger domain concern it came from.
 
+## Decision-ready summary
+
+Before the detailed contracts, give the reader a practical recommendation:
+
+```text
+Do first: selected promise, smallest change, reused control, minimum evidence,
+          benefit, effort/maintenance tradeoff, exclusions, and dependencies.
+Decide: unresolved policy/risk/ownership choices, recommended answers, and the
+        affected clauses; none if no such choices remain.
+Do later: optional assurance or coverage, its added benefit and trigger.
+```
+
+Keep technical unknowns visible as engineering work, not automatically as human
+policy questions. A first increment must stand on its own evidence; do not claim
+independence if a deferred extension's inputs can prevent its verdict. Essential
+completeness and verdict handling cannot be deferred while retaining the same
+PASS claim. Where effort is unmeasured, explain the likely work and uncertainty
+instead of inventing a cost estimate.
+
 ## Contract template
+
+Use this for selected Rules. Shared clauses may appear once with explicit
+per-Rule differences; the template is not a reason to fully design deferred work.
 
 ```text
 Domain concern:
@@ -67,10 +89,22 @@ evidence source when available. Record repository paths plus sections or line
 ranges for promoted claims. If a clause has no support, keep it under `Open
 questions` rather than making it part of the Rule.
 
+You may propose an unsupported design choice for approval, but label it as a
+recommendation and explain its tradeoff, not as a sourced or agreed requirement.
+Distinguish decisions that change policy from implementation details you can
+recommend. A useful handoff can contain a concrete conditional design without
+claiming that the contract is settled.
+
 Record the counterevidence considered, including relevant exceptions, waivers,
 deprecations, compatibility windows, lifecycle or retirement rules,
 supersession or replacement behavior, alternate release paths, and available
 history. A plausible implementation category is not itself policy evidence.
+
+Read relevant worked examples alongside the prose they illustrate. If an example
+would violate the proposed Rule, record whether the source establishes an
+exception or leaves a contradiction. Identify which clause is affected and what
+answer would change the design; leave unrelated clauses usable. Do not resolve
+the conflict by silently excluding the example's category.
 
 ## Native-enforcement test
 
@@ -83,6 +117,15 @@ Use `command()` when a native executable reliably communicates the bounded Rule
 through its exit status and diagnostics. Use an Adapter when the tool emits
 structured evidence, covers multiple Rules, or needs domain-specific validation
 before Redproof can distinguish PASS, FAIL, and REFUSE.
+
+Compare only plausible alternatives. For native-only, focused `command()`, or
+Adapter designs under consideration, explain who validates evidence and how
+compliance, violation, and unavailable evidence reach Redproof. Verify the
+integration's actual capabilities; an exit convention is not automatically a
+supported REFUSE mapping. If a simpler option cannot express the required
+distinction, state that specific gap rather than merely citing today's tool
+limitations or the availability of JSON. Account for the cost of any new schema,
+manifest, parser, or evidence protocol relative to the bounded promise.
 
 An executable is not reusable merely because it can be spawned. Verify that it:
 

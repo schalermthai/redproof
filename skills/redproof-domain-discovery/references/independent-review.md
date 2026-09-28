@@ -19,11 +19,18 @@ Give a fresh reviewer:
 Ask the reviewer to:
 
 - sample relevant concern classes;
+- research from both promises and control families using
+  [research-depth.md](research-depth.md), including referenced and hidden
+  configuration; inspect representative assertions rather than just test names;
+- inspect operational boundaries when the project changes files, copies
+  workspaces, runs processes, deploys, or restores state;
 - find consequential authoritative promises;
 - map each selected promise to the real native control;
 - inspect actual control scope, cadence, exceptions, and failure behavior;
 - identify concrete partial, absent, or unknown coverage;
 - distinguish a focused native fix from a Redproof candidate;
+- retain important outcomes with full or unknown coverage, independently of
+  whether a new control is worthwhile;
 - stop before Rule or Check design.
 
 Merge new evidence into the primary inventory. Do not accept a candidate merely
@@ -38,7 +45,7 @@ decision.
 Give a different fresh reviewer:
 
 - the repository evidence boundary;
-- the draft candidate inventory, policy-to-control map, and Gate briefs;
+- the protected-outcomes map, research/clauses record, ranked actions, and any Gate briefs;
 - the scoring dimensions used by portfolio convergence;
 - no instruction to favor a particular candidate or later iteration.
 
@@ -52,6 +59,13 @@ Ask the reviewer to challenge:
   governance, or useful cadence;
 - implementation and recurring execution cost;
 - whether proposed Gates should be split, narrowed, deferred, or rejected;
+- whether an existing Gate should be amended instead of adding a new one;
+- whether important outcomes disappeared merely because coverage was unknown
+  or a proposed new control was rejected;
+- whether broad headings conceal distinct consequential promises, or a control
+  family was inventoried without investigating what its assertions protect;
+- whether each consequential research/reviewer finding has a retained, narrowed,
+  resolved or rejected disposition supported by evidence;
 - which decision-changing questions remain for a real maintainer.
 
 ## Reconciliation record
@@ -62,6 +76,8 @@ Record the review rather than silently replacing the primary judgment:
 Independent gap-review additions:
 Gap-review findings rejected after verification:
 Maintainer-lens recommendation:
+Outcomes retained when control recommendations changed:
+Research omissions, merged clauses, and reasons for final dispositions:
 Primary/reviewer disagreements:
 Evidence used to reconcile them:
 Remaining human decision:

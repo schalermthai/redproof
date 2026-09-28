@@ -1,7 +1,7 @@
 # Candidate Inventory and Promotion
 
-Use this inventory before proposing a Gate. Its purpose is to stop repository
-observations, preferences, and duplicated tooling from silently becoming policy.
+Use this inventory to record important outcomes and appraise proposed changes
+separately. Existing or unknown protection does not remove a credible outcome.
 
 ## Candidate record
 
@@ -9,6 +9,7 @@ observations, preferences, and duplicated tooling from silently becoming policy.
 Candidate:
 Observation:
 Protected domain outcome:
+Distinct protected clauses (IDs where needed):
 Stakeholders:
 Accountable policy owner:
 Concrete consequence if violated:
@@ -19,7 +20,10 @@ Counterevidence search performed:
 Counterevidence effect: invalidates | narrows | exception/lifecycle | unresolved
 Existing enforcement:
 Authority of that enforcement:
+Coverage: full | partial | none | unknown
 Gap in current enforcement:
+Recommended action: keep | investigate | improve existing control | native fix | consider new Gate | reject proposed control
+Existing Gate/control to amend (if applicable):
 Why Redproof might add value:
 Expected cadence:
 Current state: compliant | partially compliant | violated | unknown
@@ -49,12 +53,29 @@ Architecture / ownership: sampled | out of scope | no candidate
 Modernization / legacy direction: sampled | out of scope | no candidate
 Notable evidence inspected:
 Known blind spots or unavailable history:
+Operational boundary review (when relevant): effects traced, promised limits, deliberate exceptions, relevant assertions, remaining gaps
+Control families inspected: entry points, test groups, native configuration, delivery stages
+Priority research traces: promise -> policy evidence -> actual control -> representative assertions/exceptions
+Stopping rationale and material uninspected areas:
 ```
 
-## Promotion test
+For broad discovery, use [research-depth.md](research-depth.md) to populate this
+record from both promises and existing controls. Keep a compact reconciliation
+table for consequential clauses; it may be part of the outcome map:
 
-Promote a candidate from `candidate` to `proposed` only when the answers support
-all of these claims:
+```text
+Clause ID / promise | Source and failure case | Coverage | Retained under / narrowed / resolved / rejected, with reason | Action
+```
+
+Retain sources and concrete failure cases when grouping clauses. Existing
+protection can resolve the need for additional work without removing the promise.
+
+## Promotion test for new Gate work
+
+Retain a credible protected outcome when claims 1–4 and 7 below are supported.
+Proposing a new Gate additionally requires claims 5–6. Unknown coverage or a
+sufficient existing control affects the action recommendation, not the existence
+of the outcome in the map.
 
 1. There is evidence of an important constraint, not merely a common pattern.
 2. A project source or accountable person can plausibly authorize the policy.
@@ -81,10 +102,12 @@ human or better evidence must decide. Do not use a legitimate squash,
 deprecation, or retirement path as an automatic reason to lose an otherwise
 valuable candidate.
 
-If an answer is unknown, keep the candidate visible but mark it `deferred`. An
+If evidence for new Gate work is unknown, keep the outcome visible and mark the
+Gate recommendation `defer` or the action `investigate`. An
 accountable human may separately authorize an experiment without confirming the
-policy. If the constraint is stylistic, incidental, already enforced adequately,
-too broad to explain, or not intended by the project, reject it.
+policy. If the constraint is stylistic, incidental, too broad to explain, or not
+intended by the project, reject the outcome. If it is already enforced adequately,
+keep the outcome and reject the duplicate control.
 
 ## Existing-enforcement appraisal
 
@@ -123,7 +146,8 @@ Control authority:
 Actual control scope and cadence:
 Coverage: full | partial | none | unknown
 Concrete uncovered scenario:
-Smallest sufficient response: native fix | Redproof candidate | no new control | investigate
+Smallest sufficient response: keep | investigate | improve existing control | native fix | consider new Gate | reject proposed control
+Existing Gate/control to amend (if applicable):
 Why Redproof adds value beyond the native response:
 ```
 
@@ -136,10 +160,12 @@ Use the map as follows:
 - `full`: normally reject a new Redproof Gate unless composition, proof, or
   governance adds a specific missing assurance;
 - `partial` or `none`: preserve the uncovered scenario for portfolio comparison;
-- `unknown`: record the uncertainty and defer any claim of coverage;
+- `unknown`: retain the outcome, record the uncertainty, and investigate coverage;
+- `improve existing control`: name the owning Gate or native control and the
+  missing case; do not count the amendment as a new Gate;
 - `native fix`: recommend the focused test or control improvement when Redproof
   would add no material value;
-- `Redproof candidate`: retain it only when Redproof contributes more than a
+- `consider new Gate`: recommend it only when Redproof contributes more than a
   ceremonial wrapper around the native fix.
 
 Legitimate lifecycle operations do not automatically erase a policy. Narrow the
@@ -147,7 +173,11 @@ promise to its normal scope and identify who authorizes the exception.
 
 ## Portfolio convergence
 
-After appraising individual candidates, rank the surviving portfolio using
+Present the protected-outcomes map alongside a ranked action portfolio. Link
+actions to their outcome records instead of copying the same evidence. Keep
+important protected outcomes visible even when no new work is recommended.
+
+After appraising individual changes, rank the action portfolio using
 qualitative, evidence-backed judgments:
 
 ```text
