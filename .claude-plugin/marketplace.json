@@ -1,0 +1,14 @@
+{
+  "name": "redproof-plugins",
+  "description": "Redproof skills for discovering, designing and proving project guardrails.",
+  "owner": {
+    "name": "Redproof contributors"
+  },
+  "plugins": [
+    {
+      "name": "redproof",
+      "source": "./plugins/redproof",
+      "description": "Discover important guardrails, design honest Gates, and prove they catch regressions."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "redproof",
+  "version": "0.1.0",
+  "description": "Discover important guardrails, design honest Gates, and prove they catch regressions.",
+  "author": {
+    "name": "Redproof contributors"
+  },
+  "homepage": "https://github.com/schalermthai/redproof",
+  "repository": "https://github.com/schalermthai/redproof",
+  "license": "Apache-2.0",
+  "keywords": [
+    "guardrails",
+    "testing",
+    "redproof"
+  ]
+}

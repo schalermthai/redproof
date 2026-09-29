@@ -1,0 +1,28 @@
+{
+  "name": "redproof",
+  "version": "0.1.0",
+  "description": "Discover important guardrails, design honest Gates, and prove they catch regressions.",
+  "author": {
+    "name": "Redproof contributors"
+  },
+  "homepage": "https://github.com/schalermthai/redproof",
+  "repository": "https://github.com/schalermthai/redproof",
+  "license": "Apache-2.0",
+  "keywords": [
+    "guardrails",
+    "testing",
+    "redproof"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Redproof",
+    "shortDescription": "Prove your guardrails can catch regressions.",
+    "longDescription": "Discover the promises worth protecting, design focused Gates, implement and certify approved work, and review results with scoped human decisions.",
+    "developerName": "Redproof contributors",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": [
+      "Use Redproof discovery to find the promises this project should protect."
+    ]
+  }
+}

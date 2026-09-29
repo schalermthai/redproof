@@ -1,0 +1,20 @@
+{
+  "name": "redproof-plugins",
+  "interface": {
+    "displayName": "Redproof"
+  },
+  "plugins": [
+    {
+      "name": "redproof",
+      "source": {
+        "source": "local",
+        "path": "./plugins/redproof"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
