@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync, type SpawnSyncReturns } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ import { assertReleaseReadiness, buildPluginRelease, compareVersions, hostChecks
 import { publishPluginRelease, validatePluginRelease } from '../../scripts/publish-plugin.ts';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
+const pluginWorkflow = 'publish-harness-plugins.yml';
 const sourceCommit = 'a'.repeat(40);
 
 async function temporary(t: TestContext) {
@@ -175,9 +176,22 @@ test('unapproved host checks refuse publication before contacting even a local r
   await assert.rejects(publishPluginRelease(result.output, '/nonexistent-remote'), /Plugin release is not ready/);
 });
 
+test('exactly one workflow invokes the plugin publisher and the release guide names it', async () => {
+  const directory = join(repository, '.github/workflows');
+  const publishers: string[] = [];
+  for (const filename of await readdir(directory)) {
+    if (!/\.ya?ml$/.test(filename)) continue;
+    const workflow = await readFile(join(directory, filename), 'utf8');
+    if (/node scripts\/publish-plugin\.ts\b[^\n]*--publish\b/.test(workflow)) publishers.push(filename);
+  }
+  assert.deepEqual(publishers.sort(), [pluginWorkflow]);
+  const guide = await readFile(join(repository, 'plugin/RELEASING.md'), 'utf8');
+  assert.ok(guide.includes(`gh workflow run ${pluginWorkflow} --ref main`));
+});
+
 test('release workflows keep npm and plugin publication separate and preserve hidden catalogs', async () => {
   const npm = await readFile(join(repository, '.github/workflows/publish.yml'), 'utf8');
-  const plugin = await readFile(join(repository, '.github/workflows/publish-plugin.yml'), 'utf8');
+  const plugin = await readFile(join(repository, '.github/workflows', pluginWorkflow), 'utf8');
   assert.match(npm, /if: github.event_name == 'workflow_dispatch' \|\| startsWith\(github.event.release.tag_name, 'v'\)/);
   assert.match(plugin, /startsWith\(github.event.release.tag_name, 'plugin-v'\)/);
   assert.match(plugin, /include-hidden-files: true/);
@@ -188,7 +202,7 @@ test('release workflows keep npm and plugin publication separate and preserve hi
 });
 
 test('workflow tag validation rejects multiline output injection before checkout', async () => {
-  const workflow = await readFile(join(repository, '.github/workflows/publish-plugin.yml'), 'utf8');
+  const workflow = await readFile(join(repository, '.github/workflows', pluginWorkflow), 'utf8');
   const guard = workflow.match(/        run: \|\n([\s\S]*?)\n      - uses:/)?.[1];
   assert.ok(guard);
   for (const tag of ['plugin-v0.1.0', 'v0.1.0', 'plugin-v01.0.0', 'plugin-v0.1.0\nother=value', 'plugin-v0.1.0\n', 'plugin-v1.0.0;exit 0']) {

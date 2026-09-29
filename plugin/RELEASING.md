@@ -111,7 +111,7 @@ source tag; do not move a published tag:
 ```sh
 git tag -a plugin-v0.1.0 -m "Redproof plugin 0.1.0"
 git push origin plugin-v0.1.0
-gh workflow run publish-plugin.yml --ref main -f tag=plugin-v0.1.0 -F dry-run=true
+gh workflow run publish-harness-plugins.yml --ref main -f tag=plugin-v0.1.0 -F dry-run=true
 ```
 
 Tag push alone does not publish. A dry run builds the exact tagged source, runs
