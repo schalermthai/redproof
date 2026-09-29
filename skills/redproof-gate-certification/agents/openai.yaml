@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof Gate Certification"
+  short_description: "Prove and adversarially certify Gates"
+  default_prompt: "Use $redproof-gate-certification to implement or review this Gate and decide whether it deserves trust."

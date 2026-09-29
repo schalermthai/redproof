@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof Domain Discovery"
+  short_description: "Discover domain outcomes worth protecting"
+  default_prompt: "Use $redproof-domain-discovery to discover and align the domain outcomes this repository should protect."

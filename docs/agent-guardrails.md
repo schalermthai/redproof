@@ -10,7 +10,8 @@ more, not less. That only works when a check still fails on a real mistake.
 - [The Stop hook](#the-stop-hook)
 - [The redproof skill](#the-redproof-skill)
 - [The redproof-pr-review skill](#the-redproof-pr-review-skill)
-- [How the three fit together](#how-the-three-fit-together)
+- [Discover, design and certify project guardrails](#discover-design-and-certify-project-guardrails)
+- [How the skills and library fit together](#how-the-skills-and-library-fit-together)
 
 ## Why a rule in a prompt does not hold
 
@@ -263,18 +264,49 @@ The suggestion under C1 asks for exactly that kind of check.
 
 That check is a Gate.
 
-## How the three fit together
+## Discover, design and certify project guardrails
+
+When introducing Redproof to an existing project, start with
+[`redproof-discovery`](../skills/redproof-discovery/SKILL.md). It routes the work
+to the stage that owns the next decision; it does not require starting over when
+an agreed design already exists.
+
+| Skill | Question it answers | What you receive |
+| --- | --- | --- |
+| [`redproof-domain-discovery`](../skills/redproof-domain-discovery/SKILL.md) | What is worth protecting? | Ranked recommendations and draft Gate descriptions, with existing protection and remaining gaps. First-time discovery prioritizes the project claims users rely on. |
+| [`redproof-gate-design`](../skills/redproof-gate-design/SKILL.md) | What can we honestly check and prove? | Bounded Rules, evidence contracts, and concrete scope and work choices. |
+| [`redproof-gate-certification`](../skills/redproof-gate-certification/SKILL.md) | Does the implemented Gate catch the failures it promises to catch? | Authorized implementation and proof work, followed by results compared with the agreed design, limitations and next steps. |
+
+These stages share
+[`redproof-review-ui`](../skills/redproof-review-ui/SKILL.md), a local browser
+report with descriptions, examples and scoped choices. Discovery lets you choose
+which Gates to design. Design lets you choose coverage and, when settled,
+implementation and proof. Certification reports what was actually delivered.
+Unanswered choices authorize nothing; implementing locally does not authorize
+production adoption. The report collects decisions, not proof evidence itself.
+
+Reuse the project checks that already protect its promises. A native fix or
+keeping sufficient existing protection can be the right result; a new Gate is
+not required for every claim. When a Gate is worthwhile, these skills help turn
+that claim into a bounded promise and prove its safeguard detects regressions.
+
+## How the skills and library fit together
 
 ```text
 redproof skill             one proof, by hand, for a check you just wrote or changed
 redproof-pr-review skill   proofs for the claims a pull request makes, at review time
+discovery -> design -> certification
+                          select, define, then implement and prove project Gates
+redproof-review-ui skill  local reports and scoped human choices across those stages
 Redproof library           a proof stored beside the Gate, repeated on every commit
 ```
 
-The skills teach the discipline by hand. The library makes the proof
-permanent. Claude Code loads a skill from a `SKILL.md` file under
+The skills guide the work and its decisions. The library stores repeatable
+proofs beside Gates. Claude Code loads a skill from a `SKILL.md` file under
 `.claude/skills/` in a project, or under `~/.claude/skills/` for every
-project. Copy the skill directory there to use it.
+project. Copy the skill directory there to use it. For the staged workflow,
+keep the router, three stage skills and review helper together so their sibling
+references remain available.
 
 ## Next
 
