@@ -237,34 +237,10 @@ For implementation, follow its completion contract: build the Gate, Check and
 proofs, run them against the real selected target, and return verified results
 or a precise partial/blocked status. Never silently substitute an experiment.
 
-Produce one contract per Rule:
-
-```text
-Domain concern:
-Gate:
-Bounded Rule:
-Policy status:
-Stage authorization:
-Policy source and strength:
-Policy clause traceability:
-Counterevidence considered:
-Allowed example:
-Violating example:
-Evidence source and authority:
-Evidence completeness obligation:
-Native enforcement slot:
-Integration choice: command() | Adapter | custom Check
-Why this is the smallest honest integration:
-PASS proves:
-PASS does not prove:
-FAIL means:
-Check-level REFUSE conditions:
-Enforcement frontier:
-Existing enforcement and incremental Redproof value:
-Owner / cadence / failure response:
-Deferred domain remainder:
-Open questions:
-```
+Produce one contract per Rule using the canonical
+[contract template](references/rule-contract.md#contract-template). Keep shared
+clauses once with explicit per-Rule differences; do not maintain a second template
+in the handoff instructions.
 
 Stop before claiming the Check is trustworthy. Do not hand off to certification
 while the comparison base, policy scope, exception owner, lifecycle, evidence

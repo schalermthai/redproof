@@ -98,7 +98,7 @@ Produce a certification record:
 ```text
 Rule contract reference:
 Check implementation:
-Implementation status: implemented-and-verified | partially implemented | blocked
+Implementation status: implemented-and-verified | partially-implemented | blocked
 Actual target/tool and revision:
 Real-project evidence versus controlled-fixture evidence:
 Healthy baseline:
@@ -122,8 +122,8 @@ stage or implementation work is required.
 
 Use `implemented-and-verified` only when the selected implementation, actual
 integration, proof portfolio, adversarial review and mutation restoration are
-complete. With code written but validation incomplete, report `partially
-implemented` and the blocker; with work prevented before implementation, report
+complete. With code written but validation incomplete, report
+`partially-implemented` and the blocker; with work prevented before implementation, report
 `blocked`. Keep these delivery statuses separate from the Check's PASS/FAIL/REFUSE
 verdicts and from an explicitly limited experiment's result. Restoration means
 removing proof mutations while preserving the implementation and user changes.

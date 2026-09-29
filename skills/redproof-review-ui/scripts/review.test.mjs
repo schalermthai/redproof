@@ -7,6 +7,28 @@ import { request } from 'node:http';
 import { digestOf, renderReview, startReview, validateAnswer, validateReview } from './review.mjs';
 import { certificationFixture } from './fixtures/certification.mjs';
 
+test('documented certification values produce valid report data', async () => {
+  const skill = await readFile(new URL('../../redproof-gate-certification/SKILL.md', import.meta.url), 'utf8');
+  const handoff = await readFile(new URL('../../redproof-gate-certification/references/results-handoff.md', import.meta.url), 'utf8');
+  const statusLine = skill.split('\n').find(line => line.startsWith('Implementation status:'));
+  assert.ok(statusLine, 'Certification record must declare its implementation statuses');
+  const statuses = statusLine.slice('Implementation status:'.length).split('|').map(value => value.trim());
+  const exampleRow = handoff.split('\n').find(line => line.startsWith('| Example: reference behavior |'));
+  assert.ok(exampleRow, 'Results handoff must include its comparison example');
+  const dispositions = [...exampleRow.split('|').at(-2).matchAll(/`([^`]+)`/g)].map(match => match[1]);
+  assert.ok(dispositions.length > 0, 'The example must name machine-readable dispositions');
+  for (const status of statuses) {
+    for (const disposition of dispositions) {
+      const review = certificationFixture();
+      const result = review.gates[0].certification;
+      result.status = status;
+      result.decision = status === 'implemented-and-verified' ? 'trusted' : 'not-trusted';
+      result.comparison[0].disposition = disposition;
+      assert.doesNotThrow(() => validateReview(review), `Documented values: ${status}, ${disposition}`);
+    }
+  }
+});
+
 test('certification requires honest status, comparisons and describe availability', async () => {
   const review = certificationFixture();
   validateReview(review);

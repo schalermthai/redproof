@@ -67,6 +67,7 @@ Category:
 Enforcement frontier:
 Expected cadence:
 Owner / responder:
+Failure response:
 Deferred domain remainder:
 Open questions:
 ```

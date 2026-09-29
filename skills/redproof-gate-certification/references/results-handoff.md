@@ -64,7 +64,7 @@ Check/evidence source, scope/platform, proof plan and completion criteria:
 
 | Promise or component | Approved design | Actual delivery and evidence | Disposition |
 | --- | --- | --- | --- |
-| Example: reference behavior | Run the selected native examples | Recorded native run and proof results | Delivered, changed, deferred or blocked |
+| Example: reference behavior | Run the selected native examples | Recorded native run and proof results | `delivered`, `changed`, `deferred` or `blocked` |
 
 Explain meaningful differences, their reasons and authorization. Separate harmless
 engineering choices from changed promises requiring renewed design approval.
