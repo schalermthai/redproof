@@ -39,6 +39,23 @@ export const proofs = defineProofs(gate, [
 export default gate;
 ```
 
+A configured ESLint finding becomes a Breach of the Redproof Rule that adopted
+it. Fatal parsing or execution problems become REFUSE, not fake Rule breaches.
+
+An adopted Rule cannot be suppressed in the source. A finding that ESLint
+reports as suppressed by `/* eslint-disable */` still breaches the Redproof
+Rule that adopted it. The ESLint Adapter has no baseline.
+
+Name a path in `files` and ESLint must read it. A configured `ignores` pattern
+that excludes that path becomes REFUSE, not PASS. A glob in `files` keeps your
+`ignores` patterns, so name the path when you need Redproof to prove that
+ESLint read it.
+
+Each entry of `files` must be a non-empty relative path. An empty or absolute
+entry throws when the Gate file loads. That check rejects an absolute path
+only. It does not reject a `..` segment, so `files` is not confined to the
+Gate root.
+
 Then run:
 
 ```bash

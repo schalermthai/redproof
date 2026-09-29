@@ -110,7 +110,8 @@ export function parseKnipEvidence(text: string): KnipEvidence {
           const symbol = nonempty(item.symbol);
           const line = position(item.line);
           const column = position(item.col);
-          return `${symbol}${line === null ? '' : `:${line}${column === null ? '' : `:${column}`}`}`;
+          if (line === null) return symbol;
+          return column === null ? `${symbol}:${line}` : `${symbol}:${line}:${column}`;
         });
       }
       if ((type === 'duplicates' || type === 'cycles') && symbols.length < 2) {

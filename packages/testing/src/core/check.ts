@@ -179,18 +179,14 @@ export function decideCheck<R extends RuleRef>(input: {
   }
 
   const { execution } = evidence;
+  const output = [execution.stderr.trim(), execution.stdout.trim(), `exit code: ${execution.exitCode}`];
   const run = parseReport(evidence.root, evidence.report, format);
   if (run instanceof Error) {
     return result.refuse(scanOf(format, times, null), {
       code: 'test-report-unavailable',
       message: 'The test command did not produce a trustworthy structured report.',
       location: null,
-      detail: [
-        run.message,
-        execution.stderr.trim(),
-        execution.stdout.trim(),
-        `exit code: ${execution.exitCode}`,
-      ].filter(Boolean).join('\n'),
+      detail: [run.message, ...output].filter(Boolean).join('\n'),
     });
   }
 
@@ -199,11 +195,7 @@ export function decideCheck<R extends RuleRef>(input: {
       code: 'test-runner-unsuccessful',
       message: 'The test command exited unsuccessfully without structured failed tests explaining the exit.',
       location: null,
-      detail: [
-        execution.stderr.trim(),
-        execution.stdout.trim(),
-        `exit code: ${execution.exitCode}`,
-      ].filter(Boolean).join('\n'),
+      detail: output.filter(Boolean).join('\n'),
     });
   }
 

@@ -1,4 +1,4 @@
-import type { TestCase, TestReportFormat, TestRun } from '../model.ts';
+import type { TestCase, TestReportFormat, TestRun, TestStatus } from '../model.ts';
 
 function decodeXml(value: string): string {
   return value
@@ -47,7 +47,9 @@ export function parseJunitXml(input: string): TestRun {
     const body = match[2] ?? '';
     const failure = element(body, 'failure') ?? element(body, 'error');
     const skipped = element(body, 'skipped');
-    const status = failure ? 'failed' : skipped ? 'skipped' : 'passed';
+    let status: TestStatus = 'passed';
+    if (failure) status = 'failed';
+    else if (skipped) status = 'skipped';
     const file = attrs.file ?? null;
     const line = attrs.line ? Number.parseInt(attrs.line, 10) : null;
     const durationSeconds = attrs.time ? Number.parseFloat(attrs.time) : Number.NaN;

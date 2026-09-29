@@ -1,6 +1,6 @@
 {
   "name": "@redproof/adapter-tck",
-  "version": "0.10.0",
+  "version": "0.12.0",
   "description": "Technology compatibility kit for Redproof adapters.",
   "type": "module",
   "exports": {
@@ -20,7 +20,7 @@
     "typescript": "^5.9.0"
   },
   "peerDependencies": {
-    "redproof": "0.10.0"
+    "redproof": "0.12.0"
   },
   "repository": {
     "type": "git",

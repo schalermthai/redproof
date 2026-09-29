@@ -41,6 +41,13 @@ export const proofs = defineProofs(gate, [
 export default gate;
 ```
 
+One dependency-cruiser run can report breaches across several selected Rules.
+
+`configFile`, `knownViolationsFile`, and each entry of `files` must be non-empty
+relative paths. An empty or absolute value throws when the Gate file loads.
+That check rejects an absolute path only. It does not reject a `..` segment, so
+`files` is not confined to the Gate root.
+
 Set `knownViolationsFile` when the project maintains a dependency-cruiser
 baseline. Matching known violations are ignored; new violations still breach
 their selected Redproof Rules. Checks run without dependency-cruiser caching so

@@ -19,10 +19,7 @@ function isInsideRoot(root: string, candidate: string): boolean {
 /** Resolve and lexically confine a path to the testing Gate root. */
 export function resolveTestingPath(root: string, path: string): ResolvedTestingPath {
   const absoluteRoot = resolve(root);
-  const candidate = resolve(absoluteRoot, path);
-  return isInsideRoot(absoluteRoot, candidate)
-    ? { kind: 'inside', path: candidate }
-    : { kind: 'outside', path: candidate };
+  return confineCanonicalTestingPath(absoluteRoot, resolve(absoluteRoot, path));
 }
 
 /** Confine already-canonical absolute paths, resolving symbolic-link escapes. */

@@ -34,7 +34,9 @@ export default defineGate({ id: 'test-strength', adapter });
 `cwd` is relative to the Gate root and cannot resolve outside it, including
 through a symbolic link. `configFile`, `acceptedMutantsFile`, and Stryker's own
 relative paths are resolved from that working directory. A `cwd` that does not
-exist is reported as `stryker-unavailable`.
+exist is reported as `stryker-unavailable`. `cwd`, `configFile`, and
+`acceptedMutantsFile` must be non-empty relative paths. An empty or absolute
+value throws when the Gate file loads.
 
 If a mature project intentionally carries surviving or uncovered mutants, use
 an accepted-mutant baseline instead of weakening the score until unrelated

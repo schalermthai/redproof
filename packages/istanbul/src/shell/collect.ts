@@ -17,11 +17,12 @@ function identity(stat: Stats): ReportStat {
 }
 async function readReport(reportFile: string, maxReportBytes: number): Promise<Report | Refusal> {
   const stat = await lstat(reportFile);
-  const untrusted = reportIdentity(identity(stat), undefined, maxReportBytes);
+  const expected = identity(stat);
+  const untrusted = reportIdentity(expected, undefined, maxReportBytes);
   if (untrusted) return untrusted;
   const handle = await open(reportFile, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
-    const changed = reportIdentity(identity(stat), identity(await handle.stat()), maxReportBytes);
+    const changed = reportIdentity(expected, identity(await handle.stat()), maxReportBytes);
     if (changed) return changed;
     const bytes = Buffer.alloc(stat.size + 1);
     let length = 0;

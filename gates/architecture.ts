@@ -13,6 +13,8 @@ const dependencies = dependencyCruiser({
     'packages/testing/src',
     'packages/knip/src',
     'packages/istanbul/src',
+    'tests',
+    'packages/*/test',
   ],
   rules: {
     noCycles: 'no-cycles',
@@ -27,6 +29,7 @@ const dependencies = dependencyCruiser({
     productionNoAdapterTckDependency: 'production-no-adapter-tck-dependency',
     contextsImportThroughIndex: 'contexts-import-through-index',
     entrypointsImportThroughIndex: 'entrypoints-import-through-index',
+    coreTestsNoShell: 'core-tests-no-shell',
   },
 });
 
@@ -54,7 +57,7 @@ const gate = defineGate({
     dependencies,
     rules,
     sources: 'packages/*/src/**/*.ts',
-    coreTests: 'tests/**/*.core.test.ts',
+    coreTests: '{tests,packages/*/test}/**/*.core.test.ts',
   }),
 });
 
@@ -176,6 +179,26 @@ export const proofs = defineProofs(gate, [
     rules.coreTestsNoIoHelpers,
     'keeps filesystem fixtures out of functional-core tests',
     mutate.appendText('tests/proof/evaluation.core.test.ts', "\nimport '../helpers/workspace.ts';\n"),
+  ),
+  proof.red(
+    rules.coreTestsNoIoHelpers,
+    'keeps effect imports out of an Adapter package core test',
+    mutate.appendText('packages/knip/test/model.core.test.ts', "\nimport 'node:fs';\n"),
+  ),
+  proof.red(
+    rules.coreTestsNoIoHelpers,
+    'keeps package workspace helpers out of an Adapter package core test',
+    mutate.appendText('packages/knip/test/model.core.test.ts', "\nimport './support/workspace.ts';\n"),
+  ),
+  proof.red(
+    rules.coreTestsNoShell,
+    'keeps shell code out of functional-core tests',
+    mutate.appendText('tests/run/exit-code.core.test.ts', "\nimport '../../packages/redproof/src/run/shell/project-runner.ts';\n"),
+  ),
+  proof.red(
+    rules.coreTestsNoShell,
+    'keeps an Adapter entry point out of its package core test',
+    mutate.appendText('packages/knip/test/model.core.test.ts', "\nimport '../src/index.ts';\n"),
   ),
   proof.green('accepts the current functional-core and package boundaries'),
 ]);

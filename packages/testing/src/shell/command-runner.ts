@@ -23,21 +23,20 @@ export function command<const O extends CommandRunnerOptions>(
     argsFor: ctx => argsFor(options.args, ctx),
 
     async run(ctx): Promise<TestRunnerResult> {
-      const computedArgs = (() => {
+      const args = (() => {
         try {
           return argsFor(options.args, ctx);
         } catch (error) {
           return error instanceof Error ? error : new Error(String(error));
         }
       })();
-      if (computedArgs instanceof Error) {
+      if (args instanceof Error) {
         return {
           kind: 'unavailable',
           message: `Could not prepare test command ${options.command}.`,
-          detail: computedArgs.message,
+          detail: args.message,
         };
       }
-      const args = computedArgs;
       const cwd = resolveTestingPath(ctx.root, options.cwd ?? '.');
       if (cwd.kind === 'outside') {
         return {
@@ -50,15 +49,10 @@ export function command<const O extends CommandRunnerOptions>(
       const canonicalRoot = await realpath(ctx.root).catch((error: Error) => error);
       const canonicalCwd = await realpath(cwd.path).catch((error: Error) => error);
       if (canonicalRoot instanceof Error || canonicalCwd instanceof Error) {
-        const detail = canonicalRoot instanceof Error
-          ? canonicalRoot.message
-          : canonicalCwd instanceof Error
-            ? canonicalCwd.message
-            : 'Unknown working-directory error.';
         return {
           kind: 'unavailable',
           message: 'The test working directory could not be resolved.',
-          detail,
+          detail: canonicalRoot instanceof Error ? canonicalRoot.message : (canonicalCwd as Error).message,
         };
       }
       const confinedCwd = confineCanonicalTestingPath(canonicalRoot, canonicalCwd);

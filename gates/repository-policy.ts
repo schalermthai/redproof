@@ -41,6 +41,7 @@ const gate = defineGate({
     linkTargets: [
       'README.md',
       'LICENSE',
+      '.claude/settings.json',
       '.github/**/*',
       'docs/**/*',
       'fixtures/**/*',
@@ -65,7 +66,7 @@ export const proofs = defineProofs(gate, [
     rules.versionAlignment,
     'detects divergent package versions',
     mutate.replaceText(
-      locate.text({ files: 'packages/testing/package.json', find: '"version": "0.10.0"' }),
+      locate.text({ files: 'packages/testing/package.json', find: '"version": "0.12.0"' }),
       '"version": "0.6.1"',
     ),
   ),
@@ -91,6 +92,14 @@ export const proofs = defineProofs(gate, [
     mutate.replaceText(
       locate.text({ files: '.github/workflows/ci.yml', find: 'run: npm run verify:package' }),
       'run: npm run verify:package-off',
+    ),
+  ),
+  proof.red(
+    rules.automationVerification,
+    'detects a publish command npm would read as a GitHub shorthand',
+    mutate.replaceText(
+      locate.text({ files: '.github/workflows/publish.yml', find: 'npm publish "./$TARBALL"' }),
+      'npm publish "$TARBALL"',
     ),
   ),
   proof.red(
