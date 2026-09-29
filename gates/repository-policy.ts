@@ -37,7 +37,7 @@ const gate = defineGate({
   rules,
   check: repositoryPolicy({
     rules,
-    documents: ['README.md', 'docs/**/*.md', 'skills/redproof/**/*.md'],
+    documents: ['README.md', 'docs/**/*.md', 'skills/**/*.md', 'skill-support/**/*.md', 'plugin/**/*.md'],
     linkTargets: [
       'README.md',
       'LICENSE',
@@ -47,8 +47,11 @@ const gate = defineGate({
       'fixtures/**/*',
       'gates/**/*',
       'packages/**/*',
+      'plugin/**/*',
+      'plugin/redproof/.codex-plugin/plugin.json',
       'scripts/**/*',
       'skills/**/*',
+      'skill-support/**/*',
     ],
   }),
 });

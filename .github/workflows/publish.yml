@@ -22,6 +22,8 @@ permissions:
 jobs:
   publish:
     name: Build, verify and publish
+    # Plugin releases use plugin-v tags and their own workflow, never npm.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Redproof Review UI"
-  short_description: "Review Gate proposals, results and scoped next steps"
-  default_prompt: "Use $redproof-review-ui to present these Gate proposals or results and collect scoped next-step choices in a local report."

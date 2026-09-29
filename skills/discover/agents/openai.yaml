@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof · Discover useful Gates"
+  short_description: "Find project promises and propose useful Gates"
+  default_prompt: "Use $discover to research this project's important promises, propose useful Gates, and let me choose what to design."

@@ -1,0 +1,28 @@
+{
+  "version": "0.1.0",
+  "bundleSha256": "72cad10ed42a22e8faa5a734c012187d65a6badb8f3bfbe6654d5a5aada3f863",
+  "hosts": {
+    "codex": {
+      "version": "0.156.1",
+      "evidence": "plugin/VALIDATION.md",
+      "checks": {
+        "installation": "pass",
+        "publicSkills": "pass",
+        "approvedHandoff": "pass",
+        "reviewUI": "pass",
+        "authorizationBoundaries": "pass"
+      }
+    },
+    "claude": {
+      "version": "2.1.284",
+      "evidence": "plugin/VALIDATION.md",
+      "checks": {
+        "installation": "pass",
+        "publicSkills": "pass",
+        "approvedHandoff": "pass",
+        "reviewUI": "pass",
+        "authorizationBoundaries": "pass"
+      }
+    }
+  }
+}
