@@ -1,0 +1,112 @@
+name: Publish Harness plugin
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing source tag, for example plugin-v0.1.0'
+        required: true
+        type: string
+      dry-run:
+        description: 'Build a preview only; do not publish'
+        type: boolean
+        default: true
+
+# Serialize all versions, not only retries of the same release.
+concurrency:
+  group: plugin-marketplace-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'plugin-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+    steps:
+      - name: Validate the requested tag before checkout
+        id: identity
+        env:
+          REQUESTED_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          if [[ ! "$REQUESTED_TAG" =~ ^plugin-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::Expected a plugin-vX.Y.Z source tag.'
+            exit 1
+          fi
+          echo "tag=$REQUESTED_TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ steps.identity.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      - name: Test the standalone package and release safety
+        run: npm run test:plugin
+      - name: Build the complete marketplace snapshot
+        env:
+          RELEASE_TAG: ${{ steps.identity.outputs.tag }}
+        run: |
+          npm run plugin:release:build -- --tag "$RELEASE_TAG" --source-commit "$(git rev-parse HEAD)" --out "$RUNNER_TEMP/marketplace"
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -cf - -C "$RUNNER_TEMP/marketplace" . | gzip -n > "$RUNNER_TEMP/redproof-plugin-marketplace.tar.gz"
+          cd "$RUNNER_TEMP"
+          sha256sum redproof-plugin-marketplace.tar.gz > redproof-plugin-marketplace.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: plugin-release
+          path: |
+            ${{ runner.temp }}/marketplace
+            ${{ runner.temp }}/redproof-plugin-marketplace.tar.gz
+            ${{ runner.temp }}/redproof-plugin-marketplace.sha256
+          include-hidden-files: true
+          if-no-files-found: error
+
+  publish:
+    needs: prepare
+    if: github.event_name == 'release' || inputs.dry-run == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      - uses: actions/download-artifact@v8
+        with:
+          name: plugin-release
+          path: ${{ runner.temp }}/plugin-release
+      - name: Require exact-bundle host evidence before any publication
+        run: node scripts/publish-plugin.ts --verify "$RUNNER_TEMP/plugin-release/marketplace"
+      - name: Publish immutable bundle tag and advance marketplace atomically
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          git config --global credential.helper '!gh auth git-credential'
+          node scripts/publish-plugin.ts --directory "$RUNNER_TEMP/plugin-release/marketplace" --remote "https://github.com/$RELEASE_REPOSITORY.git" --publish
+      - name: Attach downloadable snapshot to the source release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          # Do not replace existing release assets when retrying publication.
+          existing=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+          for asset in redproof-plugin-marketplace.tar.gz redproof-plugin-marketplace.sha256; do
+            if ! printf '%s\n' "$existing" | grep -Fxq "$asset"; then
+              gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/plugin-release/$asset"
+            fi
+          done
