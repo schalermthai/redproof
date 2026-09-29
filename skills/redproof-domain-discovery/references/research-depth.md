@@ -4,6 +4,24 @@ Use this pass for broad discovery. Aim to identify the promises whose failure
 would most change a maintainer's decision. Neither reading every file nor
 producing many Gate proposals establishes useful coverage.
 
+## First-pass claim research
+
+For first brownfield discovery, begin with the README/product overview and the
+project's supported guarantees. Cross-check headline claims against detailed
+documentation, supported targets, limitations, deprecations and implementation;
+distinguish current commitments from aspirations or unsupported wording. Record
+the source and qualifiers rather than adopting a slogan as policy.
+
+Split broad claims into independently falsifiable promises before tracing their
+controls. For example, a "self-contained" executable might promise no installed
+runtime and no shared-library dependency; evidence for one does not prove the
+other. Seek the relevant native tests/tools and their demonstrated detection
+before proposing replacements. Carry uncovered parts forward explicitly.
+
+If no clear claims are documented, infer tentative outcomes from principal user
+journeys and label them for human confirmation; do not invent a headline. This
+starting priority complements, rather than replaces, the breadth sweep below.
+
 ## Start from two directions
 
 **Promises to controls:** inspect the principal user or business paths, public

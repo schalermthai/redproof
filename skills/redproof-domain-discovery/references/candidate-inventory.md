@@ -9,6 +9,7 @@ separately. Existing or unknown protection does not remove a credible outcome.
 Candidate:
 Observation:
 Protected domain outcome:
+Project claim supported (source and bounded interpretation, or not claim-linked):
 Distinct protected clauses (IDs where needed):
 Stakeholders:
 Accountable policy owner:
@@ -50,6 +51,8 @@ baseline.
 Record breadth once per discovery, without manufacturing candidates:
 
 ```text
+Discovery context: first brownfield pass | follow-up | unknown (stated assumption)
+Principal project claims and links to protected clauses/dispositions:
 Stakeholder-visible / business behavior: sampled | out of scope | no candidate
 Operational / data integrity: sampled | out of scope | no candidate
 Public contracts / compatibility: sampled | out of scope | no candidate
@@ -224,6 +227,7 @@ qualitative, evidence-backed judgments:
 
 ```text
 Candidate:
+Claim-linked priority and reason for any first-pass deferral or override:
 Stakeholder consequence: high | medium | low
 Policy strength: high | medium | low
 Uncovered assurance gap: high | medium | low

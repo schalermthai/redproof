@@ -1,6 +1,6 @@
 ---
 name: redproof-domain-discovery
-description: Discover the important outcomes an existing repository should protect with Redproof, draft Gate descriptions, and let the user choose Gates in a local interactive report. Use when guardrail priorities are not yet agreed. Do not use when a specific outcome is agreed and only its evidence contract or implementation remains.
+description: Discover the important outcomes an existing repository should protect with Redproof, prioritizing project claims on first brownfield use. Draft Gate descriptions and let the user choose Gates in a local interactive report. Use when guardrail priorities are not yet agreed. Do not use when a specific outcome is agreed and only its evidence contract or implementation remains.
 ---
 
 # Redproof Domain Discovery
@@ -30,6 +30,31 @@ scope. Do not modernize the system, design detailed Checks, or install policy as
 part of this skill unless the user separately asks for that work. Draft Rules,
 plausible Checks and conceptual proof cases are part of discovery: they make the
 proposal discussable, not implementation-ready or approved.
+
+### First brownfield discovery: prioritize the project's claims
+
+Establish whether this is the first discovery or a follow-up from the supplied
+history and repository artifacts. Existing tests or Gates alone do not establish
+that claim-led discovery already happened. If history is unavailable, state the
+assumption and use claims-first for broad discovery; respect an explicitly
+narrower user scope.
+
+On the first pass, start with what users rely on the project to deliver: its
+principal product claims, supported guarantees and distinguishing capabilities.
+Give redproving those claims high priority over incidental repository hygiene.
+Ask: **If this claim stopped being true, would the existing safeguards catch it?**
+Trace the claims to bounded promises, actual controls and detection evidence
+using [research-depth.md](references/research-depth.md). A headline is a starting
+point, not proof of behavior or authority for an absolute Rule.
+
+This is a research and ranking priority, not a quota or a requirement to add a
+Gate per claim. Reuse existing safeguards, credit demonstrated detection, and
+retain adequately protected claims without duplicate Gates. User priorities or
+more consequential safety/data-integrity gaps can take precedence; explain why.
+Follow-up discovery revisits changed claims and remaining assurance gaps rather
+than automatically repeating the entire first-pass exercise.
+
+### Inspect the wider scope
 
 Inspect enough evidence to understand promises and failure costs. Useful sources
 include architecture documents, ADRs, APIs, schemas, migrations, tests, CI,
@@ -259,6 +284,11 @@ and a cheap authoritative enforcement path over a broader candidate whose
 evidence would be expensive or ambiguous. This is prioritization, not permission
 to finalize or implement a Rule; draft wording remains open to revision.
 
+For first brownfield discovery, apply the claims-first priority above: do not let
+easy-to-write hygiene checks displace worthwhile proofs of the project's main
+promises. Link recommended actions to those claims and explain any decision to
+defer claim-linked work or rank another concern ahead of it.
+
 Use the policy-to-control map for one final missed-opportunity pass:
 
 > Is there an explicit, consequential policy with weak enforcement and a cheap
@@ -278,6 +308,10 @@ reasoned narrowing, resolution or rejection. Include earlier findings when they
 are supplied in the task; do not search outside the authorized evidence boundary
 for them. Preserve the concrete failure case when grouping findings, and report
 important uninspected areas instead of implying complete coverage.
+
+In the first-use handoff, make the claim-to-protection relationship clear in
+plain language, including claims already protected or not yet established.
+Proving one bounded case must not be presented as proving the whole headline.
 
 For Gate additions or amendments in the action portfolio, give the recommendation `approve-for-design`,
 `approve-for-experiment`, `approve-for-adoption`, `defer`, or `reject` and the
