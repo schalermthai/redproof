@@ -42,6 +42,11 @@ For each priority concern, inspect enough to connect:
 4. A representative assertion and an adverse or exception case, where present.
    Read what is asserted, not only the test name. Missing or unavailable evidence
    remains an explicit gap; do not fabricate an assertion or a passing run.
+5. Evidence that the control detects the feared regression, distinct from its
+   intended coverage. Look for relevant negative/fault-injection tests, recorded
+   failing-then-passing cases or mutation evidence, and preserve their actual
+   scope. Use the candidate inventory's proof-value appraisal for consequential
+   controls; absent evidence remains unknown, not automatic Gate work.
 
 Product capability examples and incidental tests do not automatically establish
 mandatory repository policy. A tool configuration can establish intended rules

@@ -28,10 +28,14 @@ Ask the reviewer to:
 - map each selected promise to the real native control;
 - inspect actual control scope, cadence, exceptions, and failure behavior;
 - identify concrete partial, absent, or unknown coverage;
-- distinguish a focused native fix from a Redproof candidate;
+- distinguish coverage from demonstrated regression detection and appraise
+  proof value for consequential native controls;
+- distinguish a focused native fix, proving an existing safeguard, and adding
+  a new control; native fixes and proof opportunities may coexist;
 - retain important outcomes with full or unknown coverage, independently of
   whether a new control is worthwhile;
-- stop before Rule or Check design.
+- stop before detailed Rule/Check implementation design; concrete draft promises
+  and detection/proof ideas are welcome, not finalized contracts.
 
 Merge new evidence into the primary inventory. Do not accept a candidate merely
 because the reviewer proposed it; verify its source, consequence, control gap,
@@ -55,6 +59,10 @@ Ask the reviewer to challenge:
 - whether the policy is real, scoped, and exception-aware;
 - whether the claimed native-control gap is accurate;
 - whether a native fix is smaller and sufficient;
+- whether existing safeguards were trusted merely because tests exist, without
+  detection evidence or the proof-value appraisal;
+- whether a proposed proof reuses the native control, adds meaningful confidence,
+  and is safe and proportionate; unknown detection alone does not justify a Gate;
 - whether Redproof adds composition, honest REFUSE behavior, proofs, ratcheting,
   governance, or useful cadence;
 - implementation and recurring execution cost;
@@ -67,6 +75,23 @@ Ask the reviewer to challenge:
 - whether each consequential research/reviewer finding has a retained, narrowed,
   resolved or rejected disposition supported by evidence;
 - which decision-changing questions remain for a real maintainer.
+
+When reviewing the final handoff, also read its beginner summary independently
+of the technical inventory. Can a new user identify the next useful action,
+understand the concrete consequence and existing protection, distinguish
+suspected from demonstrated failures, and tell what approval is requested?
+Check that diagrams, examples, excerpts and counts preserve those distinctions;
+presentation quality must not conceal uncertainty or create extra Gate claims.
+Check that unresolved opportunities explain their potential value and missing
+decision, and that the ending gives a recommended order with honest dependencies,
+optional work and conditions for designing/proving a named Gate. A list of labels
+or repeated approval menus is not an actionable handoff.
+Verify that every Gate presented in the final portfolio has a draft in actual
+Redproof describe syntax, including deferred candidates and amendments. Challenge
+the draft Rules, plausible Check and conceptual proofs; identify unsupported
+capability claims, missing proof ideas and unresolved assumptions. Do not demand
+implementation-ready patches or mistake expected proof outcomes for executed
+results. Ordinary fixes/no-Gate dispositions must not become invented Gates.
 
 ## Reconciliation record
 

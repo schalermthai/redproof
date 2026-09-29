@@ -6,6 +6,10 @@ larger domain concern it came from.
 
 ## Decision-ready summary
 
+Follow [beginner-handoff.md](beginner-handoff.md) for the required proposed
+describe block, readable HTML/Markdown summary and final response. The detailed
+contract below supports that handoff; it does not replace it.
+
 Before the detailed contracts, give the reader a practical recommendation:
 
 ```text
@@ -195,5 +199,10 @@ as authorized policy.
 Only `confirmed` contracts with `approved-for-adoption` become production
 policy. Confirmation may come from the user, an accountable maintainer, or an
 authoritative project policy whose meaning is unambiguous. An accountable human
-must still authorize the stage. Use `approved-for-experiment` when implementation
-is useful for learning but adoption is unresolved.
+must still authorize the stage. Use `approved-for-experiment` for an explicitly
+selected bounded feasibility question, not merely because adoption is unresolved.
+Use `approved-for-implementation` for an explicitly selected local build-and-proof
+scope; it can proceed without adoption approval and still grants no production
+adoption or publication. Record the review
+ID, selected Gate/scope/depth, notes, work location and stopping point. A smaller
+scope never relaxes the evidence requirements of its retained Rules.

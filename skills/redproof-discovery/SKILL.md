@@ -79,3 +79,19 @@ Recommended skill:
 
 If the user authorized work beyond routing, continue with the selected skill.
 Otherwise, stop after making the next decision clear.
+
+Discovery, Gate Design and certification use the shared `$redproof-review-ui`
+local report for Gate selection, scope/work-depth choices and results follow-up,
+respectively. An explicit, non-preview submission
+is a human decision for its displayed scope, not merely a generated artifact;
+do not ask for that approval again. Preserve notes and unanswered choices.
+`approved-for-implementation` permits the named local build/proof scope, not CI
+enforcement or production adoption. Confirmed policy plus separately authorized
+adoption is still required for those changes.
+
+For a settled design, recommend implementation and proof as the next finish
+line. After an actual `implement` selection, continue with certification through
+building, real-project verification and results, or report a precise blocker.
+Missing local tooling is an implementation prerequisite, not an automatic route
+back to design or a substitute feasibility experiment. A named experiment stays
+an optional, separately selected learning task, not the default finish line.

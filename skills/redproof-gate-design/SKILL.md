@@ -1,6 +1,6 @@
 ---
 name: redproof-gate-design
-description: Turn an agreed domain concern into bounded Redproof Gates, Rules, evidence contracts, and brownfield enforcement frontiers. Use after the protected outcome is understood but before implementing its Check. Do not use to discover stakeholder priorities or to certify an existing Check.
+description: Turn selected domain concerns into bounded Redproof Gates and evidence contracts, then offer implementation and proof through a local interactive approval. Use after the protected outcome is understood but before implementing its Check. Do not use to discover stakeholder priorities or to certify an existing Check.
 ---
 
 # Redproof Gate Design
@@ -14,7 +14,9 @@ Rule must be narrower.
 Start from a Gate brief containing a protected outcome, stakeholders, failure
 consequence, policy source, existing enforcement, policy status, and explicit
 stage authorization. Proceed only when an accountable human recorded
-`approved-for-design`, `approved-for-experiment`, or `approved-for-adoption`.
+`approved-for-design`, `approved-for-experiment`, `approved-for-implementation`,
+or `approved-for-adoption`. A real discovery-review selection counts as design
+authorization; do not ask the user to approve the same selection again.
 If those inputs are missing or disputed, return to
 `$redproof-domain-discovery`.
 
@@ -46,6 +48,9 @@ Keep an honest, useful first increment rather than a comprehensive assurance
 system. Continue unaffected design work while material decisions remain open.
 
 ## Design bounded Rules
+
+Design only the selected Gates. If several were selected, preserve each one's
+priority, notes and scope; do not silently reduce the request to your favorite.
 
 Use [rule-contract.md](references/rule-contract.md) for every Rule. A bounded
 Rule states one observable promise and makes its evidence boundary visible.
@@ -169,10 +174,68 @@ with everything stakeholders care about.
 
 ## Produce the handoff
 
-Lead with a concise **Do first / Decide / Do later** recommendation. Keep the
-supporting contracts for the selected first scope below it; share common evidence
-details rather than repeating them for each Rule. Deferred extensions need their
-benefit and boundary, not a full implementation design.
+Read [beginner-handoff.md](references/beginner-handoff.md) before producing the
+handoff. A technical evidence contract alone is not a complete deliverable.
+
+Use `$redproof-review-ui`, available through
+[the shared helper](../redproof-review-ui/SKILL.md). The user chooses a concrete
+coverage scope and work depth per Gate. Follow the scope/depth semantics in
+[beginner-handoff.md](references/beginner-handoff.md#choose-scope-and-work-depth-in-the-report).
+Only an actual user decision authorizes the displayed work. Unanswered Gates
+remain undecided; preview submissions authorize nothing. Use short chat choices
+as the fallback if the helper or local serving is unavailable, not another server.
+
+For a settled contract, recommend **Implement and prove this Gate**. Approval
+should lead through implementation and real-project verification, not end with
+another design report or a fixture-only trial. A disposable copy is a work
+location, not a lesser completion target. Missing tools or dependencies are
+implementation prerequisites; identify them and any needed permission, without
+automatically replacing implementation with an experiment. Offer a feasibility
+experiment only to answer a named uncertainty with an explicit learning goal.
+Unresolved policy or evidence meaning still requires design before implementation.
+
+Every design handoff must include a visible **Proposed describe block** for each
+selected Gate before its detailed contracts. Follow the verified terminal syntax,
+formatter guidance and missing-proof rules in
+[the describe reference](references/beginner-handoff.md#required-proposed-describe-block).
+Keep the block visible as coverage choices change. Label it as a proposal, with
+verdict boundaries, limits, unresolved policy, proof status and the next decision
+outside the block; it is not captured output from an implemented Gate.
+When recommending native-only work or no Gate, explicitly describe that
+disposition instead of inventing an implementation to fill the format.
+
+Produce `gate-design-summary.md`, the helper's `review.html` (or a static
+`gate-design-report.html` fallback), and the detailed Rule
+contracts in the authorized report location. The local interactive HTML is the friendly
+reading path; the summary is its concise text fallback. Honor explicit no-file
+or alternate-format requests, but still include the describe block in the allowed
+format. A narrow follow-up may update existing artifacts instead of duplicating
+them. Do not omit the handoff merely because execution awaits a decision.
+
+Lead with a concise **Do first / Decide / Do later** recommendation in everyday
+language. Keep the describe block easy to find, with detailed contracts linked
+or expandable; share common evidence details rather than repeating them for each
+Rule. Deferred extensions need their benefit and boundary, not a full design.
+End the HTML and final chat response with the recommended next action, what has
+actually run, and the decision or prerequisite that unlocks further work.
+
+For authorized local implementation or a disposable experiment, the task owner
+can own the work; do not demand an upstream maintainer's identity before starting. Keep
+production ownership unresolved until adoption if it does not affect the scoped
+work's safety or meaning. The UI cannot confer external organizational authority.
+
+After submission, restate and record each selected scope, depth, notes, work
+location and stopping point. Refine design here for `revise`; carry a bounded
+experiment forward for `experiment`; use `$redproof-gate-certification` for
+`implement` only when the evidence contract is settled and local implementation
+is explicitly authorized. That authorization is `approved-for-implementation`,
+not production adoption. Continue only selected work without a duplicate
+approval round. A requested scope change that invalidates the displayed contract
+returns to design before implementation. No automatic CI, commit, PR or publish.
+If the next skill is unavailable, report the handoff as blocked, not completed.
+For implementation, follow its completion contract: build the Gate, Check and
+proofs, run them against the real selected target, and return verified results
+or a precise partial/blocked status. Never silently substitute an experiment.
 
 Produce one contract per Rule:
 
@@ -210,3 +273,9 @@ The next stage is `$redproof-gate-certification` only when the Rule evidence
 contract is agreed and implementation or review is explicitly authorized. If
 implementation exposes a contract mismatch, return here and revise the design
 explicitly.
+
+Before reporting completion, apply the handoff acceptance checks in
+[beginner-handoff.md](references/beginner-handoff.md#acceptance-checks). Missing
+describe blocks, missing required artifacts or an unclear next decision make the
+handoff incomplete even if the technical contract is sound. Distinguish static
+instruction validation, presentation review and actual Gate/proof execution.
