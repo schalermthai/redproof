@@ -141,6 +141,25 @@ test('local Git publication is atomic, retryable and refuses reused or decreasin
   assert.deepEqual(git('for-each-ref', '--format=%(refname)', 'refs/heads').split('\n'), ['refs/heads/plugin-marketplace']);
 });
 
+test('a missing bundle tag cannot permit an equal-version republish', { timeout: 60_000 }, async t => {
+  const remote = join(await temporary(t), 'remote.git');
+  execFileSync('git', ['init', '--bare', '--quiet', remote]);
+  const git = (...args: string[]) => execFileSync('git', ['--git-dir', remote, ...args], { encoding: 'utf8' }).trim();
+  const candidate = await fixture(t, '0.1.0');
+  assert.equal((await publishPluginRelease(candidate.output, remote)).status, 'published');
+  const initialCommit = git('rev-parse', 'refs/heads/plugin-marketplace');
+
+  // Simulate manual tag deletion in this disposable remote, not a normal retry.
+  git('update-ref', '-d', 'refs/tags/plugin-bundle-v0.1.0');
+  assert.equal(git('for-each-ref', '--format=%(refname)', 'refs/tags'), '');
+  await writeFile(join(candidate.output, 'README.md'), 'different content under the same released version');
+  await validatePluginRelease(candidate.output);
+
+  await assert.rejects(publishPluginRelease(candidate.output, remote), /non-increasing/);
+  assert.equal(git('rev-parse', 'refs/heads/plugin-marketplace'), initialCommit, 'Refusal must not advance the marketplace');
+  assert.equal(git('for-each-ref', '--format=%(refname)', 'refs/tags'), '', 'Refusal must not recreate the deleted tag');
+});
+
 test('a server refusing a tag cannot advance the marketplace branch', { timeout: 60_000 }, async t => {
   const remote = join(await temporary(t), 'remote.git');
   execFileSync('git', ['init', '--bare', '--quiet', remote]);
