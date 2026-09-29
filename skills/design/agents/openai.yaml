@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof · Design a Gate"
+  short_description: "Define a Gate's scope, evidence and proof plan"
+  default_prompt: "Use $design to turn this agreed concern into bounded Redproof Rules and evidence contracts."

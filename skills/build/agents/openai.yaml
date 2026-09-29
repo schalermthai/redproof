@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof · Build and prove Gates"
+  short_description: "Build an agreed Gate or recheck an existing one"
+  default_prompt: "Use $build for this Gate within my authorized scope; deliver proof results and do not repair code during a recheck-only request."

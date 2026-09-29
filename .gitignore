@@ -4,6 +4,9 @@ node_modules/
 # Build and type-check output
 dist/
 build/
+# Public plugin skill, not generated build output
+!skills/build/
+!skills/build/**
 *.tsbuildinfo
 
 # redproof run output (proofs, reports, SARIF)

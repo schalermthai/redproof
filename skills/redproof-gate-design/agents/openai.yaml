@@ -1,4 +1,0 @@
-interface:
-  display_name: "Redproof Gate Design"
-  short_description: "Design bounded Rules and evidence contracts"
-  default_prompt: "Use $redproof-gate-design to turn this agreed concern into bounded Redproof Rules and evidence contracts."

@@ -8,9 +8,9 @@ more, not less. That only works when a check still fails on a real mistake.
 - [Why a rule in a prompt does not hold](#why-a-rule-in-a-prompt-does-not-hold)
 - [When to run check and prove](#when-to-run-check-and-prove)
 - [The Stop hook](#the-stop-hook)
-- [The redproof skill](#the-redproof-skill)
-- [The redproof-pr-review skill](#the-redproof-pr-review-skill)
-- [Discover, design and certify project guardrails](#discover-design-and-certify-project-guardrails)
+- [The challenge skill](#the-challenge-skill)
+- [The review-pr skill](#the-review-pr-skill)
+- [Discover, design and build project guardrails](#discover-design-and-build-project-guardrails)
 - [How the skills and library fit together](#how-the-skills-and-library-fit-together)
 
 ## Why a rule in a prompt does not hold
@@ -99,9 +99,9 @@ sees the broken Rule and its location, and fixes it in the same turn.
 The first part of the script reads `stop_hook_active`. When that field is true,
 the hook exits at once, so a blocked stop does not run the check twice.
 
-## The redproof skill
+## The challenge skill
 
-The [`redproof`](../skills/redproof/SKILL.md) skill teaches the agent to prove
+The [`challenge`](../skills/challenge/SKILL.md) skill teaches the agent to prove
 a check by hand once before trusting it. A check can be a new test, a lint
 rule, a CI step, or an assertion in a script. The skill works with or without
 the Redproof library. It only needs a check that can fail and a file the agent
@@ -183,9 +183,9 @@ differently:
 ```
 
 
-## The redproof-pr-review skill
+## The review-pr skill
 
-The [`redproof-pr-review`](../skills/redproof-pr-review/SKILL.md) skill reviews
+The [`review-pr`](../skills/review-pr/SKILL.md) skill reviews
 a pull request as a set of claims, not just as a diff. A claim is a statement
 about what the change is supposed to achieve.
 
@@ -264,21 +264,22 @@ The suggestion under C1 asks for exactly that kind of check.
 
 That check is a Gate.
 
-## Discover, design and certify project guardrails
+## Discover, design and build project guardrails
 
 When introducing Redproof to an existing project, start with
-[`redproof-discovery`](../skills/redproof-discovery/SKILL.md). It routes the work
-to the stage that owns the next decision; it does not require starting over when
-an agreed design already exists.
+[`discover`](../skills/discover/SKILL.md). If you already have a selected promise
+or an approved design, enter at `design` or `build` instead. Shared internal
+routing helps the agent recognize that starting point; it is not another command
+you need to learn and does not grant permission to perform the next stage.
 
 | Skill | Question it answers | What you receive |
 | --- | --- | --- |
-| [`redproof-domain-discovery`](../skills/redproof-domain-discovery/SKILL.md) | What is worth protecting? | Ranked recommendations and draft Gate descriptions, with existing protection and remaining gaps. First-time discovery prioritizes the project claims users rely on. |
-| [`redproof-gate-design`](../skills/redproof-gate-design/SKILL.md) | What can we honestly check and prove? | Bounded Rules, evidence contracts, and concrete scope and work choices. |
-| [`redproof-gate-certification`](../skills/redproof-gate-certification/SKILL.md) | Does the implemented Gate catch the failures it promises to catch? | Authorized implementation and proof work, followed by results compared with the agreed design, limitations and next steps. |
+| [`discover`](../skills/discover/SKILL.md) | What is worth protecting? | Ranked recommendations and draft Gate descriptions, with existing protection and remaining gaps. First-time discovery prioritizes the project claims users rely on. |
+| [`design`](../skills/design/SKILL.md) | What can we honestly check and prove? | Bounded Rules, evidence contracts, and concrete scope and work choices. |
+| [`build`](../skills/build/SKILL.md) | Does the implemented Gate catch the failures it promises to catch? | Authorized implementation and proof work, followed by results compared with the agreed design, limitations and next steps. |
 
-These stages share
-[`redproof-review-ui`](../skills/redproof-review-ui/SKILL.md), a local browser
+These stages share an
+[internal review UI](../skill-support/review-ui/guide.md), a local browser
 report with descriptions, examples and scoped choices. Discovery lets you choose
 which Gates to design. Design lets you choose coverage and, when settled,
 implementation and proof. Certification reports what was actually delivered.
@@ -293,20 +294,26 @@ that claim into a bounded promise and prove its safeguard detects regressions.
 ## How the skills and library fit together
 
 ```text
-redproof skill             one proof, by hand, for a check you just wrote or changed
-redproof-pr-review skill   proofs for the claims a pull request makes, at review time
-discovery -> design -> certification
-                          select, define, then implement and prove project Gates
-redproof-review-ui skill  local reports and scoped human choices across those stages
-Redproof library           a proof stored beside the Gate, repeated on every commit
+challenge                  one bounded fault experiment against a safeguard
+review-pr                  investigate the claims a pull request makes
+discover -> design -> build
+                           select, define, then implement and prove project Gates
+internal review UI         reports and scoped choices within those stages
+Redproof library           proofs stored beside Gates, repeatable on every commit
 ```
 
 The skills guide the work and its decisions. The library stores repeatable
-proofs beside Gates. Claude Code loads a skill from a `SKILL.md` file under
-`.claude/skills/` in a project, or under `~/.claude/skills/` for every
-project. Copy the skill directory there to use it. For the staged workflow,
-keep the router, three stage skills and review helper together so their sibling
-references remain available.
+proofs beside Gates. The [Redproof skills plugin](../plugin/redproof/README.md)
+packages five public skills together, including their internal review UI and
+cross-stage references. Build it with `npm run plugin:build`; the command prints
+a fresh standalone bundle and does not install or publish it. The plugin guide
+explains local use, supported prerequisites and which host checks remain before
+a marketplace release. Plugin installation is separate from installing the
+Redproof npm library or approving any Gate implementation.
+
+Maintainers: see [plugin versioning and release steps](../plugin/RELEASING.md).
+Plugin releases have their own tags, marketplace snapshots and host-readiness
+checks; they do not trigger an npm library release.
 
 ## Next
 

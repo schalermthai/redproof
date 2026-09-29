@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof · Review a pull request"
+  short_description: "Challenge a pull request's important claims"
+  default_prompt: "Use $review-pr to investigate this pull request's important claims and report findings supported by focused evidence."

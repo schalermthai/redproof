@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redproof · Challenge a safeguard"
+  short_description: "Test one safeguard with a bounded deliberate fault"
+  default_prompt: "Use $challenge to test whether this safeguard catches one safe, deliberate fault, then restore and report what that establishes."
