@@ -35,6 +35,11 @@ being able to parse a manifest does not establish workflow compatibility.
 
 ## 1. Build and evaluate a local candidate
 
+Edit public skills in the repository's canonical `skills/` directory and shared
+helpers in `skill-support/`; do not edit generated bundle copies. Update
+`plugin/files.json` when adding a required resource so it is included in the
+installed plugin.
+
 Change the manifest version, add an entry to [CHANGELOG.md](CHANGELOG.md), and
 reset the host checks in [release-readiness.json](release-readiness.json) to
 `pending`. Keep the release notes factual: list verified capabilities and limits.
@@ -63,6 +68,20 @@ npm run plugin:release:build -- \
 The output contains both host catalogs, `plugins/redproof`, release notes and
 `release.json`. The latter reports the `bundleSha256` fingerprint of the complete
 plugin inventory. There are no dependencies, expert fixtures or planning logs.
+
+### Try the local bundle in Claude Code
+
+Validate the generated plugin, then load it for one session. Run the interactive
+command from a disposable test project, using the preview path created above:
+
+```sh
+claude plugin validate "$plugin_preview/marketplace/plugins/redproof" --strict
+claude --plugin-dir "$plugin_preview/marketplace/plugins/redproof"
+```
+
+The path must point to the generated bundle, not the source metadata directory
+`plugin/redproof`. Session-only loading does not persist an installation and does
+not replace the marketplace installation and behavior checks below.
 
 ## 2. Test the installed plugin, not only its source
 
