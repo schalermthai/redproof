@@ -3,7 +3,7 @@ import { defineGate, defineProofs, mutate, proof } from 'redproof';
 import { nodeTestSuite } from './checks/node-test-suite.ts';
 
 const adapter = testing({
-  runner: nodeTestSuite({ files: '{tests,packages/*/test}/**/*.test.ts' }),
+  runner: nodeTestSuite({ files: '{tests,packages/*/test,agents/tests}/**/*.test.ts' }),
   report: report.junitXml(),
   rules: {
     testsPass: true,
@@ -16,9 +16,9 @@ const gate = defineGate({ id: 'test-health', adapter });
 export const proofs = defineProofs(gate, [
   proof.red(
     adapter.rules.testsPass,
-    'detects a collected failing test',
+    'detects a collected failing test in agent tooling',
     mutate.createFile(
-      'tests/redproof-failing-proof.test.ts',
+      'agents/tests/redproof-failing-proof.test.ts',
       "import test from 'node:test';\n\ntest('redproof failing proof', () => {\n  throw new Error('intentional proof failure');\n});\n",
     ),
   ),

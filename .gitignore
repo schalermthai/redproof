@@ -5,8 +5,8 @@ node_modules/
 dist/
 build/
 # Public plugin skill, not generated build output
-!skills/build/
-!skills/build/**
+!agents/skills/build/
+!agents/skills/build/**
 *.tsbuildinfo
 
 # redproof run output (proofs, reports, SARIF)
@@ -30,6 +30,9 @@ coverage/
 # Agent worktrees (Knip walks them as source otherwise); the shared hook file stays
 .claude/*
 !.claude/settings.json
+
+# Local agent plans, progress, transcripts and evaluation scratch work
+/.planning/
 
 # Editor and OS files
 .DS_Store

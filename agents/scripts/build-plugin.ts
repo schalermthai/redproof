@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const repository = fileURLToPath(new URL('../', import.meta.url));
+const repository = fileURLToPath(new URL('../../', import.meta.url));
 
 async function readSource(root: string, name: string): Promise<Buffer> {
   const parts = name.split('/');
@@ -28,19 +28,21 @@ function json(value: unknown): Buffer {
 
 /** Build a standalone directory; never clean or overwrite a caller's destination. */
 export async function buildPlugin(destination?: string, sourceRoot = repository): Promise<string> {
-  const manifest = JSON.parse((await readSource(sourceRoot, 'plugin/redproof/.codex-plugin/plugin.json')).toString());
+  const manifest = JSON.parse((await readSource(sourceRoot, 'agents/plugin/redproof/.codex-plugin/plugin.json')).toString());
   if (manifest.name !== 'redproof' || !/^\d+\.\d+\.\d+$/.test(manifest.version)) {
     throw new Error('Expected redproof plugin identity and a release version');
   }
-  const files: unknown = JSON.parse((await readSource(sourceRoot, 'plugin/files.json')).toString());
+  const files: unknown = JSON.parse((await readSource(sourceRoot, 'agents/plugin/files.json')).toString());
   if (!Array.isArray(files) || !files.length || files.some(file => typeof file !== 'string' || !/^(skills|skill-support)\//.test(file)) || new Set(files).size !== files.length) {
     throw new Error('Plugin file list must contain unique skills/ or skill-support/ paths');
   }
 
   // Read and validate all inputs before creating any output. No recursive copy.
   const entries = new Map<string, Buffer>();
-  for (const file of files as string[]) entries.set(file, await readSource(sourceRoot, file));
-  entries.set('README.md', await readSource(sourceRoot, 'plugin/redproof/README.md'));
+  // The allowlist is relative to agents/ in source and to the installed bundle.
+  // Keeping those paths unchanged preserves skill-to-helper relative links.
+  for (const file of files as string[]) entries.set(file, await readSource(sourceRoot, `agents/${file}`));
+  entries.set('README.md', await readSource(sourceRoot, 'agents/plugin/redproof/README.md'));
   entries.set('LICENSE', await readSource(sourceRoot, 'LICENSE'));
   entries.set('.codex-plugin/plugin.json', json(manifest));
   const { skills: _skills, interface: presentation, ...identity } = manifest;

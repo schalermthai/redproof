@@ -101,9 +101,9 @@ module.exports = {
     {
       name: 'production-no-test-fixture-dependencies',
       severity: 'error',
-      comment: 'Publishable source cannot depend on repository tests, fixtures, scripts, or Gates.',
+      comment: 'Publishable source cannot depend on repository tests, fixtures, scripts, Gates, or agent tooling.',
       from: { path: '^packages/[^/]+/src/' },
-      to: { path: '^(?:tests|fixtures|scripts|gates)/' },
+      to: { path: '^(?:tests|fixtures|scripts|gates|agents)/' },
     },
     {
       name: 'production-no-adapter-tck-dependency',

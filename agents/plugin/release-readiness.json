@@ -4,7 +4,7 @@
   "hosts": {
     "codex": {
       "version": "0.156.1",
-      "evidence": "plugin/VALIDATION.md",
+      "evidence": "agents/plugin/validation/2026-09-29-0.1.0-host-checks.md",
       "checks": {
         "installation": "pass",
         "publicSkills": "pass",
@@ -15,7 +15,7 @@
     },
     "claude": {
       "version": "2.1.284",
-      "evidence": "plugin/VALIDATION.md",
+      "evidence": "agents/plugin/validation/2026-09-29-0.1.0-host-checks.md",
       "checks": {
         "installation": "pass",
         "publicSkills": "pass",

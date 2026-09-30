@@ -42,6 +42,8 @@
     "packages/**/*.ts",
     "fixtures/**/*.ts",
     "tests/**/*.ts",
+    "agents/scripts/**/*.ts",
+    "agents/tests/**/*.ts",
     "gates/**/*.ts",
     "redproof.config.ts"
   ]

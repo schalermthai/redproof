@@ -101,7 +101,7 @@ the hook exits at once, so a blocked stop does not run the check twice.
 
 ## The challenge skill
 
-The [`challenge`](../skills/challenge/SKILL.md) skill teaches the agent to prove
+The [`challenge`](../agents/skills/challenge/SKILL.md) skill teaches the agent to prove
 a check by hand once before trusting it. A check can be a new test, a lint
 rule, a CI step, or an assertion in a script. The skill works with or without
 the Redproof library. It only needs a check that can fail and a file the agent
@@ -185,7 +185,7 @@ differently:
 
 ## The review-pr skill
 
-The [`review-pr`](../skills/review-pr/SKILL.md) skill reviews
+The [`review-pr`](../agents/skills/review-pr/SKILL.md) skill reviews
 a pull request as a set of claims, not just as a diff. A claim is a statement
 about what the change is supposed to achieve.
 
@@ -267,19 +267,19 @@ That check is a Gate.
 ## Discover, design and build project guardrails
 
 When introducing Redproof to an existing project, start with
-[`discover`](../skills/discover/SKILL.md). If you already have a selected promise
+[`discover`](../agents/skills/discover/SKILL.md). If you already have a selected promise
 or an approved design, enter at `design` or `build` instead. Shared internal
 routing helps the agent recognize that starting point; it is not another command
 you need to learn and does not grant permission to perform the next stage.
 
 | Skill | Question it answers | What you receive |
 | --- | --- | --- |
-| [`discover`](../skills/discover/SKILL.md) | What is worth protecting? | Ranked recommendations and draft Gate descriptions, with existing protection and remaining gaps. First-time discovery prioritizes the project claims users rely on. |
-| [`design`](../skills/design/SKILL.md) | What can we honestly check and prove? | Bounded Rules, evidence contracts, and concrete scope and work choices. |
-| [`build`](../skills/build/SKILL.md) | Does the implemented Gate catch the failures it promises to catch? | Authorized implementation and proof work, followed by results compared with the agreed design, limitations and next steps. |
+| [`discover`](../agents/skills/discover/SKILL.md) | What is worth protecting? | Ranked recommendations and draft Gate descriptions, with existing protection and remaining gaps. First-time discovery prioritizes the project claims users rely on. |
+| [`design`](../agents/skills/design/SKILL.md) | What can we honestly check and prove? | Bounded Rules, evidence contracts, and concrete scope and work choices. |
+| [`build`](../agents/skills/build/SKILL.md) | Does the implemented Gate catch the failures it promises to catch? | Authorized implementation and proof work, followed by results compared with the agreed design, limitations and next steps. |
 
 These stages share an
-[internal review UI](../skill-support/review-ui/guide.md), a local browser
+[internal review UI](../agents/skill-support/review-ui/guide.md), a local browser
 report with descriptions, examples and scoped choices. Discovery lets you choose
 which Gates to design. Design lets you choose coverage and, when settled,
 implementation and proof. Certification reports what was actually delivered.
@@ -303,7 +303,7 @@ Redproof library           proofs stored beside Gates, repeatable on every commi
 ```
 
 The skills guide the work and its decisions. The library stores repeatable
-proofs beside Gates. The [Redproof skills plugin](../plugin/redproof/README.md)
+proofs beside Gates. The [Redproof skills plugin](../agents/plugin/redproof/README.md)
 packages five public skills together, including their internal review UI and
 cross-stage references. Build it with `npm run plugin:build`; the command prints
 a fresh standalone bundle and does not install or publish it. The plugin guide
@@ -311,7 +311,7 @@ explains local use, supported prerequisites and which host checks remain before
 a marketplace release. Plugin installation is separate from installing the
 Redproof npm library or approving any Gate implementation.
 
-Maintainers: see [plugin versioning and release steps](../plugin/RELEASING.md).
+Maintainers: see [plugin versioning and release steps](../agents/plugin/RELEASING.md).
 Plugin releases have their own tags, marketplace snapshots and host-readiness
 checks; they do not trigger an npm library release.
 

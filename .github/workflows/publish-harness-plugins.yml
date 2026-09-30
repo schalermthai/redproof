@@ -87,15 +87,26 @@ jobs:
         with:
           name: plugin-release
           path: ${{ runner.temp }}/plugin-release
+      - name: Locate the publisher in the tagged source
+        run: |
+          if [ -f agents/scripts/publish-plugin.ts ]; then
+            echo 'PLUGIN_PUBLISHER=agents/scripts/publish-plugin.ts' >> "$GITHUB_ENV"
+          elif [ -f scripts/publish-plugin.ts ]; then
+            # Immutable source tags before the agents/ move retain the old path.
+            echo 'PLUGIN_PUBLISHER=scripts/publish-plugin.ts' >> "$GITHUB_ENV"
+          else
+            echo '::error::No plugin publisher in the tagged source.'
+            exit 1
+          fi
       - name: Require exact-bundle host evidence before any publication
-        run: node scripts/publish-plugin.ts --verify "$RUNNER_TEMP/plugin-release/marketplace"
+        run: node "$PLUGIN_PUBLISHER" --verify "$RUNNER_TEMP/plugin-release/marketplace"
       - name: Publish immutable bundle tag and advance marketplace atomically
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
         run: |
           git config --global credential.helper '!gh auth git-credential'
-          node scripts/publish-plugin.ts --directory "$RUNNER_TEMP/plugin-release/marketplace" --remote "https://github.com/$RELEASE_REPOSITORY.git" --publish
+          node "$PLUGIN_PUBLISHER" --directory "$RUNNER_TEMP/plugin-release/marketplace" --remote "https://github.com/$RELEASE_REPOSITORY.git" --publish
       - name: Attach downloadable snapshot to the source release
         if: github.event_name == 'release'
         env:

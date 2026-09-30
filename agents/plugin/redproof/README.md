@@ -29,7 +29,7 @@ the current project.
 
 The plugin installs skills, **not** the Redproof npm library or project tools.
 For version pinning and updates, see the
-[installation guide](https://github.com/schalermthai/redproof/blob/main/plugin/MARKETPLACE.md).
+[installation guide](https://github.com/schalermthai/redproof/blob/main/agents/plugin/MARKETPLACE.md).
 
 ## Start here
 
@@ -75,7 +75,7 @@ for worked examples.
 
 ## For maintainers
 
-[Build, test and release](https://github.com/schalermthai/redproof/blob/main/plugin/RELEASING.md)
-· [Validation record and limits](https://github.com/schalermthai/redproof/blob/main/plugin/VALIDATION.md)
+[Build, test and release](https://github.com/schalermthai/redproof/blob/main/agents/plugin/RELEASING.md)
+· [Release evidence and limits](https://github.com/schalermthai/redproof/blob/main/agents/plugin/validation/README.md)
 
 Plugin releases are versioned separately from the npm library.

@@ -420,7 +420,7 @@ claude plugin install redproof@redproof-plugins --scope user
 Start a new session in your project. Select Redproof's **discover** skill in
 Codex, or run `/redproof:discover` in Claude Code.
 
-See the **[plugin guide](https://github.com/schalermthai/redproof/tree/main/plugin/redproof)**
+See the **[plugin guide](https://github.com/schalermthai/redproof/tree/main/agents/plugin/redproof)**
 for the skills and workflow, or **[Guardrails for agent-written code](https://github.com/schalermthai/redproof/blob/main/docs/agent-guardrails.md)**
 for examples.
 
