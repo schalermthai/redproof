@@ -90,8 +90,9 @@ preview directory as a local marketplace, install the plugin, and start a fresh
 session. Installing changes the chosen host profile: use an explicit test profile
 or a deliberate user/project scope, not a teammate's existing configuration.
 
-For Codex, register the preview with `codex plugin marketplace add` and install
-Redproof from the plugin UI. For Claude, register with `claude plugin marketplace
+For Codex, register the preview with `codex plugin marketplace add`, then run
+`codex plugin add redproof@redproof-plugins` (or use the plugin UI if that command
+is unavailable). For Claude, register with `claude plugin marketplace
 add`, then install `redproof@redproof-plugins` with your intended scope. See the
 [consumer guide](MARKETPLACE.md) and the host documentation linked there.
 
