@@ -264,3 +264,28 @@ remain required release steps. Nothing was committed, pushed or published.
 
 Follow [the release checklist](RELEASING.md) to complete these checks before the
 first source tag and public release. Public-directory submission remains separate.
+
+## Session-only loading follow-up (2026-09-30)
+
+After PR #114, tested the documented `claude --plugin-dir` path with Claude Code
+2.1.285, a freshly generated bundle, an empty disposable project and a separate
+`CLAUDE_CONFIG_DIR`. The preview retains version 0.1.0 for this local check; it is
+not the published 0.1.0 artifact and must not replace that release.
+
+- Bundle inventory SHA-256:
+  `e5184374ba7d1bdce06d8c315b13b4a6c4cbc6c883cf3307bb5639374dccc01a`.
+- Strict Claude manifest validation passed.
+- Interactive startup with `--plugin-dir` logged `Loaded inline plugin from path:
+  redproof` and `Loaded 5 skills from plugin redproof default directory`.
+- A control startup in the same profile without `--plugin-dir` logged
+  `Total plugin skills loaded: 0`. The persistent plugin list was empty before
+  and after the session-only load.
+- The isolated profile reached the sign-in screen. No login, skill invocation
+  or model prompt was submitted; this verifies startup loading and non-persistence,
+  not authenticated workflow behavior. No credentials were copied or normal
+  profile settings changed.
+
+The optional Python packaging validator could not run because PyYAML is absent;
+Claude's native strict validator supplied the manifest check above. Release
+readiness and the plugin version remain unchanged: these limited observations
+do not refresh the exact-bundle attestation for a future release.
