@@ -105,6 +105,14 @@ export const proofs = defineProofs(gate, [
   ),
   proof.red(
     rules.docsLinks,
+    'detects a broken relative documentation link',
+    mutate.createFile(
+      'docs/redproof-broken-link-proof.md',
+      '# Proof probe\n\n[missing document](./definitely-missing.md)\n',
+    ),
+  ),
+  proof.red(
+    rules.docsLinks,
     'detects a broken relative documentation link in agent tooling',
     mutate.createFile(
       'agents/redproof-broken-link-proof.md',

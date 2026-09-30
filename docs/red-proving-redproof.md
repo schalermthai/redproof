@@ -1,6 +1,6 @@
 # Redproof proves Redproof
 
-This repository runs Redproof on itself. Six Gates hold 39 Rules and 61 Proofs.
+This repository runs Redproof on itself. Six Gates hold 39 Rules and 62 Proofs.
 The real CI and release workflows use these Gates. They are not a separate
 showcase suite. Every push asks two questions:
 
@@ -28,7 +28,7 @@ architecture         module graph and functional-core effect boundaries   16 Rul
 static-contracts     types, documentation examples, fragment budget         3 Rules    4 Proofs
 test-health          every test passes, none is skipped                    2 Rules    4 Proofs
 adapter-contracts    five promises every built-in Adapter keeps            5 Rules    9 Proofs
-repository-policy    packages, versions, CI, documentation links, lockfile 7 Rules   10 Proofs
+repository-policy    packages, versions, CI, documentation links, lockfile 7 Rules   11 Proofs
 unused-code          files, exports, and dependencies stay connected       6 Rules    9 Proofs
 ```
 
