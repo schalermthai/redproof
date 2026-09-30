@@ -35,10 +35,15 @@ being able to parse a manifest does not establish workflow compatibility.
 
 ## 1. Build and evaluate a local candidate
 
-Edit public skills in the repository's canonical `skills/` directory and shared
-helpers in `skill-support/`; do not edit generated bundle copies. Update
-`plugin/files.json` when adding a required resource so it is included in the
+Edit public skills in the repository's canonical `agents/skills/` directory and shared
+helpers in `agents/skill-support/`; do not edit generated bundle copies. Update
+`agents/plugin/files.json` when adding a required resource so it is included in the
 installed plugin.
+
+The allowlist paths are relative to `agents/`. Generated bundles still contain
+`skills/` and `skill-support/` at their root, preserving installed resource links.
+The release workflow also recognizes the old publisher path when retrying an
+immutable source tag created before this reorganization.
 
 Change the manifest version, add an entry to [CHANGELOG.md](CHANGELOG.md), and
 reset the host checks in [release-readiness.json](release-readiness.json) to
@@ -80,7 +85,7 @@ claude --plugin-dir "$plugin_preview/marketplace/plugins/redproof"
 ```
 
 The path must point to the generated bundle, not the source metadata directory
-`plugin/redproof`. Session-only loading does not persist an installation and does
+`agents/plugin/redproof`. Session-only loading does not persist an installation and does
 not replace the marketplace installation and behavior checks below.
 
 ## 2. Test the installed plugin, not only its source
@@ -106,15 +111,23 @@ Record each check separately for **both** hosts:
 | reviewUI | An installed helper opens a synthetic review and returns the selected response. |
 | authorizationBoundaries | Preview, timeout and silence authorize nothing; recheck-only does not repair code; missing-tool fallback is honest. |
 
-Record host versions, scenario, result and limitations in [VALIDATION.md](VALIDATION.md).
+Record host versions, tested bundle hash, scenarios, results and limitations in a
+concise report under [validation/](validation/README.md). Use a separate dated
+report for each tested bundle and point each host's `evidence` field at the report
+that supports its checks. Do not carry results between different bundle hashes.
+Keep transcripts, session IDs, temporary paths and agent progress logs out of
+commits; local working notes belong in the ignored `.planning/` directory.
+
 Set only observed passes in `release-readiness.json`; copy the exact bundle hash
 into that record. Do not infer behavioral passes from packaging tests or from an
 agent claiming it would follow the instructions. Rebuild after edits: any change
 to bundled bytes invalidates the recorded hash. Readiness records are human
 attestations, not signatures or host marketplace approval.
+The preflight checks that an evidence reference is present, not that its report
+exists or supports the claims. Reviewing that evidence remains a maintainer duty.
 
 ```sh
-node scripts/publish-plugin.ts --verify "$plugin_preview/marketplace"
+node agents/scripts/publish-plugin.ts --verify "$plugin_preview/marketplace"
 ```
 
 This command intentionally fails until the preview includes the completed

@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildPlugin } from './build-plugin.ts';
 
-const repository = fileURLToPath(new URL('../', import.meta.url));
+const repository = fileURLToPath(new URL('../../', import.meta.url));
 export const marketplaceBranch = 'plugin-marketplace';
 export const marketplaceName = 'redproof-plugins';
 const versionPattern = '(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)';
@@ -69,19 +69,19 @@ export function assertReleaseReadiness(value: unknown, version: string, bundleSh
       if (result?.checks?.[check] !== 'pass') problems.push(`${host}: ${check} has not passed`);
     }
   }
-  if (problems.length) throw new Error(`Plugin release is not ready:\n- ${problems.join('\n- ')}\nComplete plugin/release-readiness.json using plugin/RELEASING.md. A dry run is still allowed.`);
+  if (problems.length) throw new Error(`Plugin release is not ready:\n- ${problems.join('\n- ')}\nComplete agents/plugin/release-readiness.json using agents/plugin/RELEASING.md. A dry run is still allowed.`);
 }
 
 export async function buildPluginRelease(options: { tag: string; sourceCommit: string; destination?: string; sourceRoot?: string }) {
   const version = releaseVersion(options.tag);
   if (!/^[a-f0-9]{40}$/.test(options.sourceCommit)) throw new Error('Expected a full source Git commit SHA');
   const root = options.sourceRoot ?? repository;
-  const manifest = JSON.parse(await readFile(join(root, 'plugin/redproof/.codex-plugin/plugin.json'), 'utf8'));
+  const manifest = JSON.parse(await readFile(join(root, 'agents/plugin/redproof/.codex-plugin/plugin.json'), 'utf8'));
   if (manifest.version !== version) throw new Error(`Tag ${options.tag} disagrees with plugin manifest ${manifest.version}`);
-  const notes = await readFile(join(root, 'plugin/CHANGELOG.md'), 'utf8');
+  const notes = await readFile(join(root, 'agents/plugin/CHANGELOG.md'), 'utf8');
   if (!notes.includes(`## ${version}\n`)) throw new Error(`Missing plugin changelog entry for ${version}`);
-  const readiness = JSON.parse(await readFile(join(root, 'plugin/release-readiness.json'), 'utf8'));
-  const guide = await readFile(join(root, 'plugin/MARKETPLACE.md'), 'utf8');
+  const readiness = JSON.parse(await readFile(join(root, 'agents/plugin/release-readiness.json'), 'utf8'));
+  const guide = await readFile(join(root, 'agents/plugin/MARKETPLACE.md'), 'utf8');
   const output = options.destination ? resolve(options.destination) : join(await mkdtemp(join(tmpdir(), 'redproof-release-')), 'marketplace');
   await mkdir(output); // Deliberately refuses existing destinations, including symlinks.
   await mkdir(join(output, 'plugins'));

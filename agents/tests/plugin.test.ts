@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test, { type TestContext } from 'node:test';
-import { buildPlugin } from '../../scripts/build-plugin.ts';
+import { buildPlugin } from '../scripts/build-plugin.ts';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
 const skillNames = ['build', 'challenge', 'design', 'discover', 'review-pr'];
@@ -33,9 +33,9 @@ async function listFiles(root: string): Promise<string[]> {
 
 async function fixtureSource(t: TestContext): Promise<string> {
   const root = await temporary(t);
-  await cp(join(repository, 'plugin'), join(root, 'plugin'), { recursive: true });
-  await cp(join(repository, 'skills'), join(root, 'skills'), { recursive: true });
-  await cp(join(repository, 'skill-support'), join(root, 'skill-support'), { recursive: true });
+  await cp(join(repository, 'agents/plugin'), join(root, 'agents/plugin'), { recursive: true });
+  await cp(join(repository, 'agents/skills'), join(root, 'agents/skills'), { recursive: true });
+  await cp(join(repository, 'agents/skill-support'), join(root, 'agents/skill-support'), { recursive: true });
   await cp(join(repository, 'LICENSE'), join(root, 'LICENSE'));
   return root;
 }
@@ -43,14 +43,14 @@ async function fixtureSource(t: TestContext): Promise<string> {
 test('plugin contains exactly the shared skills and their declared resources, with matching host metadata', async t => {
   const root = await temporary(t);
   const bundle = await buildPlugin(join(root, 'redproof'));
-  const files = JSON.parse(await readFile(join(repository, 'plugin/files.json'), 'utf8')) as string[];
+  const files = JSON.parse(await readFile(join(repository, 'agents/plugin/files.json'), 'utf8')) as string[];
   const actual = await listFiles(bundle);
   assert.deepEqual(actual, [...files, 'README.md', 'LICENSE', 'plugin.json', '.codex-plugin/plugin.json', '.claude-plugin/plugin.json', 'bundle-files.json'].sort());
   assert.deepEqual((await readdir(join(bundle, 'skills'), { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort(), skillNames);
-  for (const file of files) assert.deepEqual(await readFile(join(bundle, file)), await readFile(join(repository, file)), file);
+  for (const file of files) assert.deepEqual(await readFile(join(bundle, file)), await readFile(join(repository, 'agents', file)), file);
   // Catch new required source resources not yet added to the shipping list.
-  const sources = [...(await listFiles(join(repository, 'skills'))).map(file => `skills/${file}`),
-    ...(await listFiles(join(repository, 'skill-support'))).map(file => `skill-support/${file}`)];
+  const sources = [...(await listFiles(join(repository, 'agents/skills'))).map(file => `skills/${file}`),
+    ...(await listFiles(join(repository, 'agents/skill-support'))).map(file => `skill-support/${file}`)];
   assert.deepEqual(files.slice().sort(), sources.sort());
   const portable = JSON.parse(await readFile(join(bundle, 'plugin.json'), 'utf8'));
   const codex = JSON.parse(await readFile(join(bundle, '.codex-plugin/plugin.json'), 'utf8'));
@@ -131,9 +131,9 @@ test('two independent bundles have identical bytes and complete deterministic ha
 
 test('undeclared reports and dependency files cannot enter a bundle', async t => {
   const source = await fixtureSource(t);
-  await writeFile(join(source, 'skills/private-report.json'), '{"private":true}');
-  await mkdir(join(source, 'skills/node_modules'));
-  await writeFile(join(source, 'skills/node_modules/secret.txt'), 'never ship');
+  await writeFile(join(source, 'agents/skills/private-report.json'), '{"private":true}');
+  await mkdir(join(source, 'agents/skills/node_modules'));
+  await writeFile(join(source, 'agents/skills/node_modules/secret.txt'), 'never ship');
   const bundle = await buildPlugin(join(await temporary(t), 'redproof'), source);
   assert.ok(!(await listFiles(bundle)).some(file => file.includes('private-report') || file.includes('node_modules')));
 });
@@ -141,19 +141,19 @@ test('undeclared reports and dependency files cannot enter a bundle', async t =>
 test('missing resources, links and escaping source paths fail before output exists', async t => {
   const source = await fixtureSource(t);
   const output = join(await temporary(t), 'redproof');
-  const resource = join(source, 'skills/challenge/verdicts.md');
+  const resource = join(source, 'agents/skills/challenge/verdicts.md');
   await rm(resource);
   await assert.rejects(buildPlugin(output, source), /ENOENT/);
   await assert.rejects(lstat(output), /ENOENT/);
-  await symlink(join(repository, 'skills/challenge/verdicts.md'), resource);
+  await symlink(join(repository, 'agents/skills/challenge/verdicts.md'), resource);
   await assert.rejects(buildPlugin(output, source), /not links/);
   await assert.rejects(lstat(output), /ENOENT/);
   // Even an allowlist edit cannot read outside the selected source tree.
-  await writeFile(join(source, 'plugin/files.json'), JSON.stringify(['skills/../../secret.txt']));
+  await writeFile(join(source, 'agents/plugin/files.json'), JSON.stringify(['skills/../../secret.txt']));
   await assert.rejects(buildPlugin(output, source), /Invalid plugin source path/);
-  await writeFile(join(source, 'plugin/files.json'), JSON.stringify(['skills/../secret.txt']));
+  await writeFile(join(source, 'agents/plugin/files.json'), JSON.stringify(['skills/../secret.txt']));
   await assert.rejects(buildPlugin(output, source), /Invalid plugin source path/);
-  await writeFile(join(source, 'plugin/files.json'), JSON.stringify(['skill-support/../../secret.txt']));
+  await writeFile(join(source, 'agents/plugin/files.json'), JSON.stringify(['skill-support/../../secret.txt']));
   await assert.rejects(buildPlugin(output, source), /Invalid plugin source path/);
 });
 
@@ -173,10 +173,22 @@ test('existing destinations, output symlinks and misleading names are refused wi
 
 test('builder CLI rejects malformed options', () => {
   for (const args of [['--out'], ['--unknown'], ['--out', '--help'], ['--out', 'one', '--out', 'two']]) {
-    const result = spawnSync(process.execPath, [join(repository, 'scripts/build-plugin.ts'), ...args], { encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [join(repository, 'agents/scripts/build-plugin.ts'), ...args], { encoding: 'utf8' });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Usage:/);
   }
+});
+
+test('relocated builder resolves repository sources from an unrelated working directory', async t => {
+  const output = join(await temporary(t), 'redproof');
+  const result = spawnSync(process.execPath, [join(repository, 'agents/scripts/build-plugin.ts'), '--out', output], {
+    cwd: await temporary(t), encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(await readFile(join(output, 'LICENSE')), await readFile(join(repository, 'LICENSE')));
+  assert.deepEqual(await readFile(join(output, 'skills/discover/SKILL.md')),
+    await readFile(join(repository, 'agents/skills/discover/SKILL.md')));
+  assert.ok(!(await listFiles(output)).some(file => file.startsWith('agents/')));
 });
 
 test('standalone bundle runs the review helper self-tests from an unrelated working directory', { timeout: 60_000 }, async t => {

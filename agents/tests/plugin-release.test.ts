@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test, { type TestContext } from 'node:test';
-import { assertReleaseReadiness, buildPluginRelease, compareVersions, hostChecks, releaseVersion } from '../../scripts/plugin-release.ts';
-import { publishPluginRelease, validatePluginRelease } from '../../scripts/publish-plugin.ts';
+import { assertReleaseReadiness, buildPluginRelease, compareVersions, hostChecks, releaseVersion } from '../scripts/plugin-release.ts';
+import { publishPluginRelease, validatePluginRelease } from '../scripts/publish-plugin.ts';
 
 const repository = fileURLToPath(new URL('../../', import.meta.url));
 const pluginWorkflow = 'publish-harness-plugins.yml';
@@ -27,12 +27,12 @@ function readiness(version: string, hash: string) {
 
 async function source(t: TestContext, version = '0.1.0') {
   const root = await temporary(t);
-  for (const path of ['plugin', 'skills', 'skill-support', 'LICENSE']) await cp(join(repository, path), join(root, path), { recursive: true });
-  const manifestPath = join(root, 'plugin/redproof/.codex-plugin/plugin.json');
+  for (const path of ['agents/plugin', 'agents/skills', 'agents/skill-support', 'LICENSE']) await cp(join(repository, path), join(root, path), { recursive: true });
+  const manifestPath = join(root, 'agents/plugin/redproof/.codex-plugin/plugin.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   manifest.version = version;
   await writeFile(manifestPath, JSON.stringify(manifest));
-  await writeFile(join(root, 'plugin/CHANGELOG.md'), `# Test release\n\n## ${version}\n\nSynthetic release only.\n`);
+  await writeFile(join(root, 'agents/plugin/CHANGELOG.md'), `# Test release\n\n## ${version}\n\nSynthetic release only.\n`);
   return root;
 }
 
@@ -182,10 +182,10 @@ test('exactly one workflow invokes the plugin publisher and the release guide na
   for (const filename of await readdir(directory)) {
     if (!/\.ya?ml$/.test(filename)) continue;
     const workflow = await readFile(join(directory, filename), 'utf8');
-    if (/node scripts\/publish-plugin\.ts\b[^\n]*--publish\b/.test(workflow)) publishers.push(filename);
+    if (/node (?:"\$PLUGIN_PUBLISHER"|(?:agents\/)?scripts\/publish-plugin\.ts)[^\n]*--publish\b/.test(workflow)) publishers.push(filename);
   }
   assert.deepEqual(publishers.sort(), [pluginWorkflow]);
-  const guide = await readFile(join(repository, 'plugin/RELEASING.md'), 'utf8');
+  const guide = await readFile(join(repository, 'agents/plugin/RELEASING.md'), 'utf8');
   assert.ok(guide.includes(`gh workflow run ${pluginWorkflow} --ref main`));
 });
 
@@ -197,8 +197,32 @@ test('release workflows keep npm and plugin publication separate and preserve hi
   assert.match(plugin, /include-hidden-files: true/);
   assert.match(plugin, /default: true/);
   assert.match(plugin, /cancel-in-progress: false/);
-  assert.ok(plugin.indexOf('publish-plugin.ts --verify') < plugin.indexOf('--publish'));
+  const verify = plugin.indexOf('node "$PLUGIN_PUBLISHER" --verify');
+  assert.ok(verify >= 0 && verify < plugin.indexOf('--publish'));
   assert.doesNotMatch(plugin, /npm publish|--force|--clobber/);
+});
+
+test('publisher lookup supports immutable old source tags and prefers the new layout', async t => {
+  const workflow = await readFile(join(repository, '.github/workflows', pluginWorkflow), 'utf8');
+  const lookup = workflow.match(/      - name: Locate the publisher in the tagged source\n        run: \|\n([\s\S]*?)\n      - name:/)?.[1];
+  assert.ok(lookup);
+  for (const paths of [[], ['scripts/publish-plugin.ts'], ['agents/scripts/publish-plugin.ts'],
+    ['scripts/publish-plugin.ts', 'agents/scripts/publish-plugin.ts']]) {
+    const root = await temporary(t);
+    const environment = join(root, 'environment');
+    await writeFile(environment, '');
+    for (const path of paths) {
+      await mkdir(join(root, path, '..'), { recursive: true });
+      await writeFile(join(root, path), '');
+    }
+    const result: SpawnSyncReturns<string> = spawnSync('bash', ['-eu', '-c', lookup], {
+      cwd: root, env: { ...process.env, GITHUB_ENV: environment }, encoding: 'utf8',
+    });
+    assert.equal(result.status, paths.length ? 0 : 1, result.stderr);
+    assert.equal(await readFile(environment, 'utf8'), paths.length
+      ? `PLUGIN_PUBLISHER=${paths.includes('agents/scripts/publish-plugin.ts') ? 'agents/scripts/publish-plugin.ts' : 'scripts/publish-plugin.ts'}\n`
+      : '');
+  }
 });
 
 test('workflow tag validation rejects multiline output injection before checkout', async () => {

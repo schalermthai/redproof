@@ -368,7 +368,7 @@ function nodeTestSuite(options: { readonly files: string }): TestRunner {
 }
 
 const adapter = testing({
-  runner: nodeTestSuite({ files: '{tests,packages/*/test}/**/*.test.ts' }),
+  runner: nodeTestSuite({ files: '{tests,packages/*/test,agents/tests}/**/*.test.ts' }),
   report: report.junitXml(),
   rules: {
     testsPass: true,

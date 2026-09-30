@@ -10,11 +10,15 @@
         "gates/support/check-doc-fragment-budget.ts",
         "redproof.config.ts",
         "scripts/*.ts",
+        "agents/scripts/*.ts",
+        "agents/tests/**/*.ts",
         "tests/**/*.ts"
       ],
       "project": [
         "gates/**/*.ts",
         "scripts/**/*.ts",
+        "agents/scripts/**/*.ts",
+        "agents/tests/**/*.ts",
         "tests/**/*.ts"
       ]
     },

@@ -37,7 +37,7 @@ const gate = defineGate({
   rules,
   check: repositoryPolicy({
     rules,
-    documents: ['README.md', 'docs/**/*.md', 'skills/**/*.md', 'skill-support/**/*.md', 'plugin/**/*.md'],
+    documents: ['README.md', 'docs/**/*.md', 'agents/**/*.md'],
     linkTargets: [
       'README.md',
       'LICENSE',
@@ -47,11 +47,9 @@ const gate = defineGate({
       'fixtures/**/*',
       'gates/**/*',
       'packages/**/*',
-      'plugin/**/*',
-      'plugin/redproof/.codex-plugin/plugin.json',
+      'agents/**/*',
+      'agents/plugin/redproof/.codex-plugin/plugin.json',
       'scripts/**/*',
-      'skills/**/*',
-      'skill-support/**/*',
     ],
   }),
 });
@@ -107,9 +105,9 @@ export const proofs = defineProofs(gate, [
   ),
   proof.red(
     rules.docsLinks,
-    'detects a broken relative documentation link',
+    'detects a broken relative documentation link in agent tooling',
     mutate.createFile(
-      'docs/redproof-broken-link-proof.md',
+      'agents/redproof-broken-link-proof.md',
       '# Proof probe\n\n[missing document](./definitely-missing.md)\n',
     ),
   ),
