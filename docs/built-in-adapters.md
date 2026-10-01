@@ -213,7 +213,9 @@ const adapter = testing({
 
 Built-in report formats are:
 
-```ts fragment
+```ts
+import { report } from '@redproof/testing';
+
 report.jestJson()
 report.junitXml()
 ```
@@ -314,8 +316,10 @@ export default gate;
 
 In this example:
 
-```ts fragment
-noConsole: 'no-console'
+```ts
+const selectedRules = { noConsole: 'no-console' };
+
+selectedRules.noConsole;
 ```
 
 means:
