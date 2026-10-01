@@ -74,7 +74,7 @@ The repository currently has six self-hosted Gates:
 | `repository-policy` | packages, versions, CI, release, documentation, and lockfile policy |
 | `unused-code` | unused files, exports, dependencies, and unresolved imports |
 
-The [Gate files](../redproof.config.ts) live under:
+The Gate files live under:
 
 ```text
 gates/
