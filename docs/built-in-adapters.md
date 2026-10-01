@@ -1,144 +1,89 @@
 # Built-in Adapters
 
-Use a built-in Adapter when a tool you already run should become a Gate you can prove.
+Already running a linter, tests, or coverage tool? An Adapter turns its findings
+into named Redproof Rules, so you can check—and prove—each policy separately.
+You keep the underlying tool; the Adapter interprets its results for Redproof.
 
-The important model is:
+## Choose an Adapter
 
-```text
-Gate
-└── Adapter              @redproof/eslint, @redproof/testing, ...
-     ├── Rules           the tool findings you select
-     └── Check           one fresh run of the tool
-          └── PASS | FAIL | REFUSE
-```
+| What you want to protect | Package and entry point | What you can check |
+|---|---|---|
+| [Test behavior](#testing) | `@redproof/testing` · `vitest()` or `testing()` | Passing tests, retries, skipped tests, and TODO tests; available policies depend on the report format. |
+| [Lint rules](#eslint-your-first-adapter-gate) | `@redproof/eslint` · `eslint()` | Selected ESLint rules, including findings suppressed by inline comments. |
+| [Architecture boundaries](#dependency-cruiser) | `@redproof/dependency-cruiser` · `dependencyCruiser()` | Named dependency rules, with optional acceptance of known violations. |
+| [Test strength](#stryker) | `@redproof/stryker` · `stryker()` | Undetected mutants, new undetected mutants, or a minimum mutation score. |
+| [Unused code and dependencies](#knip) | `@redproof/knip` · `knip()` | Selected Knip categories: unused files, exports, dependencies, unresolved imports, and more. |
+| [Coverage](#coverage) | `@redproof/istanbul` · `nyc()` or `istanbul()` | Statement, branch, function, and line thresholds, overall or per file. |
 
-The tool does the analysis. Redproof adds the Rule model and the proofs around it.
+Install only the packages you need, alongside their tools. All require Node.js 24
+or later. Package READMEs linked below list tool compatibility and advanced options.
 
-An Adapter supplies Rules and a Check, not project-specific proofs. `check` runs
-the selected Rules; `prove` runs the proofs you export with `defineProofs`.
-A RED proof verifies detection for its targeted Rule, not every Rule in the Gate.
-The examples below show either checking alone or a starter proof to extend for
-your project.
+## Why not just call `command()`?
 
-## Packages
+Use [`command()`](commands.md) when an exit code answers your question—for example,
+“Does `npm run lint` succeed?” Use `commands()` to group several such checks.
 
-```text
-@redproof/testing              test suites: Vitest, Jest, JUnit XML, any runner
-@redproof/eslint               selected ESLint rules
-@redproof/dependency-cruiser   module boundaries
-@redproof/stryker              mutation testing
-@redproof/knip                 unused files, exports, and dependencies
-@redproof/istanbul             coverage thresholds
-```
+An Adapter answers a more specific question: “Which lint rule failed, and where?”
+It reads structured tool results instead of using the exit code alone.
 
-Each package installs beside the tool it wraps:
+| Situation | Command Check | Built-in Adapter |
+|---|---|---|
+| ESLint reports both `no-console` and `eqeqeq` | Breaches the Rule you assigned to that command. | Attributes each finding to its selected Rule, with the reported source location. |
+| A test passes only after a retry | A successful exit passes. | The testing Adapter can breach `noFlakyTests` when the report provides retry evidence. |
+| The tool cannot produce trustworthy results | Spawn failures, signals, exceeded limits, and exit codes outside an explicit policy REFUSE. | Also interprets tool-specific problems, such as malformed reports or disabled selected policies. |
+| You want to prove a safeguard works | Supports RED, GREEN, and REFUSE proofs. | Supports the same proofs, targeted at the selected tool Rules. |
+
+For example, a command Check can map ESLint exit `1` to one `lint` Rule and
+exit `2` to REFUSE. The ESLint Adapter below gives `no-console` and `eqeqeq`
+separate Rules. A loose-equality finding cannot satisfy a RED proof targeting
+console usage. That is useful when you need to know that a particular safeguard
+works, not just that the lint command can fail.
+
+## ESLint: your first Adapter Gate
+
+### 1. Install and configure
+
+From your project root:
 
 ```bash
-npm install --save-dev @redproof/eslint eslint
+npm install --save-dev redproof @redproof/eslint eslint
 ```
 
-## What every built-in Adapter promises
-
-You select the findings that matter. An unselected finding never breaches.
-
-```text
-tool finding              → Breach → FAIL
-tool cannot answer        → Diagnostic → REFUSE
-bad option                → throw when the Gate file loads
-```
-
-Each Check runs the tool again. The Adapter does not use the tool's result cache, so a RED proof cannot reuse a result from before the mutation.
-
-Each Check counts what it inspected. A PASS over zero targets is refused as `nothing-inspected`, unless the Gate sets `policies: { emptyEvidence: 'allow' }`. See [Empty evidence](composition.md#empty-evidence).
-
-Path options are relative paths. An empty or absolute path throws when the Gate file loads.
-
-## Testing
-
-`vitest()` makes a Vitest suite a Gate:
+If you have not configured Redproof yet, create `redproof.config.ts`:
 
 ```ts
-import { vitest } from '@redproof/testing';
-import { defineGate, defineProofs, mutate, proof } from 'redproof';
+import { defineConfig } from 'redproof';
 
-const adapter = vitest({
-  rules: {
-    testsPass: true,
-    noFlakyTests: true,
-    noSkippedTests: true,
-    noTodoTests: true,
-  },
-});
-
-const gate = defineGate({ id: 'tests', adapter });
-
-export const proofs = defineProofs(gate, [
-  proof.red(
-    adapter.rules.testsPass,
-    'detects broken behavior',
-    mutate.writeText('src/example.ts', 'export const value = "broken";\n'),
-  ),
-  proof.green('accepts the healthy test suite'),
-]);
-
-export default gate;
+export default defineConfig({ root: '.', gatesRoot: 'gates/**/*.ts' });
 ```
 
-This Gate checks four policies, but its RED proof targets only `testsPass`.
-The mutation assumes a test depends on `src/example.ts` and fails when its value
-changes. Add targeted proofs for the other policies you want to verify.
+This example uses JavaScript to avoid needing a TypeScript parser. It assumes
+`src/example.js` exists and has no lint violations. For a new project, start with:
 
-The Rules:
-
-```text
-testing/tests-pass
-testing/no-flaky-tests       Jest-compatible JSON only
-testing/no-skipped-tests
-testing/no-todo-tests
+```js
+export const value = 1;
 ```
 
-A flaky test is a test that passes only after a retry.
+Keep your existing ESLint configuration. If you do not have one, create
+`eslint.config.mjs`:
 
-### Other test runners
-
-Any runner that writes a structured report works. Pair a runner with a report format:
-
-```ts
-import { report, runner, testing } from '@redproof/testing';
-
-const adapter = testing({
-  runner: runner.command({
-    command: 'pytest',
-    args: ({ reportFile }) => ['-q', `--junitxml=${reportFile}`],
-  }),
-  report: report.junitXml(),
-  rules: { testsPass: true, noSkippedTests: true },
-});
+```js
+export default [{
+  files: ['src/**/*.js'],
+  rules: { 'no-console': 'error', eqeqeq: 'error' },
+}];
 ```
 
-Built-in report formats:
+### 2. Select the Rules and add a proof
 
-```ts fragment
-report.jestJson()
-report.junitXml()
-```
-
-For an in-house tool, implement only the runner or the report format. See
-[Extend the testing adapter instead](custom-adapter.md#extend-the-testing-adapter-instead).
-
-See the [testing package](../packages/testing/README.md) for `cwd`, `reportFile`,
-process limits, and the Vitest flags.
-
-## ESLint
-
-Select the ESLint rules you adopt:
+Create `gates/eslint.ts`:
 
 ```ts
 import { eslint } from '@redproof/eslint';
 import { defineGate, defineProofs, mutate, proof } from 'redproof';
 
 const adapter = eslint({
-  files: ['src/**/*.ts'],
+  files: ['src/**/*.js'],
   rules: {
     noConsole: 'no-console',
     strictEquality: 'eqeqeq',
@@ -151,7 +96,7 @@ export const proofs = defineProofs(gate, [
   proof.red(
     adapter.rules.noConsole,
     'detects console usage',
-    mutate.appendText('src/example.ts', '\nconsole.log("proof");\n'),
+    mutate.appendText('src/example.js', '\nconsole.log("proof");\n'),
   ),
   proof.green('accepts clean source'),
 ]);
@@ -159,22 +104,109 @@ export const proofs = defineProofs(gate, [
 export default gate;
 ```
 
-The example RED proof targets `noConsole`, not `strictEquality`. It assumes
-`src/example.ts` exists and the ESLint configuration enables both selected rules.
+`noConsole` is your local name; `no-console` is the ESLint rule it selects.
+The Adapter enables selected rules at error severity for its run. Your ESLint
+configuration still supplies parsers, plugins, and file settings.
 
-An adopted Rule cannot be silenced. A finding under `/* eslint-disable */` still breaches.
+### 3. Check it, then prove it
 
-Name a path in `files` and ESLint must read it. A path that your `ignores` pattern excludes is REFUSE, not PASS.
+```bash
+npx redproof describe gates/eslint.ts
+npx redproof check gates/eslint.ts
+npx redproof prove gates/eslint.ts
+```
 
-See the [ESLint package](../packages/eslint/README.md).
+`describe` shows the Gate's Rules, Check, and proofs. `check` should PASS on clean
+source. By default, during `prove`, Redproof adds the console call to a temporary copy and
+expects the Gate to FAIL for `noConsole`. That expected failure means the RED
+proof succeeded. The GREEN proof checks that clean source still passes.
 
-## dependency-cruiser
+This Gate checks two Rules, but proves detection for only `noConsole`. Add a
+separate RED proof that introduces `==` to prove `strictEquality` too.
 
-Keep the rules in dependency-cruiser's own configuration. Select the ones to prove:
+Two ESLint-specific protections go beyond the command's exit code:
+
+- Findings suppressed by `/* eslint-disable */` still breach selected Rules.
+- An explicitly named file that ESLint ignores produces REFUSE. A glob still
+  respects ignore patterns; it does not establish that every matching file was read.
+
+See the [ESLint package](../packages/eslint/README.md) for details.
+
+## Recipes for the other Adapters
+
+These examples assume Redproof is configured as above and the underlying tool
+already works in your project. Save a Gate in `gates/` and run `npx redproof check`
+with its path. Each recipe below is **check-only**: it selects Rules but does not
+include proofs. See [Add proofs to your Gate](#add-proofs-to-your-gate) when it passes.
+
+### Testing
+
+Use this when “the test command passed” is not enough: you also want to reject
+skipped tests, TODOs, or tests that passed only after a retry.
+
+```bash
+npm install --save-dev @redproof/testing vitest
+```
+
+```ts
+import { vitest } from '@redproof/testing';
+import { defineGate } from 'redproof';
+
+const adapter = vitest({
+  rules: {
+    testsPass: true,
+    noFlakyTests: true,
+    noSkippedTests: true,
+    noTodoTests: true,
+  },
+});
+
+export default defineGate({ id: 'tests', adapter });
+```
+
+These select `testing/tests-pass`, `testing/no-flaky-tests`,
+`testing/no-skipped-tests`, and `testing/no-todo-tests`.
+
+Not using Vitest? `testing()` pairs a command with a supported report format.
+For example, with pytest installed and tests in the project:
+
+```ts
+import { report, runner, testing } from '@redproof/testing';
+import { defineGate } from 'redproof';
+
+const adapter = testing({
+  runner: runner.command({
+    command: 'pytest',
+    args: ({ reportFile }) => ['-q', `--junitxml=${reportFile}`],
+  }),
+  report: report.junitXml(),
+  rules: { testsPass: true, noSkippedTests: true },
+});
+
+export default defineGate({ id: 'python-tests', adapter });
+```
+
+Built-in formats are `report.jestJson()` and `report.junitXml()`.
+Retry detection needs Jest-compatible JSON; selecting `noFlakyTests` with JUnit
+XML is rejected because that format cannot establish it.
+
+The [testing package](../packages/testing/README.md) covers Jest retry signals,
+Vitest config-loader settings for proof runs, report paths, and process limits.
+For another format, [extend the runner or report parser](custom-adapter.md#extend-the-testing-adapter-instead).
+
+### dependency-cruiser
+
+Use this to protect individual module boundaries rather than one “architecture
+command passes” promise. Define the boundaries in dependency-cruiser's config,
+then select their names:
+
+```bash
+npm install --save-dev @redproof/dependency-cruiser dependency-cruiser
+```
 
 ```ts
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
-import { defineGate, defineProofs, mutate, proof } from 'redproof';
+import { defineGate } from 'redproof';
 
 const adapter = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
@@ -185,31 +217,27 @@ const adapter = dependencyCruiser({
   },
 });
 
-const gate = defineGate({ id: 'architecture', adapter });
-
-export const proofs = defineProofs(gate, [
-  proof.red(
-    adapter.rules.domainNoInfrastructure,
-    'detects domain importing infrastructure',
-    mutate.appendText('src/domain/order.js', "\nimport '../infrastructure/database.js';\n"),
-  ),
-  proof.green('accepts valid architecture'),
-]);
-
-export default gate;
+export default defineGate({ id: 'architecture', adapter });
 ```
 
-The example RED proof targets `domainNoInfrastructure`, not `applicationNoAdapters`.
-It assumes the source files exist and the dependency-cruiser configuration defines
-both selected rules.
+The config must define both selected rules. A selected rule disabled with severity
+`ignore` produces REFUSE, not PASS. Set `knownViolationsFile` to accept an existing
+baseline while still rejecting new violations.
 
-A baseline in `knownViolationsFile` makes the Gate quieter on purpose. Keep a RED proof that plants a new violation, so you know the Gate still fails.
+See the [dependency-cruiser package](../packages/dependency-cruiser/README.md)
+for configuration and baseline details.
 
-See the [dependency-cruiser package](../packages/dependency-cruiser/README.md).
+### Stryker
 
-## Stryker
+Stryker deliberately changes source code to see whether your tests notice.
+Use this Adapter to set test-strength policies or accept specific existing
+survivors without accepting new ones.
 
-Stryker measures the tests, not the source:
+```bash
+npm install --save-dev @redproof/stryker @stryker-mutator/core
+```
+
+With a working Stryker configuration and its test-runner dependencies installed:
 
 ```ts
 import { stryker } from '@redproof/stryker';
@@ -217,32 +245,27 @@ import { defineGate } from 'redproof';
 
 const adapter = stryker({
   configFile: 'stryker.config.mjs',
-  rules: {
-    mutantsDetected: true,
-    mutationScore: { minimum: 80 },
-  },
+  rules: { mutationScore: { minimum: 80 } },
 });
 
-export default defineGate({ id: 'mutation-testing', adapter });
+export default defineGate({ id: 'test-strength', adapter });
 ```
 
-The policies:
+Choose `mutationScore` for a minimum score, `mutantsDetected` to require every
+valid mutant to be detected, or `noNewUndetectedMutants` to reject undetected
+mutants outside an accepted baseline. A different survivor breaches the last
+policy even if the total survivor count stays unchanged.
 
-```text
-mutantsDetected            every valid mutant is detected
-noNewUndetectedMutants     no survivor outside an accepted baseline
-mutationScore              the score stays at or above a minimum
+See the [Stryker package](../packages/stryker/README.md) for baseline setup.
+
+### Knip
+
+Use this to give unused files, unused exports, dependency issues, and other Knip
+categories their own Rules. A selected warning breaches even if Knip exits zero.
+
+```bash
+npm install --save-dev @redproof/knip knip
 ```
-
-This is a check-only example. Before running `prove` for this Gate, export a
-`defineProofs` suite. For a RED proof, weaken a test: Stryker must notice the loss
-of test strength. See the [Stryker fixture's proofs](../fixtures/stryker-project/gates/test-strength.ts).
-
-See the [Stryker package](../packages/stryker/README.md) for the accepted-mutant baseline.
-
-## Knip
-
-Select the Knip categories you adopt:
 
 ```ts
 import { knip } from '@redproof/knip';
@@ -259,17 +282,25 @@ const adapter = knip({
 export default defineGate({ id: 'unused-code', adapter });
 ```
 
-This is a check-only example. Before running `prove` for this Gate, export a
-`defineProofs` suite. See [Redproof's own Knip Gate and proofs](../gates/unused-code.ts)
-for mutations that introduce unused files, exports and unresolved imports.
+Knip's configuration determines scope, plugins, and ignore patterns. A selected
+category disabled by that configuration produces REFUSE, not PASS. The Adapter
+does not prove that ignored code is unused or safe.
 
-The Knip configuration decides the scope. A selected category that the Knip configuration disables is REFUSE, not PASS.
+See the [Knip package](../packages/knip/README.md) for all categories, Rule IDs,
+and workspace options.
 
-See the [Knip package](../packages/knip/README.md) for every category and its Rule ID.
+### Coverage
 
-## Coverage
+Use this to check coverage metrics separately, apply per-file thresholds, and
+require specific files to appear in the report—not just trust a coverage command's
+exit code.
 
-`nyc()` collects fresh coverage and applies thresholds:
+```bash
+npm install --save-dev @redproof/istanbul nyc
+```
+
+This example assumes Mocha is installed, tests live under `test/`, and
+`src/orders.js` exists:
 
 ```ts
 import { nyc } from '@redproof/istanbul';
@@ -289,16 +320,54 @@ const adapter = nyc({
 export default defineGate({ id: 'coverage', adapter });
 ```
 
-This is a check-only example. Before running `prove` for this Gate, export a
-`defineProofs` suite. See the [coverage fixture's proofs](../fixtures/istanbul-project/gates/coverage.ts)
-for examples that introduce coverage gaps and refuse a failed test run.
+You can also select `functions` and `lines`. `nyc()` collects fresh coverage and
+includes unexecuted files in its configured scope by default. Pass the test
+executable, not a script that already wraps nyc.
 
-Coverage measures execution, not assertion quality. Combine it with a testing Gate and a Stryker Gate.
+A missing expected file or failed test process produces REFUSE, even if a report
+exists. `expectedFiles` cannot detect omitted statements within a reported file.
+Coverage measures execution, not assertion quality.
 
-`istanbul()` accepts a full coverage map from another producer, such as c8. See the [Istanbul package](../packages/istanbul/README.md).
+Already using c8 or another coverage producer? `istanbul()` accepts a fresh,
+full Istanbul coverage map—not summary-only JSON. See the
+[Istanbul package](../packages/istanbul/README.md) for that recipe and all options.
 
-## Next
+## Add proofs to your Gate
 
-- **[Custom Adapter](custom-adapter.md)** when no built-in integration fits, and for
-  choosing between a Check, a runner or report format, and an Adapter.
-- **[Command Checks](commands.md)** when the tool is an executable and its exit code is the result.
+An Adapter supplies Rules and a Check. It does **not** supply project-specific
+proofs. Once `check` passes, follow the ESLint example: keep the Gate in a variable
+and export a `defineProofs` suite targeting `adapter.rules.<yourRule>`.
+
+Choose a mutation that breaks the policy you want to trust:
+
+| Adapter | Example RED proof | Existing example |
+|---|---|---|
+| Testing | Break behavior that an existing test asserts. | [Vitest proofs](../fixtures/testing-vitest/gates/tests.ts) |
+| ESLint | Add a console call or loose equality. | [ESLint proofs](../fixtures/eslint-project/gates/eslint.ts) |
+| dependency-cruiser | Add an import across a forbidden boundary. | [Architecture proofs](../fixtures/dependency-cruiser-project/gates/architecture.ts) |
+| Stryker | Weaken an assertion so a mutant survives. | [Test-strength proofs](../fixtures/stryker-project/gates/test-strength.ts) |
+| Knip | Introduce an unused file or export. | [Redproof's Knip Gate](../gates/unused-code.ts) |
+| Coverage | Add an unexecuted branch. | [Coverage proofs](../fixtures/istanbul-project/gates/coverage.ts) |
+
+Add a GREEN proof for the healthy state and a REFUSE proof for unavailable
+evidence. Then run `npx redproof prove` with your Gate's path. A RED proof verifies
+only its targeted Rule, not every Rule selected by the Adapter.
+
+## How to read the result
+
+- **PASS:** the Check completed and found no breaches of the selected Rules.
+- **FAIL:** tool evidence breached a selected Rule. Unselected findings do not breach.
+- **REFUSE:** Redproof could not establish the result—for example, the report was
+  malformed or a selected policy was disabled. Fix the evidence problem and rerun.
+
+Checks run the tool again rather than just reading yesterday's report. If you
+write a custom test or coverage producer, it must collect fresh evidence too.
+A PASS with zero inspected targets becomes REFUSE by default; see
+[Empty evidence](composition.md#empty-evidence) for intentional exceptions.
+
+Adapters still depend on the tool's configured scope. Selecting a policy does
+not automatically include ignored code. Invalid Adapter options throw when the
+Gate file loads; package READMEs explain supported paths and options.
+
+If an exit code is all you need, start with [Command Checks](commands.md).
+If neither approach fits, see [Custom Adapter](custom-adapter.md).
