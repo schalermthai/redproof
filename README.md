@@ -9,13 +9,17 @@ the source commit, plugin version and immutable `plugin-bundle-vVERSION` snapsho
 The readiness record describes the exact bundle tested; it is a maintainer
 attestation, not marketplace approval or a signature.
 
-## Install after the first release
+## Install
 
-For Codex, register the Git marketplace, then install Redproof from its plugin UI:
+For Codex, register the Git marketplace and install Redproof:
 
 ```sh
 codex plugin marketplace add schalermthai/redproof --ref plugin-marketplace
+codex plugin add redproof@redproof-plugins
 ```
+
+If your Codex version does not offer `plugin add`, install Redproof from the
+plugin browser after adding the marketplace.
 
 For Claude Code:
 

@@ -1,10 +1,10 @@
 {
-  "version": "0.1.0",
-  "bundleSha256": "72cad10ed42a22e8faa5a734c012187d65a6badb8f3bfbe6654d5a5aada3f863",
+  "version": "0.2.0",
+  "bundleSha256": "e3d2eac5c7afbfec31922804c595ed46993b46e0327be904a0af9ff7b719a081",
   "hosts": {
     "codex": {
       "version": "0.156.1",
-      "evidence": "plugin/VALIDATION.md",
+      "evidence": "agents/plugin/validation/2026-10-01-0.2.0-host-checks.md",
       "checks": {
         "installation": "pass",
         "publicSkills": "pass",
@@ -14,8 +14,8 @@
       }
     },
     "claude": {
-      "version": "2.1.284",
-      "evidence": "plugin/VALIDATION.md",
+      "version": "2.1.286",
+      "evidence": "agents/plugin/validation/2026-10-01-0.2.0-host-checks.md",
       "checks": {
         "installation": "pass",
         "publicSkills": "pass",
