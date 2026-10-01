@@ -342,6 +342,206 @@ Already using c8 or another coverage producer? `istanbul()` accepts a fresh,
 full Istanbul coverage map—not summary-only JSON. See the
 [Istanbul package](../packages/istanbul/README.md) for that recipe and all options.
 
+## Configuration details
+
+These options extend the recipes above. Keep them in the same Gate file.
+
+### Testing configuration
+
+#### Running Vitest from a subdirectory
+
+For a project below the Gate root, set `cwd`:
+
+```ts
+import { vitest } from '@redproof/testing';
+
+const adapter = vitest({
+  cwd: 'packages/app',
+  configFile: 'vitest.config.ts',
+  rules: {
+    testsPass: true,
+  },
+});
+```
+
+`cwd` must stay inside the Gate root.
+
+`configFile` and test-file filters use Vitest's normal resolution relative to that directory.
+
+#### Using an existing Vitest JSON report
+
+Most projects do not need to configure this.
+
+By default, Redproof asks Vitest to write a temporary JSON report and cleans it up afterward.
+
+If your Vitest setup already writes a JSON `outputFile` that other setup or teardown code depends on, tell Redproof about the same file:
+
+```ts
+import { vitest } from '@redproof/testing';
+
+const adapter = vitest({
+  cwd: 'packages/app',
+  configFile: 'vitest.config.ts',
+  reportFile: 'test-results.json',
+  rules: {
+    testsPass: true,
+  },
+});
+```
+
+`reportFile`:
+
+- is relative to `cwd`
+- must match Vitest's configured JSON `outputFile`
+- cannot be empty or absolute
+
+Redproof restores any pre-existing report file after each Check.
+
+Keep Vitest's `root` aligned with `cwd`. If Vitest writes the report somewhere else, Redproof refuses the Check rather than treating a missing report as a passing result.
+
+See the [testing package](../packages/testing/README.md) for process limits and
+Vitest flags, including `--configLoader runner` when config bundling leaves
+files in the proof workspace.
+
+#### Flaky-test detection
+
+`noFlakyTests` requires a report format that records retry information.
+
+Redproof supports retry evidence from Jest-compatible JSON reports, including:
+
+- earlier failure messages
+- `invocations`
+- `retryReasons`
+
+JUnit XML only records the final test result, so it cannot reliably prove that a test was not flaky. Redproof therefore rejects `noFlakyTests` when used with JUnit XML.
+
+Redproof also validates test totals when the report provides them. A contradictory or incomplete report produces `REFUSE` instead of an incorrect `PASS`.
+
+#### Command runner metadata
+
+A command runner describes what it will execute:
+
+```ts
+import { runner } from '@redproof/testing';
+
+const built = runner.command({
+  command: 'npm',
+  args: ['test'],
+});
+
+built.description;
+// 'run npm test'
+
+built.plan;
+// { command: 'npm', args: ['test'] }
+```
+
+`redproof describe` uses this metadata so you do not need to maintain a separate description of the command.
+
+When arguments depend on the current run:
+
+```ts
+import { runner } from '@redproof/testing';
+
+const built = runner.command({
+  command: 'pytest',
+  args: ({ reportFile }) => [
+    `--junitxml=${reportFile}`,
+  ],
+});
+```
+
+`plan` contains the command, while `argsFor` can resolve the arguments for a particular run.
+
+You can also set `cwd` for commands that must run below the Gate root. Redproof rejects paths and symbolic links that escape the root.
+
+See [Command Checks](./commands.md) if the command's exit code itself is the result you want to prove.
+
+### Architecture baselines
+
+If your project already has known violations, you can use a checked-in baseline:
+
+```ts
+import { dependencyCruiser } from '@redproof/dependency-cruiser';
+
+const adapter = dependencyCruiser({
+  configFile: '.dependency-cruiser.cjs',
+  knownViolationsFile: '.dependency-cruiser-known-violations.json',
+  files: ['src'],
+  rules: {
+    domainNoInfrastructure: 'domain-no-infrastructure',
+  },
+});
+```
+
+Matching baseline violations are ignored, but new violations still breach the Rule.
+
+A baseline deliberately makes the Gate less strict, so protect it with a RED proof. The proof should add a **new** violation and confirm that the Gate still detects it.
+
+Do not automatically add every new violation to the baseline. If the baseline grows whenever new debt is introduced, the Gate can continue to PASS without protecting the architecture.
+
+Malformed baseline files produce `REFUSE` rather than being silently ignored.
+
+The adapter disables dependency-cruiser caching during Checks so a RED mutation cannot accidentally reuse a pre-mutation result.
+
+A selected rule must be active in dependency-cruiser. Severity `ignore` produces
+`REFUSE`. See the [dependency-cruiser package](../packages/dependency-cruiser/README.md).
+
+### Stryker configuration
+
+#### Working directory
+
+For a package below the Gate root, set `cwd`:
+
+```ts
+import { stryker } from '@redproof/stryker';
+
+const adapter = stryker({
+  cwd: 'packages/app',
+  configFile: 'stryker.config.mjs',
+  rules: {
+    mutationScore: {
+      minimum: 80,
+    },
+  },
+});
+```
+
+`configFile` and `acceptedMutantsFile` are resolved from that directory.
+
+#### Projects with accepted surviving mutants
+
+Sometimes a project intentionally accepts specific surviving mutants.
+
+In that case, use `noNewUndetectedMutants` instead of requiring every mutant to be detected:
+
+```ts
+import { stryker } from '@redproof/stryker';
+
+const adapter = stryker({
+  configFile: 'stryker.config.mjs',
+  rules: {
+    noNewUndetectedMutants: {
+      acceptedMutantsFile: 'accepted-mutants.json',
+    },
+  },
+});
+```
+
+The accepted-mutants file is a checked-in JSON array describing the exact mutants that are allowed to survive.
+
+Redproof matches mutant identities rather than only comparing counts. Replacing one accepted survivor with a different survivor therefore still breaches the Rule.
+
+An invalid, duplicate, or escaping baseline entry produces `REFUSE`.
+
+If an accepted mutant starts being detected by your tests, Redproof also refuses the baseline. Remove that mutant from the accepted list.
+
+For a useful RED proof, weaken the test suite and confirm that Stryker detects the loss of test strength.
+
+See the [Stryker package](../packages/stryker/README.md) for the baseline schema
+and mutant identity fields.
+
+
 ## Add proofs to your Gate
 
 An Adapter supplies Rules and a Check. It does **not** supply project-specific
