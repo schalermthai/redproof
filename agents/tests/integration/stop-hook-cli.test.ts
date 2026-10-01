@@ -49,3 +49,30 @@ test('the real CLI: held Rules let the turn end with no output', { timeout: 60_0
   const result = run('stop');
   assert.deepEqual({ status: result.status, stdout: result.stdout, stderr: result.stderr }, { status: 0, stdout: '', stderr: '' });
 });
+
+for (const exitCode of [0, 2]) {
+  test(`the real CLI: REFUSE with exit ${exitCode} is unverified evidence`, { timeout: 60_000 }, async t => {
+    const { root, run } = await fixtureProject(t, 'refuse');
+    await writeFile(join(root, 'redproof.config.ts'), `import { defineConfig } from 'redproof';\nexport default defineConfig({ root: '.', gatesRoot: 'gates/**/*.ts', refusalExit: ${exitCode} });\n`);
+    run('baseline');
+    await writeFile(join(root, 'note.txt'), 'unrelated edit\n');
+    const result = run('stop');
+    assert.equal(result.status, 2, result.stdout + result.stderr);
+    assert.match(result.stderr, /could not run/);
+    assert.match(result.stderr, /REFUSE/);
+    assert.doesNotMatch(result.stderr, /Fix each breached Rule|check failed/);
+  });
+}
+
+test('the real CLI: an unrelated edit exempts an unchanged baseline Breach, but touching its file blocks', { timeout: 60_000 }, async t => {
+  const { root, run } = await fixtureProject(t, 'fail-single');
+  run('baseline');
+  await writeFile(join(root, 'note.txt'), 'unrelated edit\n');
+  const untouched = run('stop');
+  assert.equal(untouched.status, 0, untouched.stdout + untouched.stderr);
+  assert.match(untouched.stdout, /pre-existing Breaches[\s\S]*not passing/);
+  await writeFile(join(root, 'src/parser.ts'), 'export const changed = true;\n');
+  const changed = run('stop');
+  assert.equal(changed.status, 2, changed.stdout + changed.stderr);
+  assert.match(changed.stderr, /rejects-malformed-input/);
+});

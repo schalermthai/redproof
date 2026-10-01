@@ -27,6 +27,7 @@ const CONFIG_FILES = [
 const SETTINGS_FILE = 'redproof.stop-hook.json';
 const MAX_BLOCKS = 3;
 const CHECK_BUDGET_MS = Number(process.env.REDPROOF_STOP_HOOK_BUDGET_MS) || 240_000;
+const BASELINE_BUDGET_MS = Math.min(CHECK_BUDGET_MS, 15_000);
 const REPORT_CHARS = 6000;
 const LARGE_FILE_BYTES = 8 * 1024 * 1024;
 const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -242,12 +243,89 @@ function runCheck(root, dir, reportFile, deadline) {
       } catch {
         // No report: the CLI stopped before it had a verdict.
       }
-      if (report?.command !== 'check' || typeof report.status !== 'string') {
+      if (report?.version !== 1 || report.command !== 'check'
+        || !['passed', 'failed', 'refused'].includes(report.status)
+        || !Array.isArray(report.gates)
+        || report.gates.some(gate => !gate || !['pass', 'fail', 'refuse'].includes(gate.verdict)
+          || typeof gate.file !== 'string' || !Array.isArray(gate.rules)
+          || gate.rules.some(rule => !rule || !Array.isArray(rule.breaches)))) {
         return done({ dir, verdict: 'cannot-run', reason: `redproof exited with code ${code} without a check report`, output });
       }
-      done({ dir, verdict: code === 0 ? 'pass' : 'fail', output });
+      // The exit policy can map REFUSE to any code, including zero.
+      if (report.status === 'refused' || report.gates.some(gate => gate.verdict === 'refuse')) {
+        return done({ dir, verdict: 'cannot-run', reason: 'a Gate refused: the required evidence is unavailable or untrustworthy', output });
+      }
+      const hasFailure = report.gates.some(gate => gate.verdict === 'fail');
+      if (code === null || (report.status === 'passed' && (code !== 0 || hasFailure))
+        || (report.status === 'failed' && (code === 0 || !hasFailure))) {
+        return done({ dir, verdict: 'cannot-run', reason: 'the check report contradicts the process result', output });
+      }
+      done({ dir, verdict: report.status === 'passed' ? 'pass' : 'fail', output, report });
     });
   });
+}
+
+function breachKey(gate, rule, breach) {
+  return sha256(JSON.stringify({ gate: gate.id, rule: rule.id, breach }));
+}
+
+function failureBaseline(root, dir, report) {
+  const entries = [];
+  for (const gate of report.gates) {
+    if (gate.verdict !== 'fail') continue;
+    for (const rule of gate.rules) {
+      for (const breach of rule.breaches) {
+        const file = breach.location?.file;
+        if (typeof file !== 'string' || !file) continue;
+        entries.push({
+          key: breachKey(gate, rule, breach),
+          file,
+          mark: contentMark(resolve(root, dir, file)),
+          gateFile: gate.file,
+          gateMark: contentMark(resolve(root, dir, gate.file)),
+        });
+      }
+    }
+  }
+  return {
+    entries,
+    configMarks: Object.fromEntries(CONFIG_FILES.map(file => [file, contentMark(resolve(root, dir, file))])),
+  };
+}
+
+/** Exempt only known, located Breaches whose source and Gate inputs did not change. */
+function filterBaselineFailures(root, result, baseline) {
+  if (!baseline || !baseline.entries?.length || !result.report) return result;
+  if (CONFIG_FILES.some(file => baseline.configMarks?.[file] !== contentMark(resolve(root, result.dir, file)))) {
+    baseline.entries = [];
+    return result;
+  }
+  // Once touched, an old defect cannot regain its exemption by restoring old bytes.
+  baseline.entries = baseline.entries.filter(entry => entry.mark === contentMark(resolve(root, result.dir, entry.file))
+    && entry.gateMark === contentMark(resolve(root, result.dir, entry.gateFile)));
+  let ignored = 0;
+  const actionable = [];
+  for (const gate of result.report.gates) {
+    if (gate.verdict !== 'fail') continue;
+    let gateCount = 0;
+    for (const rule of gate.rules) {
+      for (const breach of rule.breaches) {
+        gateCount += 1;
+        const original = baseline.entries.find(entry => entry.key === breachKey(gate, rule, breach));
+        if (original && original.mark === contentMark(resolve(root, result.dir, original.file))
+          && original.gateMark === contentMark(resolve(root, result.dir, original.gateFile))) {
+          ignored += 1;
+        } else {
+          actionable.push(`FAIL ${gate.id} > ${rule.id}: ${breach.message} (${breach.code})${breach.location?.file ? ` at ${breach.location.file}` : ''}`);
+        }
+      }
+    }
+    // Non-countable failures with no located diagnostic remain actionable.
+    if (gateCount === 0) actionable.push(`FAIL ${gate.id}: a failure without located Breach evidence remains actionable.`);
+  }
+  if (!ignored) return result;
+  if (!actionable.length) return { ...result, verdict: 'pre-existing' };
+  return { ...result, output: `${actionable.join('\n')}\n\n${ignored} unchanged, pre-existing Breach(es) do not block this turn. See the full log for the original report.` };
 }
 
 function block(text) {
@@ -355,14 +433,22 @@ async function stop(input) {
 
   // The check may write files of its own; remember the tree as the next stop will see it.
   const after = snapshot(root, session);
-  const failed = results.filter(result => result.verdict === 'fail');
+  for (const result of results) {
+    if (result.verdict === 'pass' && session.failureBaselines) delete session.failureBaselines[result.dir];
+  }
+  const scoped = results.map(result => result.verdict === 'fail'
+    ? filterBaselineFailures(root, result, session.failureBaselines?.[result.dir]) : result);
+  const preExisting = scoped.filter(result => result.verdict === 'pre-existing');
+  const failed = scoped.filter(result => result.verdict === 'fail');
   const missing = results.filter(result => result.verdict === 'not-installed');
   const unrun = results.filter(result => result.verdict === 'cannot-run');
 
   if (failed.length === 0 && unrun.length === 0 && missing.length === 0) {
     Object.assign(session, { verified: after.files, chain: 0 });
     delete session.lastFail;
-    return store.save();
+    store.save();
+    if (preExisting.length) warn(`Redproof: only unchanged, pre-existing Breaches remain in ${preExisting.map(result => label(result.dir)).join(', ')}. They do not block this turn; the Gates are not passing. Full output: ${logFile}`);
+    return;
   }
   if (failed.length === 0 && unrun.length === 0) return notInstalled(store, session, missing.map(result => result.dir));
   if (failed.length === 0) return cannotRun(store, session, describe([...unrun, ...missing], root, logFile));
@@ -377,20 +463,32 @@ async function stop(input) {
   block(`Redproof check failed (block ${session.chain} of ${MAX_BLOCKS}). Fix each breached Rule below, or tell the user why you cannot.\n\n${report}`);
 }
 
-function baseline(input) {
+async function baseline(input) {
   const cwd = typeof input.cwd === 'string' && input.cwd ? input.cwd : process.cwd();
   const sessionId = typeof input.session_id === 'string' && input.session_id ? input.session_id : 'unknown';
   const root = gitRoot(cwd);
   if (!root) return;
   const { settings } = readSettings(root);
   if (settings && !settings.enabled) return;
-  if (configDirs(root, settings ? settings.ignore : []).size === 0) return;
+  const dirs = configDirs(root, settings ? settings.ignore : []);
+  if (dirs.size === 0) return;
   const store = openStore(root);
   // A resumed or compacted session keeps its first baseline.
   if (Object.hasOwn(store.state.sessions, sessionId)) return;
   // Whatever is already uncommitted belongs to the user, not to this session.
   const session = Object.assign(sessionOf(store, sessionId), { startHead: headCommit(root) });
   session.verified = snapshot(root, session).files;
+  session.failureBaselines = {};
+  // Save before execution so a host interruption does not lose the file baseline.
+  store.save();
+  const deadline = Date.now() + BASELINE_BUDGET_MS;
+  for (const [index, dir] of [...dirs].sort().entries()) {
+    if (Date.now() >= deadline) break;
+    const reportFile = join(store.dir, `baseline-${index}.json`);
+    const result = await runCheck(root, dir, reportFile, deadline);
+    if (result.verdict === 'fail') session.failureBaselines[dir] = failureBaseline(root, dir, result.report);
+    rmSync(reportFile, { force: true });
+  }
   store.save();
 }
 
@@ -406,7 +504,7 @@ async function main() {
   }
   if (mode === 'baseline') {
     try {
-      baseline(input);
+      await baseline(input);
     } catch {
       // The baseline is an optimisation. A session start must stay silent.
     }

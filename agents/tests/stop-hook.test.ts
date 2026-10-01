@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -10,7 +11,7 @@ const repository = fileURLToPath(new URL('../../', import.meta.url));
 const hook = join(repository, 'agents/hooks/stop-check.mjs');
 
 // Stands in for the installed CLI. The folder's gate.txt decides the verdict.
-const fakeCli = `import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+const fakeCli = `import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 const verdict = readFileSync('gate.txt', 'utf8').trim();
 appendFileSync(process.env.FAKE_RUNS, process.cwd() + '\\n');
 if (verdict === 'crash') {
@@ -20,9 +21,16 @@ if (verdict === 'crash') {
 if (verdict === 'hang') setInterval(() => {}, 1000);
 else {
   const reporter = process.argv.find(arg => arg.startsWith('--reporter=json:'));
-  writeFileSync(reporter.slice('--reporter=json:'.length), JSON.stringify({ version: 1, command: 'check', status: verdict === 'pass' ? 'passed' : 'failed' }));
+  const passed = verdict === 'pass';
+  const refused = verdict.startsWith('refuse');
+  const status = passed ? 'passed' : refused ? 'refused' : 'failed';
+  const report = { version: 1, command: 'check', status, gates: [{ id: 'demo', file: 'gates/demo.ts', verdict: passed ? 'pass' : refused ? 'refuse' : 'fail', rules: [{ id: 'demo/rule', breaches: passed || refused ? [] : [{ rule: 'demo/rule', code: 'bad', message: 'bad gate', location: { file: 'gate.txt', line: 1, column: 1 } }] }] }] };
+  if (!passed && !refused && existsSync('extra.txt')) report.gates[0].rules[0].breaches.push({ rule: 'demo/rule', code: 'new', message: 'new failure', location: { file: 'extra.txt', line: 1, column: 1 } });
+  if (verdict === 'malformed') report.status = 'surprise';
+  if (verdict === 'contradictory') report.status = 'passed';
+  writeFileSync(reporter.slice('--reporter=json:'.length), JSON.stringify(report));
   console.log(verdict === 'pass' ? 'PASS' : 'FAIL gates/demo.ts > demo/rule-breached at ' + process.cwd());
-  process.exit(verdict === 'pass' ? 0 : 1);
+  process.exit(passed || verdict === 'refuse-zero' ? 0 : refused ? 2 : 1);
 }
 `;
 
@@ -72,6 +80,8 @@ async function project(t: TestContext, options: { git?: boolean; cli?: boolean }
         input: JSON.stringify({ session_id: session, cwd, hook_event_name: mode === 'stop' ? 'Stop' : 'SessionStart', stop_hook_active: active }),
         env: { ...inherited, CLAUDE_PLUGIN_DATA: join(base, 'plugin-data'), FAKE_RUNS: runsFile, ...env },
       });
+      // Assertions below count Stop checks, not the silent SessionStart baseline.
+      if (mode === 'baseline') rmSync(runsFile, { force: true });
       return { status: result.status, stdout: result.stdout, stderr: result.stderr };
     },
     runs: async () => (await readFile(runsFile, 'utf8').catch(() => '')).split('\n').filter(Boolean),
@@ -160,6 +170,7 @@ test('an ignored config is skipped and the next config up owns its files', async
   p.git('commit', '-q', '-m', 'add fixture');
   silent(p.hook('baseline'));
   await p.write('fixtures/broken/input.txt', 'two\n');
+  await p.write('fixtures/broken/gate.txt', 'fail\n\n');
   const unignored = p.hook('stop');
   assert.equal(unignored.status, 2, 'without the ignore list the fixture config runs and fails');
   assert.deepEqual(await p.runs(), [join(p.root, 'fixtures/broken')]);
@@ -327,4 +338,78 @@ test('the hook file runs the bundled script and knows every config name the CLI 
     list(await readFile(hook, 'utf8'), /const CONFIG_FILES = \[([\s\S]*?)\];/),
     list(await readFile(join(repository, 'packages/redproof/src/cli/core/arguments.ts'), 'utf8'), /DEFAULT_CONFIG_FILES = \[([\s\S]*?)\]/),
   );
+});
+
+for (const verdict of ['refuse', 'refuse-zero', 'malformed', 'contradictory']) {
+  test(`report ${verdict} is unavailable evidence, never a pass or breached Rule`, async t => {
+    const p = await project(t);
+    silent(p.hook('baseline'));
+    await p.write('gate.txt', verdict + '\n');
+    const first = p.hook('stop');
+    assert.equal(first.status, 2);
+    assert.match(first.stderr, /could not run/);
+    assert.doesNotMatch(first.stderr, /Fix each breached Rule|check failed/);
+    assert.match(warning(p.hook('stop', { active: true })), /could not run/);
+  });
+}
+
+test('an unrelated edit does not block on a known, untouched baseline Breach', async t => {
+  const p = await project(t);
+  await p.write('gate.txt', 'fail\n');
+  silent(p.hook('baseline'));
+  await p.write('src/a.txt', 'unrelated edit\n');
+  assert.match(warning(p.hook('stop')), /pre-existing Breaches[\s\S]*not passing/);
+  // Touching the reported failure, even while its diagnostic stays identical, must block.
+  await p.write('gate.txt', 'fail\n\n');
+  const changed = p.hook('stop');
+  assert.equal(changed.status, 2);
+  assert.match(changed.stderr, /check failed/);
+});
+
+test('changing Gate configuration invalidates pre-existing failure exemptions', async t => {
+  const p = await project(t);
+  await p.write('gate.txt', 'fail\n');
+  silent(p.hook('baseline'));
+  await p.write('redproof.config.ts', 'export default { changed: true };\n');
+  assert.equal(p.hook('stop').status, 2);
+});
+
+test('new Breaches still block when an untouched baseline Breach is also present', async t => {
+  const p = await project(t);
+  await p.write('gate.txt', 'fail\n');
+  silent(p.hook('baseline'));
+  await p.write('extra.txt', 'new failure\n');
+  const result = p.hook('stop');
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /new failure/);
+  assert.match(result.stderr, /1 unchanged, pre-existing Breach/);
+  assert.doesNotMatch(result.stderr, /bad gate/);
+});
+
+test('changing the Gate source invalidates pre-existing failure exemptions', async t => {
+  const p = await project(t);
+  await p.write('gate.txt', 'fail\n');
+  silent(p.hook('baseline'));
+  await p.write('gates/demo.ts', '// changed Gate source\n');
+  assert.equal(p.hook('stop').status, 2);
+});
+
+test('fixing an old failure retires its exemption so reintroducing it blocks', async t => {
+  const p = await project(t);
+  await p.write('gate.txt', 'fail\n');
+  silent(p.hook('baseline'));
+  await p.write('gate.txt', 'pass\n');
+  silent(p.hook('stop'));
+  await p.write('gate.txt', 'fail\n');
+  assert.equal(p.hook('stop').status, 2);
+});
+
+test('an unavailable startup check stays silent and never exempts a later failure', async t => {
+  const p = await project(t);
+  await p.write('gate.txt', 'hang\n');
+  silent(p.hook('baseline', { env: { REDPROOF_STOP_HOOK_BUDGET_MS: '500' } }));
+  await p.write('gate.txt', 'fail\n');
+  const stopped = p.hook('stop');
+  assert.equal(stopped.status, 2);
+  assert.match(stopped.stderr, /check failed/);
 });

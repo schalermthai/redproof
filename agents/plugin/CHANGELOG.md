@@ -9,6 +9,11 @@ Independent of the Redproof npm library. Release versions are immutable.
 - The hook stays silent in projects without a Redproof config, checks only the
   configs that own changed files, and reports a check that could not run.
 
+- REFUSE reports remain unverified regardless of the configured CLI exit code.
+- A silent, bounded session-start check records pre-existing located Breaches;
+  unchanged ones warn without blocking unrelated work. New or touched Breaches
+  still block, and fixed failures lose their exemptions.
+
 Limitations: Codex does not load hooks from this plugin. The hook needs git.
 
 ## 0.1.0

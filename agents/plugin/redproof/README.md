@@ -83,6 +83,11 @@ Gate fails, the turn stays open and the agent receives the report.
   started, committed or not. The nearest config above a file owns that file.
   Only owning configs run, so a session started in a subfolder still works, and
   a turn that changed nothing costs no check.
+- **Pre-existing failures.** SessionStart silently checks configs within a shared
+  15-second budget to record known Breaches. A matching, located Breach does not
+  block unrelated work while its source file, Gate file, and config remain
+  unchanged. The hook warns that those Gates still fail. Without a completed
+  baseline check or a source location, failures remain blocking.
 - **Your install only.** The hook runs the Redproof library in your project's
   `node_modules`. It never downloads or installs anything.
 - **Fixes are checked again.** After 3 failed checks in one turn, the turn ends
