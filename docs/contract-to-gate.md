@@ -222,9 +222,14 @@ This makes the policy easier to test and keeps failures easier to understand.
 
 For a path-containment Rule, for example, the pure part might decide:
 
-```ts fragment
+```ts
+import { isAbsolute, relative, resolve, sep } from 'node:path';
+
 function isInside(root: string, candidate: string): boolean {
-  // path policy
+  const fromRoot = relative(resolve(root), resolve(candidate));
+  return fromRoot !== '..'
+    && !fromRoot.startsWith(`..${sep}`)
+    && !isAbsolute(fromRoot);
 }
 ```
 
@@ -283,7 +288,17 @@ Now deliberately break the behavior protected by the Rule.
 
 For example:
 
-```ts fragment
+```ts
+import { mutate, proof } from 'redproof';
+import { defineRules } from 'redproof';
+
+const rules = defineRules({
+  domainBoundary: {
+    id: 'architecture/domain-boundary',
+    description: 'Domain code does not depend on infrastructure.',
+  },
+});
+
 proof.red(
   rules.domainBoundary,
   'detects domain depending on infrastructure',
@@ -318,11 +333,21 @@ A useful proof set normally includes three kinds of evidence.
 
 Shows that the Gate detects a violation.
 
-```ts fragment
+```ts
+import { mutate, proof } from 'redproof';
+import { defineRules } from 'redproof';
+
+const rules = defineRules({
+  domainBoundary: {
+    id: 'architecture/domain-boundary',
+    description: 'Domain code does not depend on infrastructure.',
+  },
+});
+
 proof.red(
   rules.domainBoundary,
   'detects a forbidden dependency',
-  mutation,
+  mutate.appendText('src/domain/order.ts', '\nimport "../infrastructure/database";\n'),
 )
 ```
 
@@ -332,7 +357,9 @@ For Rules that protect different behaviors, aim for one focused RED proof per Ru
 
 Shows that the healthy repository is accepted.
 
-```ts fragment
+```ts
+import { proof } from 'redproof';
+
 proof.green('accepts the healthy architecture')
 ```
 
@@ -340,10 +367,12 @@ proof.green('accepts the healthy architecture')
 
 Shows that Redproof does not invent an answer when the evidence becomes unavailable or unsafe to trust.
 
-```ts fragment
+```ts
+import { mutate, proof } from 'redproof';
+
 proof.refuse(
   'refuses when dependency evidence cannot be produced',
-  mutation,
+  mutate.move('.dependency-cruiser.cjs', '.dependency-cruiser.off.cjs'),
 )
 ```
 
@@ -512,7 +541,16 @@ const adapter = dependencyCruiser({
 
 ### 3. Create the Gate
 
-```ts fragment
+```ts
+import { dependencyCruiser } from '@redproof/dependency-cruiser';
+
+const adapter = dependencyCruiser({
+  configFile: '.dependency-cruiser.cjs',
+  files: ['src'],
+  rules: {
+    domainBoundary: 'domain-no-infrastructure',
+  },
+});
 import { defineGate } from 'redproof';
 
 const gate = defineGate({
@@ -535,7 +573,20 @@ The healthy architecture should pass.
 
 Deliberately introduce the forbidden dependency:
 
-```ts fragment
+```ts
+import { dependencyCruiser } from '@redproof/dependency-cruiser';
+
+const adapter = dependencyCruiser({
+  configFile: '.dependency-cruiser.cjs',
+  files: ['src'],
+  rules: {
+    domainBoundary: 'domain-no-infrastructure',
+  },
+});
+import { defineGate } from 'redproof';
+
+const gate = defineGate({ id: 'architecture', adapter });
+
 import { defineProofs, mutate, proof } from 'redproof';
 
 export const proofs = defineProofs(gate, [
@@ -691,17 +742,24 @@ That establishes which defects actually exist.
 
 ### Then separate policy from I/O
 
-Keep path-policy decisions in pure functions when possible. This signature is
-a design sketch; the implementation must check both lexical paths and canonical
-paths resolved through existing parents to detect symlink escapes:
+Keep path-policy decisions in pure functions when possible. This example checks lexical containment; the surrounding I/O must also check
+canonical paths resolved through existing parents to detect symlink escapes:
 
-```ts fragment
-export function resolveReportPath(
-  root: string,
-  cwd: string,
-  reportFile: string,
-) {
-  // Decide whether the resulting path is inside root.
+```ts
+import { isAbsolute, relative, resolve, sep } from 'node:path';
+
+function isInside(root: string, candidate: string): boolean {
+  const fromRoot = relative(resolve(root), resolve(candidate));
+  return fromRoot !== '..'
+    && !fromRoot.startsWith(`..${sep}`)
+    && !isAbsolute(fromRoot);
+}
+
+export function resolveReportPath(root: string, cwd: string, reportFile: string) {
+  const candidate = resolve(root, cwd, reportFile);
+  return isInside(root, candidate)
+    ? { kind: 'inside' as const, path: candidate }
+    : { kind: 'outside' as const, path: candidate };
 }
 ```
 
@@ -721,13 +779,44 @@ This makes the policy cheap to test while keeping integration tests for filesyst
 ### Put the contract tests behind a Gate
 
 If the contract already exists as executable tests, a command Check can be enough.
-The following excerpt uses the `rules` defined above. Import `defineGate` from
-`redproof` and `commands` from `redproof/command`, and define `tests(pattern)`
-to return the arguments that run the matching project contract tests.
+The example repeats the Rules and defines a test selector so it compiles on its
+own. Adapt the test-file path and name patterns to your project.
 Ensure each selector actually runs an assertion; an exit code alone cannot
 establish that a test-name filter matched anything.
 
-```ts fragment
+```ts
+import { defineGate } from 'redproof';
+import { commands } from 'redproof/command';
+import { defineRules } from 'redproof';
+
+const rules = defineRules({
+  pathConfined: {
+    id: 'report-runner/path-confined',
+    description: 'Configured report paths stay inside the Gate root.',
+  },
+
+  fresh: {
+    id: 'report-runner/fresh',
+    description: 'A run never consumes a report left by an earlier run.',
+  },
+
+  restored: {
+    id: 'report-runner/restored',
+    description: 'A pre-existing report is restored exactly.',
+  },
+
+  clean: {
+    id: 'report-runner/clean',
+    description: 'The runner removes only artifacts it created.',
+  },
+});
+const tests = (pattern: string) => [
+  '--experimental-strip-types',
+  '--test',
+  `--test-name-pattern=${pattern}`,
+  'tests/report-lifecycle.test.ts',
+];
+
 const gate = defineGate({
   id: 'report-runner-contracts',
 
@@ -768,12 +857,36 @@ const gate = defineGate({
 ### Add focused proof mutations
 
 Each Rule should have a mutation that removes the behavior protecting it.
-The excerpt below assumes your Gate file imports `locate`, `mutate`, and `proof`
-from `redproof`, and that the selected source text exists exactly once.
+The example repeats the Rules and imports so it compiles on its own. It assumes
+that the selected source text exists exactly once in your implementation.
 
 For example:
 
-```ts fragment
+```ts
+import { locate, mutate, proof } from 'redproof';
+import { defineRules } from 'redproof';
+
+const rules = defineRules({
+  pathConfined: {
+    id: 'report-runner/path-confined',
+    description: 'Configured report paths stay inside the Gate root.',
+  },
+
+  fresh: {
+    id: 'report-runner/fresh',
+    description: 'A run never consumes a report left by an earlier run.',
+  },
+
+  restored: {
+    id: 'report-runner/restored',
+    description: 'A pre-existing report is restored exactly.',
+  },
+
+  clean: {
+    id: 'report-runner/clean',
+    description: 'The runner removes only artifacts it created.',
+  },
+});
 proof.red(
   rules.restored,
   'detects removal of report restoration',
@@ -792,7 +905,9 @@ Avoid mutations that only make the program crash or fail to compile. They can ma
 
 Finally include:
 
-```ts fragment
+```ts
+import { proof } from 'redproof';
+
 proof.green('accepts the healthy report lifecycle')
 ```
 
