@@ -30,18 +30,19 @@ The plugin is optional. You can use Redproof without an agent plugin, and you ca
 
 Redproof publishes an agent plugin for Codex and Claude Code.
 
-The published skills release installs:
+Plugin 0.2.0 installs:
 
 - the `discover` skill
 - the `design` skill
 - the `build` skill
 - the `challenge` skill
 - the `review-pr` skill
+- a completion-time Stop hook for Claude Code
 
-The source bundle also includes a completion-time Stop hook for Claude Code.
-That hook is currently listed as **Unreleased** in the
-[plugin changelog](../agents/plugin/CHANGELOG.md); installing an older marketplace
-release does not provide it. Plugin releases are separate from npm releases.
+The Stop hook ships from plugin 0.2.0, as recorded in the
+[plugin changelog](../agents/plugin/CHANGELOG.md). Update an older installation
+to use it; the [installation guide](../agents/plugin/MARKETPLACE.md) covers
+version pinning and updates. Plugin releases are separate from npm releases.
 
 It does **not** install the Redproof npm library or any of your project's checking tools. Those remain normal project dependencies.
 
@@ -266,9 +267,8 @@ This is useful for large agent-generated changes where the visible diff may not 
 
 ## The Claude Code Stop hook
 
-The current source bundle includes a Stop hook for Claude Code. The behavior
-below applies to a bundle containing that hook; check your installed version
-against the [plugin changelog](../agents/plugin/CHANGELOG.md).
+Plugin 0.2.0 and later include a Stop hook for Claude Code. Check your installed
+version against the [plugin changelog](../agents/plugin/CHANGELOG.md).
 Codex does not load this plugin's hooks yet. Its five skills work in both hosts,
 and Codex users can run the project check manually.
 
@@ -300,7 +300,10 @@ The hook uses the Redproof installation already present in your project.
 
 It does not download Redproof or install dependencies. It invokes the project's
 checks, which may produce artifacts according to their own behavior. The hook
-needs Git and the Node.js version required by your installed Redproof library.
+needs Git and the Node.js version required by your installed Redproof library
+on the session's `PATH`. Without Node.js, the host reports a hook error and
+nothing is checked. The hook was developed against Redproof 0.12.0; that is
+not a guarantee of compatibility with every library version.
 
 ---
 
@@ -441,7 +444,7 @@ The responsibilities stay separate:
 
 Once a project already has useful Gates, most agent tasks do not need `discover`, `design`, or `build`.
 
-With a Claude Code bundle containing the hook, the normal loop is much simpler:
+With plugin 0.2.0 or later in Claude Code, the normal loop is much simpler:
 
 ```text
 agent reads task
@@ -631,8 +634,8 @@ Approve the implementation and use `build`.
 
 ### 6. Use the hook during normal work
 
-Once useful Gates exist and your installed bundle includes the hook, Claude
-Code can automatically check relevant work before the agent finishes. Use a
+Once useful Gates exist and plugin 0.2.0 or later is installed, Claude Code
+can automatically check relevant work before the agent finishes. Use a
 manual project check in Codex.
 
 ### 7. Use `challenge` and `review-pr` when needed
