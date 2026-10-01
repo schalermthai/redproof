@@ -420,7 +420,9 @@ npm run redproof:describe -- gates/no-todo.ts
 ## Install the agent plugin
 
 Use Redproof with Codex or Claude Code to discover, design, build and prove
-guardrails. The plugin installs agent skills, not the npm library or adapters.
+guardrails. The plugin installs agent skills and, in Claude Code, a Stop hook
+that runs your project's `redproof check` when the agent ends a turn. It does
+not install the npm library or adapters.
 
 **Codex** — run in your terminal:
 
