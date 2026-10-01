@@ -1,369 +1,727 @@
-# Guardrails for agent-written code
+# Guardrails for Agent-Written Code
 
-A coding agent is an AI tool that edits code and runs commands for you. It
-changes source files, configuration, and documentation in one pass. It makes
-mistakes at the same speed. So the checks that run after each change matter
-more, not less. That only works when a check still fails on a real mistake.
+Coding agents can make large changes quickly.
 
-- [Why a rule in a prompt does not hold](#why-a-rule-in-a-prompt-does-not-hold)
-- [When to run check and prove](#when-to-run-check-and-prove)
-- [The Stop hook](#the-stop-hook)
-- [The challenge skill](#the-challenge-skill)
-- [The review-pr skill](#the-review-pr-skill)
-- [Discover, design and build project guardrails](#discover-design-and-build-project-guardrails)
-- [How the skills and library fit together](#how-the-skills-and-library-fit-together)
+They can also miss an instruction, cross an architecture boundary, skip a test, or make a change that satisfies the immediate task while violating a project invariant.
 
-## Why a rule in a prompt does not hold
+Redproof gives the agent executable feedback from the repository itself.
 
-Most teams write their guardrails as prose. The rules go into a `CLAUDE.md`
-file, a system prompt, or a contributing guide. The agent reads them once at
-the start of a session.
-
-An agent does not follow prose for a whole session. It skips a rule to finish
-a task, or forgets one after a long tool output. When its context window
-fills up, the early instructions lose weight first. The context window is the
-amount of text the agent can hold at one time. The agent does not announce
-the drift. It reports that the task is done.
-
-Here are seven rules from this repository. An agent will likely miss each one
-when it reads them as a prompt:
+There are two pieces you can use together:
 
 ```text
-Core modules must not import node:fs or node:child_process.
-Import another context only through its index.ts.
-Do not call process.cwd() inside a core module.
-Every ts code block in the docs must compile.
-Do not mark a test .skip to make the run green.
-Do not leave an export that nothing imports.
-Add every new package to scripts/set-version.ts.
+Redproof library
+    ↓
+Rules, Gates, Checks, Proofs
+
+Redproof agent plugin
+    ↓
+skills + completion hook
 ```
 
-Each rule is easy to break without noticing. A new import looks like every
-other import. A `.skip` is one word. A missed package is an absence, and an
-absence is invisible in a diff.
+The library defines and evaluates your project guardrails.
 
-So it is better to convert these proses into a Redproof Gate, where each policy 
-can be grouped as a rule within the Gate. We can define as many logical Gates 
-as we need.
+The plugin helps coding agents discover, design, build, challenge, and use those guardrails during their normal workflow.
 
-The [Redproof proves Redproof](red-proving-redproof.md) page showcases the
-different proofs this repository maintains for its six Gates.
+The plugin is optional. You can use Redproof without an agent plugin, and you can install the plugin before a project has any Gates.
 
-## When to run check and prove
+---
 
-Run `redproof check` when the agent ends a turn. A turn is one round of agent work. 
-In this repository, the full check takes about 16 seconds, so do not run it after
-every file edit. [The Stop hook](#the-stop-hook) runs it for you.
+## Install the Redproof agent plugin
 
+Redproof publishes an agent plugin for Codex and Claude Code.
 
-Run `redproof prove` in CI. Also run it for a specific Gate file when the agent has
-edited that file:
+Plugin 0.2.0 installs:
+
+- the `discover` skill
+- the `design` skill
+- the `build` skill
+- the `challenge` skill
+- the `review-pr` skill
+- a completion-time Stop hook for Claude Code
+
+The Stop hook ships from plugin 0.2.0, as recorded in the
+[plugin changelog](../agents/plugin/CHANGELOG.md). Update an older installation
+to use it; the [installation guide](../agents/plugin/MARKETPLACE.md) covers
+version pinning and updates. Plugin releases are separate from npm releases.
+
+It does **not** install the Redproof npm library or any of your project's checking tools. Those remain normal project dependencies.
+
+### Codex
 
 ```bash
-npx redproof prove gates/architecture.ts
+codex plugin marketplace add schalermthai/redproof --ref plugin-marketplace
+codex plugin add redproof@redproof-plugins
 ```
 
-You can also ask the agent to harden any guardrails by prompting it to review the
-relevant Gate, identify weak or missing rules, and improve them until the proof
-passes reliably.
+If your Codex version does not provide `plugin add`, add the marketplace first and install Redproof from the plugin browser.
 
-## The Stop hook
-
-A hook is a command that Claude Code runs at a fixed point in its work. The
-Stop hook runs when the agent ends a turn. You can install one with the Redproof
-plugin, or write your own.
-
-### Install the plugin's hook
-
-The [Redproof plugin](../agents/plugin/redproof/README.md) ships a Stop hook
-from version 0.2.0. Install the plugin in Claude Code:
+### Claude Code
 
 ```bash
 claude plugin marketplace add 'schalermthai/redproof#plugin-marketplace'
-claude plugin install redproof@redproof-plugins
+claude plugin install redproof@redproof-plugins --scope user
 ```
 
-When the agent ends a turn, the hook runs your project's own `redproof check`.
-When a Gate fails, the turn stays open and the agent receives the report. The
-agent fixes the breached Rule, or tells you why it cannot.
+Use `--scope local` instead if you want it only for you in the current project.
 
-- **Quiet elsewhere.** In a project with no `redproof.config.*` file, the hook
-  does nothing.
-- **Changed work only.** The hook checks only the configs that own files
-  changed since the session started.
-- **Your install only.** The hook runs the Redproof library in your project's
-  `node_modules`. It never installs anything. When the library is missing, the
-  hook warns you and lets the turn end.
-- **Old failures do not block new work.** A Breach that was already there when
-  the session started does not block unrelated work. The hook warns that the
-  Gate still fails.
-- **Three tries.** After 3 failed checks in one turn, the turn ends with a
-  warning that the Gates still fail.
+---
 
-The hook needs git and Node.js. Codex does not load hooks from the plugin yet.
-The [plugin guide](../agents/plugin/redproof/README.md#the-stop-hook-claude-code)
-lists every case and shows how to turn the hook off.
+## Where the plugin fits
 
-### Write your own hook
+A typical project has three layers:
 
-This repository keeps its own hook in
-[`.claude/settings.json`](../.claude/settings.json). It checks Redproof with
-the source in this repository, not with an installed copy:
+```text
+project tools
+Vitest / ESLint / dependency-cruiser / scripts
+        ↓
+Redproof library
+Rules / Gates / Checks / Proofs
+        ↓
+Redproof agent plugin
+skills + lifecycle integration
+```
+
+The project tools produce evidence.
+
+The Redproof library turns that evidence into stable project contracts.
+
+The agent plugin helps an agent work with those contracts.
+
+That separation is important.
+
+Installing the plugin does not automatically create Gates.
+
+Installing the npm library does not automatically integrate with your coding agent.
+
+You can adopt either piece independently.
+
+---
+
+## Start with the plugin if you do not know what to protect
+
+If you are adopting Redproof in an existing project, a good first step is the `discover` skill.
+
+In Codex, select Redproof's `discover` skill.
+
+In Claude Code, use:
+
+```text
+/redproof:discover
+```
+
+Then ask something like:
+
+```text
+Find the important promises this project makes.
+Show where our existing checks might miss a regression,
+and let me choose what to protect first.
+```
+
+The plugin can inspect the project, identify candidate guardrails, and propose Gate designs.
+
+The intended flow is:
+
+```text
+Discover
+    ↓
+choose Gates
+    ↓
+Design
+    ↓
+approve implementation
+    ↓
+Build and prove
+```
+
+Choosing a Gate authorizes design work. Implementation requires its own approval.
+Discovery and design use a local interactive report, with chat as a fallback.
+The report helper needs Node.js 24+ and a local browser. Unanswered choices
+authorize no work; local implementation does not authorize CI changes or publication.
+
+---
+
+## The published skills
+
+You can start at whichever stage matches what you already know.
+
+### `discover`
+
+Use `discover` when you want to know:
+
+> What important promises in this project deserve stronger protection?
+
+Typical candidates include:
+
+```text
+architecture boundaries
+release requirements
+test-health expectations
+package relationships
+documentation guarantees
+security-sensitive invariants
+```
+
+The skill looks for important project promises and places where existing checks may not detect a realistic regression.
+
+---
+
+### `design`
+
+Use `design` when you already know what you want to protect.
+
+For example:
+
+```text
+Design a Gate that ensures the domain package
+never imports application infrastructure.
+```
+
+The skill helps work out:
+
+```text
+Rule identity
+evidence source
+scope
+PASS / FAIL / REFUSE behavior
+proof strategy
+```
+
+It designs the guardrail without implementing it yet.
+
+---
+
+### `build`
+
+Use `build` once you have an approved Gate design.
+
+For example:
+
+```text
+Implement the approved architecture Gate
+and prove that it catches the regression.
+```
+
+The build workflow can implement the Gate, run its proofs, restore temporary faults, and report the result or blockers.
+
+You can also ask it to assess an existing Gate without repairing it.
+
+---
+
+### `challenge`
+
+Use `challenge` when a safeguard already exists and you want to know:
+
+> Does it actually catch the defect it claims to catch?
+
+For example:
+
+```text
+Does our architecture check catch a forbidden import?
+Test it once and restore the project afterward.
+```
+
+The workflow temporarily introduces the defect, runs the same safeguard, restores
+the project, and confirms that the safeguard passes again. A proof is owed when
+the guard is unproven to the agent and a blind pass would be quiet. Ordinary
+edits do not automatically require a fault experiment. When an existing Redproof
+Proof already targets the Rule, run `redproof prove` instead of repeating the
+experiment by hand.
+
+This is especially useful for:
+
+```text
+new regression tests
+repository scripts
+architecture rules
+existing Gates
+```
+
+---
+
+### `review-pr`
+
+Use `review-pr` when reviewing a change based on the claims it makes.
+
+For example:
+
+```text
+Does this PR actually deliver its claim
+that exports preserve every row?
+```
+
+Instead of only inspecting the diff, the workflow asks:
+
+```text
+What does the PR claim?
+
+What evidence supports it?
+
+What would falsify the claim?
+
+Which existing guardrails can test it?
+```
+
+This is useful for large agent-generated changes where the visible diff may not tell you whether the intended contract actually holds.
+
+---
+
+## The Claude Code Stop hook
+
+Plugin 0.2.0 and later include a Stop hook for Claude Code. Check your installed
+version against the [plugin changelog](../agents/plugin/CHANGELOG.md).
+Codex does not load this plugin's hooks yet. Its five skills work in both hosts,
+and Codex users can run the project check manually.
+
+A Stop hook runs when the agent tries to end a turn.
+
+Redproof uses that lifecycle point to run the project's existing Gates automatically.
+
+Conceptually:
+
+```text
+agent tries to finish
+        ↓
+Redproof Stop hook
+        ↓
+project's redproof check
+        ↓
+PASS
+  → turn can finish
+
+FAIL
+  → Gate report goes back to the agent
+  → agent fixes the problem
+
+REFUSE
+  → evidence problem goes back to the agent
+```
+
+The hook uses the Redproof installation already present in your project.
+
+It does not download Redproof or install dependencies. It invokes the project's
+checks, which may produce artifacts according to their own behavior. The hook
+needs Git and the Node.js version required by your installed Redproof library
+on the session's `PATH`. Without Node.js, the host reports a hook error and
+nothing is checked. The hook was developed against Redproof 0.12.0; that is
+not a guarantee of compatibility with every library version.
+
+---
+
+### The hook only checks relevant work
+
+The hook is designed to avoid blindly running every Gate after every turn.
+
+It uses Git to find files changed since the agent session started, committed or
+not. The nearest Redproof config above a changed file owns that file. Git-ignored
+files are outside this change tracking.
+
+Only the owning configs are checked, but each runs its full configured Gate
+catalogue. An unchanged turn does not trigger a Stop check; the separate
+session-start baseline can still run.
+
+Conceptually:
+
+```text
+changed files
+    ↓
+find owning Redproof config
+    ↓
+run relevant Gates
+```
+
+This keeps the completion check closer to the work the agent actually performed.
+
+---
+
+### Existing failures do not have to block unrelated work
+
+A project may already have failing Gates before the agent starts.
+
+At session start, the hook silently checks configs within a shared 15-second
+budget and records known, located Breaches from completed checks. Without a
+completed baseline or a source location, failures remain blocking.
+
+If the agent does not touch the affected source, Gate, or config, those known failures can remain warnings instead of blocking unrelated work.
+
+That avoids a common problem with repository-wide agent hooks:
+
+```text
+existing unrelated failure
+        ↓
+agent can never finish any task
+```
+
+while still surfacing the existing problem as a warning, not a passing result.
+New Breaches still block. Changing the affected source, Gate, or config retires
+the corresponding exemption; a successful check also clears old exemptions.
+
+---
+
+### The hook does not silently pretend everything passed
+
+In a project without a Redproof config, the hook stays silent. If relevant work
+has a config but no installed Redproof library, it warns once per session that
+the Gates are unverified and lets the turn end.
+
+It does not install anything automatically.
+
+If an installed check crashes, times out, or returns REFUSE, the hook blocks
+once per session, then warns that verification could not be established. REFUSE
+remains unverified even if the project config gives it exit code zero.
+
+A failed Gate can block three checks in one turn before the hook lets the turn
+end with a warning. An unchanged previously failing tree also warns without
+rerunning. These limits allow work to finish; they do not establish a pass.
+
+This preserves an important distinction:
+
+```text
+PASS
+the project satisfied the Gate
+
+FAIL
+the evidence shows a Rule was violated
+
+unverified / REFUSE
+the check could not establish the result
+```
+
+---
+
+### Configure or disable the hook
+
+Set `REDPROOF_STOP_HOOK=off` to disable it for one shell. For one project, add
+`redproof.stop-hook.json` at the repository root:
 
 ```json
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 120,
-            "command": "input=$(cat); case \"$input\" in *'\"stop_hook_active\":true'*|*'\"stop_hook_active\": true'*) exit 0;; esac; out=$(npm run -s self:check 2>&1) && exit 0; printf '%s\\n' \"$out\" >&2; exit 2"
-          }
-        ]
-      }
-    ]
-  }
-}
+{ "enabled": false }
 ```
 
-The script runs `npm run -s self:check`. When every Gate passes, it exits 0
-and the turn ends. When a Gate fails, it prints the report to stderr and exits
-2. Exit 2 keeps the turn open and hands the report to the agent. The agent
-sees the broken Rule and its location, and fixes it in the same turn.
+To skip configs used as fixtures, the same file accepts:
 
-The first part of the script reads `stop_hook_active`. When that field is true,
-the hook exits at once, so a blocked stop does not run the check twice.
+```json
+{ "ignore": ["fixtures/**"] }
+```
 
-Keep one Stop hook per project. When a project has its own hook and the plugin
-is installed, both hooks run the check. This repository turns the plugin's hook
-off with a `redproof.stop-hook.json` file at its root.
+This repository also has a separate local Stop hook in
+[`.claude/settings.json`](../.claude/settings.json), which runs `npm run -s self:check`.
+The plugin hook is disabled here to avoid duplicate checks. If your project
+already has a local hook, keep one active check path.
 
-## The challenge skill
+---
 
-The [`challenge`](../agents/skills/challenge/SKILL.md) skill teaches the agent to prove
-a check by hand once before trusting it. A check can be a new test, a lint
-rule, a CI step, or an assertion in a script. The skill works with or without
-the Redproof library. It only needs a check that can fail and a file the agent
-can change and restore.
+## What the plugin does not replace
 
-The important part is what the agent builds on afterward. An agent that trusts
-an unproven check builds on an assumption. An agent that has seen the check fail
-for the right reason builds on a fact.
+The plugin is an agent workflow layer.
 
-The skill first asks whether a proof is owed. A proof is owed only when both
-answers are yes:
+It does not replace your normal project tools.
+
+You still need whatever produces the underlying evidence:
 
 ```text
-Q1  the guard is unproven to you
-Q2  a blind pass would be quiet
+Vitest
+ESLint
+dependency-cruiser
+Stryker
+TypeScript
+repository scripts
 ```
 
-The guard is the check the agent is about to trust. It is unproven when the
-agent has never seen it fail. A blind pass is a green result from a check
-that can no longer detect the problem. Quiet means that nothing else would
-report the problem.
+And your project still needs the Redproof library when it contains executable Gates.
 
-Ordinary edits do not automatically require a proof. Apply both questions when
-the agent writes or changes a safeguard, or relies on or cites an existing
-safeguard it has never seen fail.
+The responsibilities stay separate:
 
-When the guard is unproven and the agent is about to build on that assumption, it runs the loop:
+| Component | Responsibility |
+| --- | --- |
+| Project tool | Produce evidence |
+| Redproof library | Define and evaluate project contracts |
+| Redproof plugin | Help the agent discover, build, challenge, and consume those contracts |
+| CI | Run shared verification for the repository |
+
+---
+
+## Using the plugin during normal implementation
+
+Once a project already has useful Gates, most agent tasks do not need `discover`, `design`, or `build`.
+
+With plugin 0.2.0 or later in Claude Code, the normal loop is much simpler:
 
 ```text
-1  state the rule in one sentence
-2  plan the restore
-3  choose the smallest break, in the code and never in the check
-4  run the same check and confirm it fails for that rule
-5  restore
-6  run the check again and confirm it passes
-7  report both results
+agent reads task
+        ↓
+agent edits code
+        ↓
+runs focused development checks
+        ↓
+tries to finish
+        ↓
+Stop hook runs Redproof
+        ↓
+PASS → done
+FAIL → repair
+REFUSE → repair evidence
 ```
 
-Here is a real example.
+The agent can still run:
 
-A fresh agent was given the Redproof skill files and a small Node.js project. The project did not use the Redproof library.
+```bash
+npx --no-install redproof check
+```
 
-The project had a function called `applyDiscount(totalCents, percent)`. It makes sure the discount percentage stays between 0 and 100. The project already had two passing tests.
+manually whenever useful.
 
-The agent's task was to add a new test for a discount percentage above 100. The new test checks that the function treats any value above 100 as 100. After adding the test, all 3 tests passed.
+The hook makes the final check harder to forget. In Codex, run it manually.
+Run `redproof prove` in CI and when you change a Gate or what its evidence
+checks. For a focused proof run in a configured project:
 
-But a passing test is not enough by itself. The agent had never seen this new test fail, so it did not yet know whether the test could actually catch the bug it was meant to detect.
+```bash
+npx --no-install redproof prove gates/architecture.ts
+```
 
-To prove that, the agent temporarily changed the implementation from a maximum of 100 to a maximum of 200. It then ran the same test suite again:
+---
+
+## Keep focused checks fast
+
+Redproof should not replace the agent's normal development feedback loop.
+
+While working, the agent may run:
 
 ```text
-Red-proof: a percent above 100 must be clamped to 100 before the discount is applied
-  break     src/discount.js:10, changed `Math.min(100, Math.max(0, percent))` to `Math.min(200, Math.max(0, percent))`
-  red       ✖ clamps a percent above 100 to 100 (0.324375ms)
-            AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-            -500 !== 0
-            at test/discount.test.js:14:10
-  restore   git checkout -- src/discount.js; git status --short src/discount.js is empty
-  green     ✔ clamps a percent above 100 to 100 (0.041708ms); tests 3, pass 3, fail 0
+one test file
+one package's type-check
+one lint target
+one focused repository script
 ```
 
-The new test failed when the bug was introduced. The agent then restored the original implementation and confirmed that all 3 tests passed again.
+That is usually the fastest way to iterate.
 
-That proves one thing: the new test can detect the bug it claims to guard against.
-
-
-The agent changed one number on line 10, from 100 to 200. The new test failed
-with `-500 !== 0`, while the two existing tests stayed green. The agent then
-restored the file and confirmed that all 3 tests passed.
-
-It now knows one fact: the new test detects the bug it names.
-
-When the project uses the Redproof library, the skill does three things
-differently:
+Then, before finishing:
 
 ```text
-1  run  redproof check --reporter=json --outputFile=out.json and read the inspected count first
-2  when a Proof already targets the Rule, run  redproof prove  instead of the loop by hand
-3  when the guard is permanent, store the break beside the Gate as a proof.red
+redproof check
 ```
 
+verifies the important project contracts.
 
-## The review-pr skill
-
-The [`review-pr`](../agents/skills/review-pr/SKILL.md) skill reviews
-a pull request as a set of claims, not just as a diff. A claim is a statement
-about what the change is supposed to achieve.
-
-A code change is not proof that the intended outcome happened. Likewise, a
-passing test is not proof that the test can detect the failure it is meant to
-guard against.
-
-The agent reads the PR description, lists its claims, and tries to disprove
-each important one. If there is not enough evidence to verify a claim, such as
-a claim about production latency, the agent reports it as unverified.
-
-The agent also treats its own suggestions as claims. Before recommending a
-change, it tests that change in a worktree. A worktree is a separate checkout
-of the same repository in its own directory.
-
-Here is a real example.
-
-A fresh agent was given the skill file and a small Node.js project with two
-branches. The PR branch moves a save call out of the domain module and into the
-application service. It also changes the service so a repository can be passed
-in.
-
-The project has one test, and that test passes on both branches. The PR
-description makes three claims:
+A useful split is:
 
 ```text
-C1  The order domain no longer depends on infrastructure.
-C2  Existing behaviour is unchanged. All tests pass.
-C3  placeOrder can be tested without the database by passing a fake repository.
+while editing:
+  smallest useful native check
+
+before finishing:
+  relevant Redproof Gates
+
+in CI:
+  full shared verification
 ```
 
-C1 was intentionally false. The PR removed the database import from the domain
-module, but another import from the same infrastructure folder was still there.
-The diff looked clean and the test still passed, so the problem was easy to
-miss.
+---
 
-The agent checked the claim against the repository and reported:
+## Challenge newly written safeguards
+
+Agent-written safeguards deserve the same skepticism as agent-written production code.
+
+Suppose the agent says:
 
 ```text
-Claim: C1  The order domain no longer depends on infrastructure
-Verdict: Not proven. Counterexample found.
-Severity: Blocking
-
-Evidence (branch decouple-domain):
-src/domain/order.js:1:import { nowIso } from '../infrastructure/clock.js';
-
-Impact:
-The PR removes one of two domain -> infrastructure edges. The main claim, as
-written, is false.
-
-Suggestion:
-Pass the timestamp, or a clock function, into createOrder from placeOrder.
-Add a check that fails when src/domain imports src/infrastructure, so this
-cannot return.
+I added a regression test for the bug.
 ```
 
-For C2 and C3, the agent introduced one temporary fault per claim in a
-worktree.
+A passing test only tells you:
 
-For C2, it removed the `repository.save(order)` line. The existing test changed
-from `pass 1` to `fail 1`. After restoring the line, the test passed again.
-This showed that the existing test could detect that behavior changing.
+> The current implementation satisfies the test.
 
-For C3, the agent added a test that passed a fake repository to `placeOrder`.
-It then temporarily changed `placeOrder` so that it ignored the fake
-repository. The new test failed with `actual: 0, expected: 1`. After restoring
-the code, the test passed again.
+A stronger question is:
 
-The agent removed both worktrees and committed nothing.
+> Would the test fail if the bug came back?
 
-It also listed four risks. One of them explained why the false C1 claim
-survived the author's own test run: the project had no check that failed when
-code in `src/domain` imported code from `src/infrastructure`.
+Use the published `challenge` skill for this.
 
-The suggestion under C1 asks for exactly that kind of check.
-
-That check is a Gate.
-
-## Discover, design and build project guardrails
-
-When introducing Redproof to an existing project, start with
-[`discover`](../agents/skills/discover/SKILL.md). If you already have a selected promise
-or an approved design, enter at `design` or `build` instead. Shared internal
-routing helps the agent recognize that starting point; it is not another command
-you need to learn and does not grant permission to perform the next stage.
-
-| Skill | Question it answers | What you receive |
-| --- | --- | --- |
-| [`discover`](../agents/skills/discover/SKILL.md) | What is worth protecting? | Ranked recommendations and draft Gate descriptions, with existing protection and remaining gaps. First-time discovery prioritizes the project claims users rely on. |
-| [`design`](../agents/skills/design/SKILL.md) | What can we honestly check and prove? | Bounded Rules, evidence contracts, and concrete scope and work choices. |
-| [`build`](../agents/skills/build/SKILL.md) | Does the implemented Gate catch the failures it promises to catch? | Authorized implementation and proof work, followed by results compared with the agreed design, limitations and next steps. |
-
-These stages share an
-[internal review UI](../agents/skill-support/review-ui/guide.md), a local browser
-report with descriptions, examples and scoped choices. Discovery lets you choose
-which Gates to design. Design lets you choose coverage and, when settled,
-implementation and proof. Certification reports what was actually delivered.
-Unanswered choices authorize nothing; implementing locally does not authorize
-production adoption. The report collects decisions, not proof evidence itself.
-
-Reuse the project checks that already protect its promises. A native fix or
-keeping sufficient existing protection can be the right result; a new Gate is
-not required for every claim. When a Gate is worthwhile, these skills help turn
-that claim into a bounded promise and prove its safeguard detects regressions.
-
-## How the skills and library fit together
+For example:
 
 ```text
-challenge                  one bounded fault experiment against a safeguard
-review-pr                  investigate the claims a pull request makes
-discover -> design -> build
-                           select, define, then implement and prove project Gates
-internal review UI         reports and scoped choices within those stages
-Stop hook                  run the project's check when the agent ends a turn
-Redproof library           proofs stored beside Gates, repeatable on every commit
+Challenge the regression test we just added.
+Reintroduce the original defect temporarily,
+run the safeguard, then restore the project.
 ```
 
-The skills guide the work and its decisions. The library stores repeatable
-proofs beside Gates. The [Redproof skills plugin](../agents/plugin/redproof/README.md)
-packages five public skills together, including their internal review UI and
-cross-stage references, and the Stop hook. Install it from the plugin
-marketplace: the [installation guide](../agents/plugin/MARKETPLACE.md) covers
-both hosts, version pinning and updates. The plugin guide explains the
-workflow and the prerequisites. Plugin installation is separate from
-installing the Redproof npm library or approving any Gate implementation.
+The useful sequence is:
 
-To try a change to the skills before a release, run `npm run plugin:build`. The
-command prints a fresh standalone bundle and does not install or publish it.
+```text
+healthy implementation
+        ↓
+safeguard passes
 
-Maintainers: see [plugin versioning and release steps](../agents/plugin/RELEASING.md).
-Plugin releases have their own tags, marketplace snapshots and host-readiness
-checks; they do not trigger an npm library release.
+temporary regression
+        ↓
+same safeguard fails
+
+restore
+        ↓
+safeguard passes
+```
+
+For contracts that deserve permanent protection, capture the same idea as a Redproof proof.
+
+See [The Contract-to-Gate method](./contract-to-gate.md) for the detailed proof model.
+
+---
+
+## Review agent changes by their claims
+
+The plugin's `review-pr` skill is useful because agent-generated changes often come with high-level claims:
+
+```text
+"The architecture boundary is now clean."
+
+"The new check prevents the original regression."
+
+"This refactor preserves every exported row."
+
+"The release now includes every package."
+```
+
+Do not treat those statements as evidence.
+
+Use them as questions.
+
+For each important claim:
+
+```text
+claim
+  ↓
+what evidence would establish it?
+  ↓
+what counterexample would make it false?
+  ↓
+which Gate or native check can test it?
+```
+
+The plugin helps perform that investigation.
+
+This complements ordinary code review rather than replacing it.
+
+---
+
+## A practical adoption path
+
+You do not need to adopt the library, plugin, skills, and hook all at once.
+
+### 1. Install the plugin
+
+This gives the agent access to the published Redproof workflows.
+
+No project changes are required yet.
+
+### 2. Run `discover`
+
+Ask the agent to identify a few important project promises worth protecting.
+
+Do not try to model the entire repository.
+
+### 3. Choose one Gate
+
+Pick a contract where a missed regression would matter and where reliable evidence already exists.
+
+### 4. Design it
+
+Use `design` to define the Rule, evidence, and proof strategy.
+
+### 5. Build and prove it
+
+Approve the implementation and use `build`.
+
+### 6. Use the hook during normal work
+
+Once useful Gates exist and plugin 0.2.0 or later is installed, Claude Code
+can automatically check relevant work before the agent finishes. Use a
+manual project check in Codex.
+
+### 7. Use `challenge` and `review-pr` when needed
+
+Use them for new safeguards and higher-risk changes rather than every small edit.
+
+---
+
+## The whole system
+
+The pieces fit together like this:
+
+```text
+                project tools
+      Vitest / ESLint / scripts / etc.
+                     ↓
+               Redproof library
+          Rules / Gates / Checks / Proofs
+                     ↓
+        ┌────────────┴────────────┐
+        ↓                         ↓
+      CI                    Redproof plugin
+                              ↓
+                    skills + Stop hook
+                              ↓
+                         coding agent
+```
+
+The plugin is not the enforcement engine.
+
+The project is.
+
+The plugin gives the agent a structured way to work with that enforcement.
+
+---
+
+## The main idea
+
+The agent should not need perfect memory of every repository rule.
+
+It should have both:
+
+```text
+instructions
+```
+
+for how the team wants it to work, and:
+
+```text
+executable project guardrails
+```
+
+for what must remain true.
+
+The published Redproof plugin connects those guardrails to the agent workflow:
+
+```text
+discover important promises
+        ↓
+design Gates
+        ↓
+build and prove them
+        ↓
+challenge safeguards
+        ↓
+review claims
+        ↓
+check work before the agent finishes
+(automatically with the Claude Code hook)
+```
+
+The result is a useful separation:
+
+```text
+the agent proposes changes
+
+the project provides evidence
+
+Redproof evaluates the contracts
+```
+
+---
 
 ## Next
 
-- **[Redproof proves Redproof](red-proving-redproof.md)** for the six Gates
-  and their patterns.
-- **[The Contract-to-Gate method](contract-to-gate.md)** to turn a quality idea
-  into a Rule, a Check, and Proofs.
+- [Install the Redproof agent plugin](../agents/plugin/redproof/README.md) — installation and plugin reference.
+- [Built-in Adapters](./built-in-adapters.md) — connect existing project tools to Redproof.
+- [The Contract-to-Gate method](./contract-to-gate.md) — design and prove project Gates.
+- [Redproof Proves Redproof](./red-proving-redproof.md) — see real guardrail patterns used in the Redproof repository.
