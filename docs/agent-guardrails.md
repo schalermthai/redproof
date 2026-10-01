@@ -53,7 +53,7 @@ different proofs this repository maintains for its six Gates.
 
 Run `redproof check` when the agent ends a turn. A turn is one round of agent work. 
 In this repository, the full check takes about 16 seconds, so do not run it after
-every file edit.
+every file edit. [The Stop hook](#the-stop-hook) runs it for you.
 
 
 Run `redproof prove` in CI. Also run it for a specific Gate file when the agent has
@@ -70,8 +70,45 @@ passes reliably.
 ## The Stop hook
 
 A hook is a command that Claude Code runs at a fixed point in its work. The
-Stop hook runs when the agent ends a turn. This repository ships one in
-[`.claude/settings.json`](../.claude/settings.json):
+Stop hook runs when the agent ends a turn. You can install one with the Redproof
+plugin, or write your own.
+
+### Install the plugin's hook
+
+The [Redproof plugin](../agents/plugin/redproof/README.md) ships a Stop hook
+from version 0.2.0. Install the plugin in Claude Code:
+
+```bash
+claude plugin marketplace add 'schalermthai/redproof#plugin-marketplace'
+claude plugin install redproof@redproof-plugins
+```
+
+When the agent ends a turn, the hook runs your project's own `redproof check`.
+When a Gate fails, the turn stays open and the agent receives the report. The
+agent fixes the breached Rule, or tells you why it cannot.
+
+- **Quiet elsewhere.** In a project with no `redproof.config.*` file, the hook
+  does nothing.
+- **Changed work only.** The hook checks only the configs that own files
+  changed since the session started.
+- **Your install only.** The hook runs the Redproof library in your project's
+  `node_modules`. It never installs anything. When the library is missing, the
+  hook warns you and lets the turn end.
+- **Old failures do not block new work.** A Breach that was already there when
+  the session started does not block unrelated work. The hook warns that the
+  Gate still fails.
+- **Three tries.** After 3 failed checks in one turn, the turn ends with a
+  warning that the Gates still fail.
+
+The hook needs git and Node.js. Codex does not load hooks from the plugin yet.
+The [plugin guide](../agents/plugin/redproof/README.md#the-stop-hook-claude-code)
+lists every case and shows how to turn the hook off.
+
+### Write your own hook
+
+This repository keeps its own hook in
+[`.claude/settings.json`](../.claude/settings.json). It checks Redproof with
+the source in this repository, not with an installed copy:
 
 ```json
 {
@@ -98,6 +135,10 @@ sees the broken Rule and its location, and fixes it in the same turn.
 
 The first part of the script reads `stop_hook_active`. When that field is true,
 the hook exits at once, so a blocked stop does not run the check twice.
+
+Keep one Stop hook per project. When a project has its own hook and the plugin
+is installed, both hooks run the check. This repository turns the plugin's hook
+off with a `redproof.stop-hook.json` file at its root.
 
 ## The challenge skill
 
@@ -300,17 +341,21 @@ review-pr                  investigate the claims a pull request makes
 discover -> design -> build
                            select, define, then implement and prove project Gates
 internal review UI         reports and scoped choices within those stages
+Stop hook                  run the project's check when the agent ends a turn
 Redproof library           proofs stored beside Gates, repeatable on every commit
 ```
 
 The skills guide the work and its decisions. The library stores repeatable
 proofs beside Gates. The [Redproof skills plugin](../agents/plugin/redproof/README.md)
 packages five public skills together, including their internal review UI and
-cross-stage references. Build it with `npm run plugin:build`; the command prints
-a fresh standalone bundle and does not install or publish it. The plugin guide
-explains local use, supported prerequisites and which host checks remain before
-a marketplace release. Plugin installation is separate from installing the
-Redproof npm library or approving any Gate implementation.
+cross-stage references, and the Stop hook. Install it from the plugin
+marketplace: the [installation guide](../agents/plugin/MARKETPLACE.md) covers
+both hosts, version pinning and updates. The plugin guide explains the
+workflow and the prerequisites. Plugin installation is separate from
+installing the Redproof npm library or approving any Gate implementation.
+
+To try a change to the skills before a release, run `npm run plugin:build`. The
+command prints a fresh standalone bundle and does not install or publish it.
 
 Maintainers: see [plugin versioning and release steps](../agents/plugin/RELEASING.md).
 Plugin releases have their own tags, marketplace snapshots and host-readiness
