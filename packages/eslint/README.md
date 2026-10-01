@@ -7,11 +7,18 @@ just run your guardrails. It proves they can fail.
 
 ## Install
 
+Requires Node.js 24 or later and ESLint 9 or later.
+
 ```bash
 npm install --save-dev @redproof/eslint redproof eslint
 ```
 
 ## Use
+
+Start with a [Redproof configuration](https://github.com/schalermthai/redproof#install)
+and an ESLint configuration for your source files. This example assumes
+`src/clean.js` exists and passes ESLint. For setup from scratch, follow the
+[ESLint walkthrough](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#eslint-your-first-adapter-gate).
 
 ```ts
 // gates/eslint.ts
@@ -39,6 +46,31 @@ export const proofs = defineProofs(gate, [
 export default gate;
 ```
 
+```bash
+npx redproof check gates/eslint.ts
+npx redproof prove gates/eslint.ts
+```
+
+The RED proof adds a console call and expects a breach of `noConsole`; the GREEN
+proof checks clean source. Add a targeted proof for each additional Rule you select.
+
+## Supported Rules
+
+There is no fixed Redproof catalog: select ESLint rule IDs available in your
+project, including rules supplied by configured plugins. These are examples:
+
+| Selection inside `rules` | Generated Rule ID | What must hold |
+|---|---|---|
+| `noConsole: 'no-console'` | `eslint/no-console` | No console calls disallowed by the rule's options. |
+| `strictEquality: 'eqeqeq'` | `eslint/eqeqeq` | Equality comparisons follow ESLint's `eqeqeq` policy. |
+| `<alias>: '<eslint-rule-id>'` | `eslint/<eslint-rule-id>` | The selected ESLint rule has no findings. |
+
+The alias is your local property name, such as `adapter.rules.noConsole`.
+The Adapter enables selected rules at error severity; your ESLint configuration
+supplies their options, parsers, and plugins. Unselected findings do not breach.
+
+## Features and limits
+
 A configured ESLint finding becomes a Breach of the Redproof Rule that adopted
 it. Fatal parsing or execution problems become REFUSE, not fake Rule breaches.
 
@@ -56,16 +88,9 @@ entry throws when the Gate file loads. That check rejects an absolute path
 only. It does not reject a `..` segment, so `files` is not confined to the
 Gate root.
 
-Then run:
-
-```bash
-npx redproof check   # do the rules hold right now?
-npx redproof prove   # can each rule actually fail?
-```
-
 ## Documentation
 
-See the [Redproof documentation](https://github.com/schalermthai/redproof#readme).
+See [all built-in Adapters and the comparison with Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md).
 
 ## License
 

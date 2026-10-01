@@ -8,11 +8,30 @@ just run your guardrails. It proves they can fail.
 
 ## Install
 
+Requires Node.js 24 or later. Install the adapter and the test runner you use.
+For the Vitest example below:
+
 ```bash
-npm install --save-dev @redproof/testing redproof
+npm install --save-dev redproof @redproof/testing vitest
 ```
 
+For another runner, install `redproof @redproof/testing` and provide that runner
+separately; Vitest is not required. `vitest()` is tested against Vitest 5.
+
+## Features
+
+- Gives test failures, retries, skips, and TODOs separate Rules instead of one
+  command-exit verdict.
+- Reads Jest-compatible JSON or JUnit XML, with a ready-made `vitest()` wrapper.
+- Refuses missing, malformed, or contradictory reports rather than treating
+  incomplete evidence as a pass.
+- Supports process timeouts and output limits, and fresh report collection.
+
 ## Use
+
+Start with a working Vitest suite and a
+[Redproof configuration](https://github.com/schalermthai/redproof#install).
+Save this as `gates/unit-tests.ts`:
 
 ```ts
 // gates/unit-tests.ts
@@ -20,11 +39,7 @@ import { vitest } from '@redproof/testing';
 import { defineGate } from 'redproof';
 
 const adapter = vitest({
-  cwd: 'packages/app',
-  configFile: 'vitest.config.js',
-  reportFile: 'test-results.json',
   timeoutMs: 120_000,
-  maxOutputBytes: 20 * 1024 * 1024,
   rules: {
     testsPass: true,
     noFlakyTests: true,
@@ -39,19 +54,28 @@ export default defineGate({ id: 'unit-tests', adapter });
 Then run:
 
 ```bash
-npx redproof check   # do the rules hold right now?
-npx redproof prove   # can each rule actually fail?
+npx redproof check gates/unit-tests.ts
 ```
 
-## Rules
+This example checks the selected policies; it does not include proofs. To prove
+them, export a `defineProofs` suite with mutations such as breaking tested behavior
+or skipping a test, then run `npx redproof prove gates/unit-tests.ts`.
+See the [Vitest proof example](https://github.com/schalermthai/redproof/blob/main/fixtures/testing-vitest/gates/tests.ts).
+
+## Supported Rules
 
 The adapter can expose these Rules. The available set depends on the report
 format.
 
-- `testing/tests-pass`
-- `testing/no-flaky-tests` (Jest-compatible JSON only)
-- `testing/no-skipped-tests`
-- `testing/no-todo-tests`
+| Selection | Rule ID | What must hold | Report support |
+|---|---|---|---|
+| `testsPass: true` | `testing/tests-pass` | No tests fail. | Jest-compatible JSON, JUnit XML |
+| `noFlakyTests: true` | `testing/no-flaky-tests` | No test passes only after a retry. | Jest-compatible JSON with retry evidence |
+| `noSkippedTests: true` | `testing/no-skipped-tests` | No tests are skipped. | Jest-compatible JSON, JUnit XML |
+| `noTodoTests: true` | `testing/no-todo-tests` | No tests are marked TODO. | Jest-compatible JSON |
+
+JUnit XML cannot establish retries or TODO status; selecting `noFlakyTests` or
+`noTodoTests` with that format throws when the Adapter is constructed.
 
 `noFlakyTests` breaches when a test passes only after a retry. The evidence
 differs by producer. Vitest keeps the failure messages of earlier attempts in
@@ -137,12 +161,7 @@ const adapter = testing({
 });
 ```
 
-Built-in report formats:
-
-```ts
-report.jestJson()
-report.junitXml()
-```
+Built-in report formats are `report.jestJson()` and `report.junitXml()`.
 
 Set `cwd` to run a generic test command below the Gate root. Redproof rejects
 both `..` escapes and symbolic links that resolve outside the root. The
@@ -184,7 +203,7 @@ A Check built from `redproof/command` reports itself the same way. See
 
 ## Documentation
 
-See the [Redproof documentation](https://github.com/schalermthai/redproof#readme).
+See [all built-in Adapters and the comparison with Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md).
 
 ## License
 
