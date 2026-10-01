@@ -1,6 +1,6 @@
 {
   "name": "redproof",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Discover important guardrails, design honest Gates, and prove they catch regressions.",
   "author": {
     "name": "Redproof contributors"
