@@ -86,7 +86,11 @@ Requires Node.js 24 or later. From your project root, beside `package.json`:
 
 ```bash
 npm install --save-dev redproof
+npm pkg set type=module
 ```
+
+The config and Gate files are ES modules. Recent `npm init` versions write
+`"type": "commonjs"`, which makes Node reject `.ts` files that use `import`.
 
 Create `redproof.config.ts`:
 
@@ -101,8 +105,9 @@ export default defineConfig({
 ```
 
 The CLI also discovers `redproof.config.mts`, `.mjs`, `.cts`, `.cjs`, and
-`.js`. CommonJS projects can use `redproof.config.mjs` to keep the config and
-Gate modules in ESM without adding `"type": "module"` to the whole package.
+`.js`. To keep a CommonJS package, use `.mts` for the config and every Gate
+file, and set `gatesRoot: 'gates/**/*.mts'`. A `.mjs` config alone is not
+enough: Node still loads `.ts` Gate files as CommonJS.
 
 ## A small Gate
 
