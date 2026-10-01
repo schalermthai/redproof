@@ -108,6 +108,16 @@ export default gate;
 The Adapter enables selected rules at error severity for its run. Your ESLint
 configuration still supplies parsers, plugins, and file settings.
 
+Browse the [official ESLint Rules Reference](https://eslint.org/docs/latest/rules/)
+for core rule IDs and options. For plugin rules, use the plugin's own reference.
+
+**Using an ESLint preset?** Keep it in `eslint.config.*`. The Adapter loads that
+configuration, but does not automatically select every rule in the preset.
+If the preset enables 100 rules and you select two here, only those two can
+breach this Gate. A PASS does not mean the entire ESLint configuration passed.
+Use a [Command Check](commands.md#exit-codes-decide-the-verdict) alongside this
+Gate if you also want to require the full ESLint run to succeed.
+
 ### 3. Check it, then prove it
 
 ```bash

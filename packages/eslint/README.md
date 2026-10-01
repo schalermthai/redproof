@@ -57,7 +57,10 @@ proof checks clean source. Add a targeted proof for each additional Rule you sel
 ## Supported Rules
 
 There is no fixed Redproof catalog: select ESLint rule IDs available in your
-project, including rules supplied by configured plugins. These are examples:
+project, including rules supplied by configured plugins. Browse the
+[official ESLint Rules Reference](https://eslint.org/docs/latest/rules/) for core
+rule IDs and options; plugin rules are documented by their respective plugins.
+The table below shows examples, not the full supported list:
 
 | Selection inside `rules` | Generated Rule ID | What must hold |
 |---|---|---|
@@ -68,6 +71,22 @@ project, including rules supplied by configured plugins. These are examples:
 The alias is your local property name, such as `adapter.rules.noConsole`.
 The Adapter enables selected rules at error severity; your ESLint configuration
 supplies their options, parsers, and plugins. Unselected findings do not breach.
+
+### What about presets?
+
+Keep presets in your `eslint.config.*`; the Adapter loads that configuration.
+There is no Adapter option to select a whole preset or automatically turn all
+its enabled rules into Redproof Rules. You select individual rule IDs in `rules`.
+
+For example, if your preset enables 100 rules and you select two here, only
+findings for those two can breach this Gate. **A PASS does not mean the entire
+ESLint configuration passed.** It means the selected Rules held in the inspected
+scope.
+
+To require your full ESLint run to succeed, use a
+[Command Check](https://github.com/schalermthai/redproof/blob/main/docs/commands.md#exit-codes-decide-the-verdict).
+You can keep that alongside an Adapter Gate with targeted proofs for the rules
+you most want to protect.
 
 ## Features and limits
 
