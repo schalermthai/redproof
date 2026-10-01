@@ -27,7 +27,7 @@ function readiness(version: string, hash: string) {
 
 async function source(t: TestContext, version = '0.1.0') {
   const root = await temporary(t);
-  for (const path of ['agents/plugin', 'agents/skills', 'agents/skill-support', 'LICENSE']) await cp(join(repository, path), join(root, path), { recursive: true });
+  for (const path of ['agents/plugin', 'agents/hooks', 'agents/skills', 'agents/skill-support', 'LICENSE']) await cp(join(repository, path), join(root, path), { recursive: true });
   const manifestPath = join(root, 'agents/plugin/redproof/.codex-plugin/plugin.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   manifest.version = version;

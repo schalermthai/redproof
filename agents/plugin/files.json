@@ -1,4 +1,6 @@
 [
+  "hooks/hooks.json",
+  "hooks/stop-check.mjs",
   "skill-support/review-ui/assets/review.css",
   "skill-support/review-ui/assets/review.js",
   "skill-support/review-ui/guide.md",

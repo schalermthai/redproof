@@ -33,8 +33,8 @@ export async function buildPlugin(destination?: string, sourceRoot = repository)
     throw new Error('Expected redproof plugin identity and a release version');
   }
   const files: unknown = JSON.parse((await readSource(sourceRoot, 'agents/plugin/files.json')).toString());
-  if (!Array.isArray(files) || !files.length || files.some(file => typeof file !== 'string' || !/^(skills|skill-support)\//.test(file)) || new Set(files).size !== files.length) {
-    throw new Error('Plugin file list must contain unique skills/ or skill-support/ paths');
+  if (!Array.isArray(files) || !files.length || files.some(file => typeof file !== 'string' || !/^(hooks|skills|skill-support)\//.test(file)) || new Set(files).size !== files.length) {
+    throw new Error('Plugin file list must contain unique hooks/, skills/ or skill-support/ paths');
   }
 
   // Read and validate all inputs before creating any output. No recursive copy.

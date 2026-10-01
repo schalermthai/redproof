@@ -34,6 +34,7 @@ async function listFiles(root: string): Promise<string[]> {
 async function fixtureSource(t: TestContext): Promise<string> {
   const root = await temporary(t);
   await cp(join(repository, 'agents/plugin'), join(root, 'agents/plugin'), { recursive: true });
+  await cp(join(repository, 'agents/hooks'), join(root, 'agents/hooks'), { recursive: true });
   await cp(join(repository, 'agents/skills'), join(root, 'agents/skills'), { recursive: true });
   await cp(join(repository, 'agents/skill-support'), join(root, 'agents/skill-support'), { recursive: true });
   await cp(join(repository, 'LICENSE'), join(root, 'LICENSE'));
@@ -49,7 +50,8 @@ test('plugin contains exactly the shared skills and their declared resources, wi
   assert.deepEqual((await readdir(join(bundle, 'skills'), { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort(), skillNames);
   for (const file of files) assert.deepEqual(await readFile(join(bundle, file)), await readFile(join(repository, 'agents', file)), file);
   // Catch new required source resources not yet added to the shipping list.
-  const sources = [...(await listFiles(join(repository, 'agents/skills'))).map(file => `skills/${file}`),
+  const sources = [...(await listFiles(join(repository, 'agents/hooks'))).map(file => `hooks/${file}`),
+    ...(await listFiles(join(repository, 'agents/skills'))).map(file => `skills/${file}`),
     ...(await listFiles(join(repository, 'agents/skill-support'))).map(file => `skill-support/${file}`)];
   assert.deepEqual(files.slice().sort(), sources.sort());
   const portable = JSON.parse(await readFile(join(bundle, 'plugin.json'), 'utf8'));
@@ -201,4 +203,25 @@ test('standalone bundle runs the review helper self-tests from an unrelated work
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /(?:#|ℹ) pass 14\b/);
+});
+
+test('bundled hooks call scripts that ship in the bundle, and stay silent outside a Redproof project', async t => {
+  const bundle = await buildPlugin(join(await temporary(t), 'redproof'));
+  const hooks = JSON.parse(await readFile(join(bundle, 'hooks/hooks.json'), 'utf8')) as {
+    hooks: Record<string, { hooks: { command: string }[] }[]>;
+  };
+  const commands = Object.values(hooks.hooks).flatMap(groups => groups.flatMap(group => group.hooks.map(handler => handler.command)));
+  assert.equal(commands.length, 2);
+  const cwd = await temporary(t);
+  for (const command of commands) {
+    // Quoted, so an install path with spaces still works.
+    const [, script, mode] = command.match(/^node "\$\{CLAUDE_PLUGIN_ROOT\}\/([^"]+)" (baseline|stop)$/) ?? [];
+    assert.ok(script && mode, command);
+    assert.ok((await lstat(join(bundle, script))).isFile(), script);
+    const result = spawnSync(process.execPath, [join(bundle, script), mode], {
+      cwd, encoding: 'utf8', input: JSON.stringify({ session_id: 'bundle-test', cwd }),
+      env: { ...process.env, CLAUDE_PLUGIN_DATA: await temporary(t) },
+    });
+    assert.deepEqual({ status: result.status, stdout: result.stdout, stderr: result.stderr }, { status: 0, stdout: '', stderr: '' }, command);
+  }
 });

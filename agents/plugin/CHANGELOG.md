@@ -2,6 +2,15 @@
 
 Independent of the Redproof npm library. Release versions are immutable.
 
+## Unreleased
+
+- Claude Code Stop hook: runs the project's own `redproof check` when the agent
+  ends a turn and keeps the turn open while a Gate fails.
+- The hook stays silent in projects without a Redproof config, checks only the
+  configs that own changed files, and reports a check that could not run.
+
+Limitations: Codex does not load hooks from this plugin. The hook needs git.
+
 ## 0.1.0
 
 Initial early-access package. The GitHub release records publication status.
