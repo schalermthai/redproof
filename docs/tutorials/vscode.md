@@ -7,7 +7,7 @@ You can integrate Redproof with VS Code without a dedicated extension.
 Use the compact reporter:
 
 ```bash
-redproof check --reporter=compact
+npx redproof check --reporter=compact
 ```
 
 It produces location-oriented lines such as:
@@ -16,20 +16,22 @@ It produces location-oriented lines such as:
 src/domain/order.ts:4:1: error redproof[architecture/domain-no-infrastructure]: Domain code imports infrastructure code.
 ```
 
-A ready-to-copy VS Code task is included at:
+With Redproof installed and your Gates configured:
 
-```text
-examples/vscode/tasks.json
-```
-
-The task problem matcher can surface Redproof breaches in the Problems panel and make file locations clickable.
+1. Copy the [example task](https://github.com/schalermthai/redproof/blob/main/examples/vscode/tasks.json) into your project's
+   `.vscode/tasks.json`. If that file already exists, add the `redproof` task to
+   its `tasks` array instead of replacing the file.
+2. Open the project root in VS Code. From the Command Palette, choose
+   **Tasks: Run Task**, then **redproof**.
+3. Open the **Problems** panel. Breaches with source locations become clickable
+   entries that take you to the affected code.
 
 ## SARIF
 
 For richer analysis output, create a SARIF file:
 
 ```bash
-redproof check \
+npx redproof check \
   --reporter=sarif \
   --outputFile=.redproof/results.sarif
 ```
@@ -41,7 +43,7 @@ Open that artifact with a VS Code SARIF viewer if your workflow already uses SAR
 For a future or custom Redproof extension, prefer the JSON report rather than parsing terminal output:
 
 ```bash
-redproof check \
+npx redproof check \
   --reporter=json \
   --outputFile=.redproof/results.json
 ```
@@ -63,7 +65,7 @@ This is the intended machine-facing boundary for Redproof-specific integrations.
 A simple workflow is:
 
 ```text
-redproof check --reporter=compact
+npx redproof check --reporter=compact
     ↓
 VS Code Problems
     ↓

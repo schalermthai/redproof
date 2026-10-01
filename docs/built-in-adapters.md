@@ -14,6 +14,12 @@ Gate
 
 The tool does the analysis. Redproof adds the Rule model and the proofs around it.
 
+An Adapter supplies Rules and a Check, not project-specific proofs. `check` runs
+the selected Rules; `prove` runs the proofs you export with `defineProofs`.
+A RED proof verifies detection for its targeted Rule, not every Rule in the Gate.
+The examples below show either checking alone or a starter proof to extend for
+your project.
+
 ## Packages
 
 ```text
@@ -77,6 +83,10 @@ export const proofs = defineProofs(gate, [
 
 export default gate;
 ```
+
+This Gate checks four policies, but its RED proof targets only `testsPass`.
+The mutation assumes a test depends on `src/example.ts` and fails when its value
+changes. Add targeted proofs for the other policies you want to verify.
 
 The Rules:
 
@@ -149,6 +159,9 @@ export const proofs = defineProofs(gate, [
 export default gate;
 ```
 
+The example RED proof targets `noConsole`, not `strictEquality`. It assumes
+`src/example.ts` exists and the ESLint configuration enables both selected rules.
+
 An adopted Rule cannot be silenced. A finding under `/* eslint-disable */` still breaches.
 
 Name a path in `files` and ESLint must read it. A path that your `ignores` pattern excludes is REFUSE, not PASS.
@@ -186,6 +199,10 @@ export const proofs = defineProofs(gate, [
 export default gate;
 ```
 
+The example RED proof targets `domainNoInfrastructure`, not `applicationNoAdapters`.
+It assumes the source files exist and the dependency-cruiser configuration defines
+both selected rules.
+
 A baseline in `knownViolationsFile` makes the Gate quieter on purpose. Keep a RED proof that plants a new violation, so you know the Gate still fails.
 
 See the [dependency-cruiser package](../packages/dependency-cruiser/README.md).
@@ -217,7 +234,9 @@ noNewUndetectedMutants     no survivor outside an accepted baseline
 mutationScore              the score stays at or above a minimum
 ```
 
-For a RED proof, weaken a test. Stryker must notice the loss of test strength.
+This is a check-only example. Before running `prove` for this Gate, export a
+`defineProofs` suite. For a RED proof, weaken a test: Stryker must notice the loss
+of test strength. See the [Stryker fixture's proofs](../fixtures/stryker-project/gates/test-strength.ts).
 
 See the [Stryker package](../packages/stryker/README.md) for the accepted-mutant baseline.
 
@@ -239,6 +258,10 @@ const adapter = knip({
 
 export default defineGate({ id: 'unused-code', adapter });
 ```
+
+This is a check-only example. Before running `prove` for this Gate, export a
+`defineProofs` suite. See [Redproof's own Knip Gate and proofs](../gates/unused-code.ts)
+for mutations that introduce unused files, exports and unresolved imports.
 
 The Knip configuration decides the scope. A selected category that the Knip configuration disables is REFUSE, not PASS.
 
@@ -265,6 +288,10 @@ const adapter = nyc({
 
 export default defineGate({ id: 'coverage', adapter });
 ```
+
+This is a check-only example. Before running `prove` for this Gate, export a
+`defineProofs` suite. See the [coverage fixture's proofs](../fixtures/istanbul-project/gates/coverage.ts)
+for examples that introduce coverage gaps and refuse a failed test run.
 
 Coverage measures execution, not assertion quality. Combine it with a testing Gate and a Stryker Gate.
 
