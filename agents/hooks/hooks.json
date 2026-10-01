@@ -1,0 +1,27 @@
+{
+  "description": "Runs the project's own Redproof check when the agent ends a turn.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 20,
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-check.mjs\" baseline"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 300,
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-check.mjs\" stop"
+          }
+        ]
+      }
+    ]
+  }
+}

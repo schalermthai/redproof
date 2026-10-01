@@ -35,13 +35,15 @@ being able to parse a manifest does not establish workflow compatibility.
 
 ## 1. Build and evaluate a local candidate
 
-Edit public skills in the repository's canonical `agents/skills/` directory and shared
-helpers in `agents/skill-support/`; do not edit generated bundle copies. Update
+Edit public skills in the repository's canonical `agents/skills/` directory, shared
+helpers in `agents/skill-support/` and hooks in `agents/hooks/`; do not edit generated
+bundle copies. Update
 `agents/plugin/files.json` when adding a required resource so it is included in the
 installed plugin.
 
 The allowlist paths are relative to `agents/`. Generated bundles still contain
-`skills/` and `skill-support/` at their root, preserving installed resource links.
+`hooks/`, `skills/` and `skill-support/` at their root, preserving installed resource
+links and the default hook location.
 The release workflow also recognizes the old publisher path when retrying an
 immutable source tag created before this reorganization.
 
@@ -100,6 +102,10 @@ For Codex, register the preview with `codex plugin marketplace add`, then run
 is unavailable). For Claude, register with `claude plugin marketplace
 add`, then install `redproof@redproof-plugins` with your intended scope. See the
 [consumer guide](MARKETPLACE.md) and the host documentation linked there.
+
+When the bundle ships hooks, also confirm in a real Claude Code session that a
+failing check keeps the turn open and a passing check lets it end. Codex does not
+load hooks from this bundle; do not claim hook behavior for Codex.
 
 Record each check separately for **both** hosts:
 
