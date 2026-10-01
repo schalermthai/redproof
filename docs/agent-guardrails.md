@@ -124,8 +124,9 @@ agent has never seen it fail. A blind pass is a green result from a check
 that can no longer detect the problem. Quiet means that nothing else would
 report the problem.
 
-Most work fails Q1 because the agent did not write or change the check. So the
-default answer is no.
+Ordinary edits do not automatically require a proof. Apply both questions when
+the agent writes or changes a safeguard, or relies on or cites an existing
+safeguard it has never seen fail.
 
 When the guard is unproven and the agent is about to build on that assumption, it runs the loop:
 

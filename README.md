@@ -80,13 +80,50 @@ Redproof makes guardrails something the repository can name, compose, prove,
 and reason about directly.
 
 
+## Install
+
+Requires Node.js 24 or later. From your project root, beside `package.json`:
+
+```bash
+npm install --save-dev redproof
+npm pkg set type=module
+```
+
+The config and Gate files are ES modules. Recent `npm init` versions write
+`"type": "commonjs"`, which makes Node reject `.ts` files that use `import`.
+
+Create `redproof.config.ts`:
+
+```ts
+import { defineConfig } from 'redproof';
+
+export default defineConfig({
+  root: '.',
+  gatesRoot: 'gates/**/*.ts',
+  refusalExit: 2,
+});
+```
+
+The CLI also discovers `redproof.config.mts`, `.mjs`, `.cts`, `.cjs`, and
+`.js`. To keep a CommonJS package, use `.mts` for the config and every Gate
+file, and set `gatesRoot: 'gates/**/*.mts'`. A `.mjs` config alone is not
+enough: Node still loads `.ts` Gate files as CommonJS.
+
 ## A small Gate
 
-Here is a simple Gate with no external tools.
+This example needs no additional tools. Create `src/example.ts` with clean source
+for the Check to inspect and the proof to modify:
+
+```ts
+export const value = 1;
+```
 
 The policy is:
 
-> TypeScript source files must not contain TODO comments.
+> TypeScript source files must not contain the word TODO.
+
+This simple text scan checks comments and strings alike. Save the following as
+`gates/no-todo.ts`:
 
 ```ts
 // gates/no-todo.ts
@@ -103,38 +140,33 @@ import {
   text,
 } from 'redproof';
 
-// defining Rules
 const rules = defineRules({
   noTodo: {
     id: 'source/no-todo',
-    description: 'Source files must not contain TODO comments.',
+    description: 'Source files must not contain the word TODO.',
   },
 });
 
-// defining a Gate
 const gate = defineGate({
   id: 'no-todo',
-  rules,  // assigning rules to a gate
+  rules,
 
   check: {
-    description: 'scan TypeScript source files for TODO comments',
+    description: 'scan TypeScript source files for the word TODO',
     counting: counting.supported,
 
     async run(ctx) {
-
-      // scan all Typescript to find //TODO comment
       const found = await text.find(ctx, {
         files: 'src/**/*.ts',
         find: /\bTODO\b/g,
       });
 
-      // should detect a breach
       return result.fromBreaches(
         found.scan(),
         found.matches.map(match =>
           breach(rules.noTodo, {
             code: 'todo-found',
-            message: 'TODO comment found.',
+            message: 'TODO found in source.',
             location: match.location,
           }),
         ),
@@ -143,14 +175,10 @@ const gate = defineGate({
   },
 });
 
-// defining Proofs
 export const proofs = defineProofs(gate, [
   proof.red(
     rules.noTodo,
-    'detects a TODO comment',
-
-    // deliberately inject //TODO into src/example.ts
-    // healthy Gate should catch it!
+    'detects the word TODO',
     mutate.appendText(
       'src/example.ts',
       '\n// TODO: proof mutation\n',
@@ -166,20 +194,20 @@ export default gate;
 See what the Gate defines:
 
 ```bash
-redproof describe gates/no-todo.ts
+npx redproof describe gates/no-todo.ts
 ```
 
 ```text
 Gate: no-todo
 
 Rules:
-  R1 Source files must not contain TODO comments.
+  R1 Source files must not contain the word TODO.
 
 Check:
-  scan TypeScript source files for TODO comments
+  scan TypeScript source files for the word TODO
 
 Proof R1:
-  detects a TODO comment
+  detects the word TODO
   mutation: append text to src/example.ts
   run the same Check
   expect Gate FAIL
@@ -192,57 +220,72 @@ Proof GREEN:
 
 ## Run it
 
-Check the current project:
+With the config, source file and Gate saved, check the current project:
 
 ```bash
-redproof check
+npx redproof check
 ```
 
-When the Gate holds:
+The clean source passes. Output excerpts below omit the start time; timings vary:
 
 ```text
- ✓ gates/no-todo.ts (1 rule) 8ms
+ ✓ gates/no-todo.ts (1 rule) 3ms
+   ✓ no-todo
 
- Gates     1 passed (1)
- Rules     1 held (1)
- Duration  8ms
+
+ Gates      1 passed (1)
+ Rules      1 held (1)
+ Duration   137ms
 ```
 
-If the project contains a TODO:
+To see a failure, add `// TODO: remove temporary workaround` on the next line of
+`src/example.ts` and run `npx redproof check` again:
 
 ```text
- ❯ gates/no-todo.ts (1 rule | 1 breached | 1 breach) 9ms
-   ❯ source/no-todo
+ ❯ gates/no-todo.ts (1 rule | 1 breached | 1 breach) 4ms
+   ❯ no-todo
      × 1 breach
 
 
- FAIL  gates/no-todo.ts > source/no-todo
+ FAIL  gates/no-todo.ts > no-todo
 
- ❯ src/example.ts:8:1
+ ❯ src/example.ts:2:4
 
-   TODO comment found.
+     1| export const value = 1;
+     2| // TODO: remove temporary workaround
+      |    ^
+     3|
 
-     8| // TODO: remove temporary workaround
-      | ^
+   TODO found in source.
+
 
  Gates      1 failed (1)
  Rules      1 breached (1)
  Breaches   1
+ Duration   118ms
 ```
 
-Now prove that the Gate itself works:
+Remove the TODO line so the project is healthy again, then prove that the Gate
+itself works:
 
 ```bash
-redproof prove
+npx redproof prove
 ```
 
 ```text
-✓ no-todo / detects a TODO comment expected=red actual=fail
-    breached source/no-todo: src/checkout.ts:12: TODO left in source
+✓ no-todo / detects the word TODO expected=red actual=fail
+    breached source/no-todo: TODO found in source.
 ✓ no-todo / accepts clean source expected=green actual=pass
 ```
 
-The RED proof temporarily adds a TODO, runs the real Check, confirms `source/no-todo` was breached, then restores the workspace. The second line names the Rule that breached and what the Check said. A proof that did not prove says why on that line: the wrong Rule breached, the Check passed, or the target was already breached before the mutation.
+`expected=red actual=fail` means the RED proof succeeded: its mutation made the
+intended Rule fail. The second line names that Rule and the Check's message.
+
+The RED proof temporarily adds a TODO, runs the real Check, confirms `source/no-todo`
+was breached, then restores the workspace. By default, proofs run in temporary
+Gate copies; see [execution isolation](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/execution-isolation.md).
+A proof that did not prove says why: the wrong Rule breached, the Check passed,
+or the target was already breached before the mutation.
 
 The GREEN proof confirms that clean source passes.
 
@@ -251,22 +294,22 @@ The GREEN proof confirms that clean source passes.
 Every command takes optional Gate files. With none, every discovered Gate runs.
 
 ```bash
-redproof check    gates/no-todo.ts
-redproof prove    gates/no-todo.ts gates/architecture.ts
-redproof describe gates/*.ts
+npx redproof check    gates/no-todo.ts
+npx redproof prove    gates/no-todo.ts gates/architecture.ts
+npx redproof describe gates/*.ts
 ```
 
 `check`, `prove`, and `describe` share one selection rule. A path that is not a discovered Gate is an error, never an empty run.
 
 ```bash
-redproof check gates/missing.ts
+npx redproof check gates/missing.ts
 ```
 
 ```text
 No Gate matched: gates/missing.ts
 ```
 
-Gate files choose **which Gates run**. They never change **what a Gate inspects**. A Gate owns its own scope:
+Command-line paths select **which Gates to run**, not **which source files to inspect**. Each Gate defines its own inspection scope:
 
 ```ts fragment
 text.find(ctx, { files: 'src/**/*.ts' })
@@ -290,6 +333,13 @@ are not treated as zero.
 ## Built-in Adapters
 
 You do not need to build every Gate yourself.
+
+Install only the integrations you need, alongside their underlying tools. For
+example:
+
+```bash
+npm install --save-dev @redproof/eslint eslint
+```
 
 - **[`@redproof/testing`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#testing)** — test suites, flaky tests, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
 - **[`@redproof/eslint`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#eslint)** — selected ESLint rules as Redproof Rules
@@ -331,39 +381,7 @@ Adapter authors can run those guidelines as executable contracts with
 
 For execution isolation, machine-readable reports, VS Code, and other workflows, see **[Tutorials](https://github.com/schalermthai/redproof/blob/main/docs/tutorials/README.md)**.
 
-## Install
-
-Install Redproof:
-
-```bash
-npm install --save-dev redproof
-```
-
-Install any integrations you need:
-
-```bash
-npm install --save-dev @redproof/testing
-npm install --save-dev @redproof/eslint
-npm install --save-dev @redproof/dependency-cruiser
-npm install --save-dev @redproof/stryker
-npm install --save-dev @redproof/adapter-tck
-```
-
-Create `redproof.config.ts`:
-
-```ts
-import { defineConfig } from 'redproof';
-
-export default defineConfig({
-  root: '.',
-  gatesRoot: 'gates/**/*.ts',
-  refusalExit: 2,
-});
-```
-
-The CLI also discovers `redproof.config.mts`, `.mjs`, `.cts`, `.cjs`, and
-`.js`. CommonJS projects can use `redproof.config.mjs` to keep the config and
-Gate modules in ESM without adding `"type": "module"` to the whole package.
+## Project layout and npm scripts
 
 A typical project:
 
@@ -372,6 +390,7 @@ my-project/
 ├── redproof.config.ts
 ├── gates/
 │   ├── tests.ts
+│   ├── no-todo.ts
 │   ├── eslint.ts
 │   └── architecture.ts
 ├── src/

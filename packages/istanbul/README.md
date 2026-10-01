@@ -1,12 +1,32 @@
 # @redproof/istanbul
 
 Turn fresh Istanbul coverage into independently provable Redproof Rules.
-Requires Node 24. The `nyc()` wrapper supports installed nyc 15–18; the generic
+
+## Install
+
+Requires Node.js 24 or later. The `nyc()` wrapper supports installed nyc 15–18; the generic
 `istanbul()` adapter accepts a full Istanbul JSON map from other producers.
 
 ```bash
 npm install --save-dev redproof @redproof/istanbul nyc
 ```
+
+For the generic `istanbul()` adapter, replace nyc with your chosen coverage
+producer, such as c8.
+
+## Features
+
+- Checks statement, branch, function, and line coverage as separate Rules.
+- Supports overall and per-file thresholds, with covered/total counts in diagnostics.
+- Uses fresh reports and can require named source files to appear in the evidence.
+- Refuses failed producers, invalid reports, and missing expected files—even when
+  a command left a coverage report behind.
+
+## Use
+
+Start with a [Redproof configuration](https://github.com/schalermthai/redproof#install).
+This example assumes Mocha is installed, tests live under `test/`, and
+`src/orders.js` exists. Save it as `gates/coverage.ts`:
 
 ```ts
 import { nyc } from '@redproof/istanbul';
@@ -28,12 +48,23 @@ const adapter = nyc({
 export default defineGate({ id: 'coverage', adapter });
 ```
 
-| Selection | Rule ID |
-|---|---|
-| `statements` | `istanbul/statements-coverage` |
-| `branches` | `istanbul/branches-coverage` |
-| `functions` | `istanbul/functions-coverage` |
-| `lines` | `istanbul/lines-coverage` |
+```bash
+npx redproof check gates/coverage.ts
+```
+
+This example checks thresholds; it does not include proofs. Export a
+`defineProofs` suite before running `npx redproof prove gates/coverage.ts`.
+For mutations that introduce coverage gaps, see the
+[coverage proof example](https://github.com/schalermthai/redproof/blob/main/fixtures/istanbul-project/gates/coverage.ts).
+
+## Supported Rules
+
+| Selection | Rule ID | What it measures |
+|---|---|---|
+| `statements` | `istanbul/statements-coverage` | Statements executed by the tests. |
+| `branches` | `istanbul/branches-coverage` | Branch paths exercised by the tests. |
+| `functions` | `istanbul/functions-coverage` | Functions called by the tests. |
+| `lines` | `istanbul/lines-coverage` | Source lines executed by the tests. |
 
 Each metric takes `minimum` (0–100 inclusive) and optional `perFile` (default
 false). Unselected metrics do not breach. Overall percentages combine counts,
@@ -107,3 +138,7 @@ files, not silently omitted statements within a file. Coverage measures executio
 not assertion quality or correctness; combine it with testing and mutation Gates.
 
 The package owns its TCK and real nyc regressions.
+
+## Documentation
+
+See [all built-in Adapters and the comparison with Command Checks](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md).
