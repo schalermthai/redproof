@@ -9,20 +9,16 @@ Redproof gives the agent executable feedback from the repository itself.
 There are two pieces you can use together:
 
 ```text
-Redproof library
-    ↓
-Rules, Gates, Checks, Proofs
+Redproof as a library (Rules, Gates, Checks, Proofs)
 
-Redproof agent plugin
-    ↓
-skills + completion hook
+Redproof as a agent plugin (skills + completion hook)
 ```
 
 The library defines and evaluates your project guardrails.
 
 The plugin helps coding agents discover, design, build, challenge, and use those guardrails during their normal workflow.
 
-The plugin is optional. You can use Redproof without an agent plugin, and you can install the plugin before a project has any Gates.
+The plugin is optional. You can use Redproof without an agent plugin, and you can even install the plugin before a project has any Gates.
 
 ---
 
@@ -32,17 +28,12 @@ Redproof publishes an agent plugin for Codex and Claude Code.
 
 Plugin 0.2.0 installs:
 
-- the `discover` skill
-- the `design` skill
-- the `build` skill
-- the `challenge` skill
-- the `review-pr` skill
+- the `/discover` skill
+- the `/design` skill
+- the `/build` skill
+- the `/challenge` skill
+- the `/review-pr` skill
 - a completion-time Stop hook for Claude Code
-
-The Stop hook ships from plugin 0.2.0, as recorded in the
-[plugin changelog](../agents/plugin/CHANGELOG.md). Update an older installation
-to use it; the [installation guide](../agents/plugin/MARKETPLACE.md) covers
-version pinning and updates. Plugin releases are separate from npm releases.
 
 It does **not** install the Redproof npm library or any of your project's checking tools. Those remain normal project dependencies.
 
@@ -71,14 +62,12 @@ Use `--scope local` instead if you want it only for you in the current project.
 A typical project has three layers:
 
 ```text
-project tools
-Vitest / ESLint / dependency-cruiser / scripts
+project tools (Vitest / ESLint / dependency-cruiser / scripts)
         ↓
-Redproof library
-Rules / Gates / Checks / Proofs
+Redproof library (Rules / Gates / Checks / Proofs)
         ↓
-Redproof agent plugin
-skills + lifecycle integration
+Redproof agent plugin (skills + lifecycle integration
+
 ```
 
 The project tools produce evidence.
@@ -144,9 +133,9 @@ authorize no work; local implementation does not authorize CI changes or publica
 
 You can start at whichever stage matches what you already know.
 
-### `discover`
+### `/discover`
 
-Use `discover` when you want to know:
+Use `/discover` when you want to know:
 
 > What important promises in this project deserve stronger protection?
 
@@ -165,9 +154,9 @@ The skill looks for important project promises and places where existing checks 
 
 ---
 
-### `design`
+### `/design`
 
-Use `design` when you already know what you want to protect.
+Use `/design` when you already know what you want to protect.
 
 For example:
 
@@ -178,21 +167,21 @@ never imports application infrastructure.
 
 The skill helps work out:
 
-```text
-Rule identity
-evidence source
-scope
-PASS / FAIL / REFUSE behavior
-proof strategy
-```
+| Item | Description |
+|---|---|
+| **Rule identity** | The rule the guardrail is intended to enforce |
+| **Evidence source** | The information used to evaluate the rule |
+| **Scope** | Where the rule applies |
+| **PASS / FAIL / REFUSE behavior** | How the guardrail responds to each outcome |
+| **Proof strategy** | How to verify that the guardrail actually detects violations |
 
 It designs the guardrail without implementing it yet.
 
 ---
 
-### `build`
+### `/build`
 
-Use `build` once you have an approved Gate design.
+Use `/build` once you have an approved Gate design.
 
 For example:
 
@@ -207,9 +196,9 @@ You can also ask it to assess an existing Gate without repairing it.
 
 ---
 
-### `challenge`
+### `/challenge`
 
-Use `challenge` when a safeguard already exists and you want to know:
+Use `/challenge` when a safeguard already exists and you want to know:
 
 > Does it actually catch the defect it claims to catch?
 
@@ -238,9 +227,9 @@ existing Gates
 
 ---
 
-### `review-pr`
+### `/review-pr`
 
-Use `review-pr` when reviewing a change based on the claims it makes.
+Use `/review-pr` when reviewing a change based on the claims it makes.
 
 For example:
 
@@ -267,10 +256,7 @@ This is useful for large agent-generated changes where the visible diff may not 
 
 ## The Claude Code Stop hook
 
-Plugin 0.2.0 and later include a Stop hook for Claude Code. Check your installed
-version against the [plugin changelog](../agents/plugin/CHANGELOG.md).
-Codex does not load this plugin's hooks yet. Its five skills work in both hosts,
-and Codex users can run the project check manually.
+Plugin 0.2.0 and later include a Stop hook for Claude Code. Codex does not load this plugin's hooks yet.
 
 A Stop hook runs when the agent tries to end a turn.
 
@@ -416,16 +402,13 @@ The plugin is an agent workflow layer.
 
 It does not replace your normal project tools.
 
-You still need whatever produces the underlying evidence:
+You still need whatever produces the underlying evidence, from tools such as:
+ - Static analysis
+ - Mutation testing
+ - Your test suite
+ - Compilation and type checking
+ - Custom validation scripts
 
-```text
-Vitest
-ESLint
-dependency-cruiser
-Stryker
-TypeScript
-repository scripts
-```
 
 And your project still needs the Redproof library when it contains executable Gates.
 
