@@ -330,7 +330,7 @@ export default defineGate({
 });
 ```
 
-This code is worth reading carefully because it shows the Redproof model directly.
+This complete example is checked by the documentation compiler. The excerpts below quote individual parts of it as text.
 
 ---
 
@@ -338,7 +338,7 @@ This code is worth reading carefully because it shows the Redproof model directl
 
 The Gate first creates three named Rules:
 
-```ts
+```text
 const rules = defineRules({
 ```
 
@@ -346,7 +346,7 @@ Each Rule has a stable ID and a human-readable promise.
 
 For example:
 
-```ts
+```text
 workspaceCompiles: {
   id: 'static/workspace-compiles',
   description: 'Workspace source, tests, fixtures, and self-hosted Gates must type-check.',
@@ -371,7 +371,7 @@ The Rule is the promise.
 
 The Rules belong to:
 
-```ts
+```text
 defineGate({
   id: 'static-contracts',
   rules,
@@ -385,7 +385,7 @@ So `static-contracts` becomes the group that owns these related promises.
 
 The Gate uses:
 
-```ts
+```text
 commands({
 ```
 
@@ -395,7 +395,7 @@ There are three entries because there are three Rules.
 
 The first entry protects workspace compilation:
 
-```ts
+```text
 {
   rule: rules.workspaceCompiles,
   label: 'workspace TypeScript',
@@ -420,7 +420,7 @@ If TypeScript reports a normal compilation failure, Redproof can report a breach
 
 The second entry is:
 
-```ts
+```text
 {
   rule: rules.docsExamplesCompile,
   label: 'documentation examples',
@@ -441,9 +441,9 @@ This solves a problem normal `tsc` does not solve.
 
 A TypeScript example inside Markdown can become wrong after an API change, even while all `.ts` source files continue to compile.
 
-For example, documentation might contain:
+For example, a call within a larger documentation example might look like:
 
-```ts
+```text
 const result = await adapter.run(input);
 ```
 
@@ -463,7 +463,7 @@ gates/support/check-doc-fragment-budget.ts
 
 through:
 
-```ts
+```text
 {
   rule: rules.docsFragmentDebt,
   label: 'documentation fragment budget',
@@ -480,7 +480,7 @@ But every fragment is an example that the compiler does not verify.
 
 So Redproof limits how many can exist.
 
-The current budget is 37.
+The current budget is 36.
 
 This is allowed:
 
@@ -760,6 +760,8 @@ test did not run
 For example:
 
 ```ts
+import { test } from 'node:test';
+
 test.skip('important behavior', () => {
   // ...
 });
