@@ -11,7 +11,7 @@ Redproof verifies the automated guardrails you already rely on: tests, linters, 
 
 ## Watch: Redproof in 4 minutes
 
-https://github.com/user-attachments/assets/4329ebd8-79b7-4b2e-a1bf-2a2572232add
+https://github.com/user-attachments/assets/094263bd-e7f4-49fc-ab7d-398d3dfdf85b
 
 ## The question Redproof asks
 
