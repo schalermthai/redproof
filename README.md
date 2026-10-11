@@ -1,8 +1,17 @@
-# Redproof
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/redproof-logo-dark.png">
+    <img src="docs/assets/redproof-logo-light.png" alt="Redproof" width="240">
+  </picture>
+</h1>
 
 > **Don't just run your guardrails. Prove they can fail.**
 
 Redproof verifies the automated guardrails you already rely on: tests, linters, architecture rules, dependency rules, mutation testing, and custom checks.
+
+## Watch: Redproof in 4 minutes
+
+https://github.com/user-attachments/assets/4329ebd8-79b7-4b2e-a1bf-2a2572232add
 
 ## The question Redproof asks
 
