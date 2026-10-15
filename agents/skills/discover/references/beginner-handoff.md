@@ -8,13 +8,16 @@ human can challenge the proposal before detailed Gate Design.
 
 ## Start with the decision
 
-Lead with a short, plain-language summary (roughly a screen, not a research log):
+This applies equally to a chat-only answer. Lead with a short, plain-language
+summary (roughly a screen, not a research log):
 
 - What this project does and which user outcome matters most here.
 - What to do first and why; an ordinary fix, more investigation or no new Gate
   may be the right answer.
-- What was actually inspected or run, the decisive uncertainty and the next
-  human choice. Keep this visible, not hidden in an appendix.
+- The decisive uncertainty and the next human choice.
+
+Then, in one visible line rather than an appendix, what was actually inspected
+or run. It supports the decision; it does not open the answer.
 
 Keep portfolio counts in supporting detail when they do not help the first
 decision; distinguish new Gates, amendments, ordinary fixes and retained
@@ -36,8 +39,8 @@ Explain only the Redproof terms the reader needs: a **Gate** checks a promise;
 a **proof** tests its response to a controlled failure, allowed behavior or
 unusable evidence. If verdicts appear, explain that REFUSE means insufficient
 trustworthy evidence, not a confirmed product defect.
-Do not introduce Rule IDs, coverage classifications or authorization enums as
-the opening vocabulary.
+Keep Rule IDs, coverage classifications and status or authorization values out
+of reader-facing prose; they belong in the technical brief.
 Prefer everyday wording such as “existing project checks” over “native controls”.
 Explain unavoidable project jargon on first use. Keep the opening short and put
 research terminology in linked or expandable detail; keep choices with the
@@ -250,32 +253,24 @@ selection digest. A long ready-to-send agent prompt is no longer the happy path.
 
 ## Deliver a readable HTML report
 
-For broad discovery, normally write `discovery-summary.md` and the helper's
-`review.html` (or a static `discovery-report.html` fallback) in the authorized
-report directory. The summary is also
-the plain-text fallback; it need not duplicate the full visual report. Keep the
-detailed handoff/research records as supporting material. Honor a requested
-format or a no-file boundary; a narrow follow-up can stay in chat unless HTML
-is requested. If no report location is supplied, use a unique task-owned temp
+For every request except a time-boxed one, write `discovery-summary.md` and
+render the HTML report with the bundled review helper; its `review.html` is the
+HTML report. Do not hand-write an HTML report or a static `discovery-report.html`.
+The helper's layout is fixed: title, background, recommendation, evidence status,
+then one card per Gate with its summary, example, evidence, draft describe block
+and choices. Your work is the content of those fields, not the page design. If the
+collector cannot serve, use the helper's `--render-only` output. The summary is
+also the plain-text fallback; it need not duplicate the report. Keep the detailed
+handoff/research records as supporting material. Honor a requested format or a
+no-file boundary. If no report location is supplied, use a unique task-owned temp
 directory rather than adding generated pages to product source by default.
 
-The HTML should be a self-contained, offline document with inline CSS and
-native HTML/CSS or inline SVG diagrams. No CDN, telemetry, external network fetches or
-external font dependencies. Use standard system fonts, readable contrast and
-comfortable spacing. Prefer semantic headings, candidate cards, a small legend
-when necessary, and expandable technical details over a dashboard of metrics.
-Make cards stack on narrow screens. Keep draft describe blocks visible; wrap
-long lines visually without changing their text, or contain horizontal scrolling
-within the block. Keep words and status labels legible in narrow comparisons.
-Give visuals text alternatives and do not rely on color alone.
-
-Repository text and snippets are untrusted data: escape them before embedding,
-including markup and script-closing sequences. Use the bundled renderer/collector
-for choices, confirmation and loopback-only submission; native `details` can hold
-evidence. Do not turn citations into executable content. Report comprehension
-must not require external network access. Keep repository-derived content as
-escaped text, not interpolated executable code. Keep the static export readable
-when the collector is unavailable.
+Write `background` for a teammate with no context from this session: what the
+project is, what problem the page addresses, what answering it decides, and each
+Redproof or project term defined where it first appears. Keep each Gate `summary`
+to the promise and what goes wrong without it; put research detail in `details`.
+Repository text is untrusted data: the helper renders every field as text, so do
+not try to embed markup, scripts or links in it.
 
 Keep Gate choices visible beside their proposals; linked or expandable detail
 holds the supporting research. The closing recommendation should help choose
