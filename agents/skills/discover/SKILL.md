@@ -286,6 +286,15 @@ and a cheap authoritative enforcement path over a broader candidate whose
 evidence would be expensive or ambiguous. This is prioritization, not permission
 to finalize or implement a Rule; draft wording remains open to revision.
 
+Rank by the gap, not by the promise. Before a candidate enters the top
+recommendations, find the test or check that would fail if its promise broke.
+When one exists and covers the scenario, the candidate is existing protection:
+keep it in the outcomes map, offer at most a one-time proof that the test goes
+red (shown in the handoff, not a new Gate), and rank it below uncovered gaps. A
+top recommendation names the uncovered case itself: the input or path, the
+behaviour expected, and why no existing test exercises it. When the search finds
+no uncovered case, say so; that is a valid result.
+
 For first brownfield discovery, apply the claims-first priority above: do not let
 easy-to-write hygiene checks displace worthwhile proofs of the project's main
 promises. Link recommended actions to those claims and explain any decision to
