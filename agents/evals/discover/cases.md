@@ -11,6 +11,7 @@ launches the review UI (report ready) or the session ends.
 | `sindresorhus/ky` | `3541888878c4d303a8bc2ad61815f4e048f55a5d` | Small TS lib, ESLint + tests; clear product claims (retries, timeouts, hooks) |
 | `expressjs/express` | `a419aa7350389a275ab45fde2e849ed1f02449ef` | Mature JS framework; public API compatibility, middleware ordering |
 | `pallets/click` | `2247b35ea1c47c727d7a06e51fa280e12a863ff6` | Python + pytest; CLI parsing guarantees, documented deprecations |
+| `go-chi/chi` | `3a33ba578e0dd93444e0ff386cc26e665d92e31e` | Go router (v5.5.0); held out from every skill edit, added for the Gate-choice climb |
 
 Variant `followup` adds one synthetic fixture file to the checkout:
 `docs/redproof/discovery-2026-09.md`, a prior discovery handoff listing two Gates
@@ -36,6 +37,9 @@ fixtures after you approve this list.
 | click-priority | click, priority | click |
 | click-followup | click, followup | click + prior discovery |
 | click-timeboxed | click, timeboxed | click |
+| chi-broad | chi, broad | chi |
+| chi-narrow | chi, narrow | chi |
+| chi-priority | chi, priority | chi |
 
 ### ky-broad
 ```text
@@ -110,4 +114,19 @@ fixtures after you approve this list.
 ### click-timeboxed
 ```text
 /redproof:discover Ten minutes, top three things Click should protect, and which to do first. Don't change any code.
+```
+
+### chi-broad
+```text
+/redproof:discover I maintain chi and haven't used Redproof before. Find what this project should protect. Don't change any code.
+```
+
+### chi-narrow
+```text
+/redproof:discover Only look at chi's routing: route pattern matching, URL parameters and the route context (chi.RouteContext, chi.URLParam). What should we protect there? Don't change any code.
+```
+
+### chi-priority
+```text
+/redproof:discover We keep shipping regressions in the bundled middleware package. That's my top worry, but tell me if something else in chi matters more. Don't change any code.
 ```

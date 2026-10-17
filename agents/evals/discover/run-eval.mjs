@@ -147,6 +147,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { cp, mkdtemp, readdir, readFile, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, extname } from 'node:path';
+import { extractPicks, judgePicks } from './pick-judge.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../..');
@@ -155,10 +156,15 @@ const PLUGIN_DIR = process.env.REDPROOF_EVAL_PLUGIN_DIR ?? join(SHARED, 'redproo
 const REPOS_DIR = join(SHARED, 'repos');
 const CONFIG_DIR = process.env.REDPROOF_EVAL_CONFIG_DIR ?? join(homedir(), '.claude-redproof-eval');
 const JUDGE_MODEL = 'claude-fable-5-1';
+// Set to a model id to also grade which Gates the handoff picks (pick-judge.mjs).
+const PICKS_MODEL = process.env.REDPROOF_EVAL_PICKS || null;
+// The maintainer judge flips about 1 in 4 Gate verdicts between passes; average this many.
+const PICKS_PASSES = Math.max(1, Number(process.env.REDPROOF_EVAL_PICKS_PASSES ?? 2));
 const PINNED = {
   ky: '3541888878c4d303a8bc2ad61815f4e048f55a5d',
   express: 'a419aa7350389a275ab45fde2e849ed1f02449ef',
   click: '2247b35ea1c47c727d7a06e51fa280e12a863ff6',
+  chi: '3a33ba578e0dd93444e0ff386cc26e665d92e31e',
 };
 // Which judge criteria apply to which request style (cases.md tags[1]).
 const APPLIES = {
@@ -661,6 +667,26 @@ async function gradeCase(input, run, ref, ctx) {
   grade.quality = applicable ? +(passed / applicable).toFixed(3) : 0;
   explanation.quality = `${passed}/${applicable} applicable criteria passed`;
   run.perf.judge_cost_usd = j.judge_cost_usd == null ? null : +j.judge_cost_usd.toFixed(4);
+
+  // Gate choice: would this repository's maintainer merge what the handoff recommends?
+  if (PICKS_MODEL) {
+    const picks = extractPicks({ jsonFiles: reviewJson ? [reviewJson.path] : [],
+      mdTexts: md.map(a => readFileSync(a.path, 'utf8')), finalText: run.finalText });
+    grade.pick_n = picks.length;
+    // No Gates proposed: the maintainer judges the "nothing uncovered" claim instead.
+    const handoff = [...md.map(a => readFileSync(a.path, 'utf8')), run.finalText].join('\n\n');
+    {
+      const passes = [];
+      for (let k = 0; k < PICKS_PASSES; k++) passes.push(await judgePicks({ repo: input.meta.repo, request: input.prompt, picks, model: PICKS_MODEL, handoff }));
+      const mean = xs => +(xs.reduce((t, x) => t + x, 0) / xs.length).toFixed(3);
+      grade.pick_score = mean(passes.map(pj => pj.score));
+      if (picks.length) grade.pick_gate_pr = mean(passes.flatMap(pj => pj.verdicts.map(v => ({ yes: 1, maybe: 0.5, no: 0 })[v.gate_pr])));
+      explanation.pick_score = passes.map((pj, k) => `pass ${k + 1} (${pj.score}): ` + (pj.none
+        ? `no Gates proposed; maintainer agrees ${pj.none.agree}${pj.none.missed ? `, missed: ${pj.none.missed}` : ''} - ${pj.none.reason}`
+        : pj.verdicts.map(v => `${v.gate}: plain ${v.plain_test}, covered ${v.covered}, accurate ${v.accurate}, gate ${v.gate_pr} - ${v.reason}`).join(' | '))).join(' || ');
+      run.perf.judge_cost_usd = +((run.perf.judge_cost_usd ?? 0) + passes.reduce((t, pj) => t + (pj.judge_cost_usd ?? 0), 0)).toFixed(4);
+    }
+  }
   return { grade, explanation, judge_model: j.judge_model, judge_usage: j.judge_usage };
 }
 
