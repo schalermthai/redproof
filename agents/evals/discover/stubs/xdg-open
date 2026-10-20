@@ -1,0 +1,3 @@
+#!/bin/sh
+# Eval stub: discover must not open windows on the machine running the eval.
+echo "(eval stub) not opening: $*"
