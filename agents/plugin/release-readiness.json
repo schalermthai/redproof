@@ -1,27 +1,27 @@
 {
-  "version": "0.2.0",
-  "bundleSha256": "e3d2eac5c7afbfec31922804c595ed46993b46e0327be904a0af9ff7b719a081",
+  "version": "0.3.0",
+  "bundleSha256": "7a71d3d56e88771baa34e97f4c3222189466270950b5ea67ccd5027a26dd8d2c",
   "hosts": {
     "codex": {
-      "version": "0.156.1",
-      "evidence": "agents/plugin/validation/2026-10-01-0.2.0-host-checks.md",
+      "version": "pending",
+      "evidence": "pending",
       "checks": {
-        "installation": "pass",
-        "publicSkills": "pass",
-        "approvedHandoff": "pass",
-        "reviewUI": "pass",
-        "authorizationBoundaries": "pass"
+        "installation": "pending",
+        "publicSkills": "pending",
+        "approvedHandoff": "pending",
+        "reviewUI": "pending",
+        "authorizationBoundaries": "pending"
       }
     },
     "claude": {
-      "version": "2.1.286",
-      "evidence": "agents/plugin/validation/2026-10-01-0.2.0-host-checks.md",
+      "version": "pending",
+      "evidence": "pending",
       "checks": {
-        "installation": "pass",
-        "publicSkills": "pass",
-        "approvedHandoff": "pass",
-        "reviewUI": "pass",
-        "authorizationBoundaries": "pass"
+        "installation": "pending",
+        "publicSkills": "pending",
+        "approvedHandoff": "pending",
+        "reviewUI": "pending",
+        "authorizationBoundaries": "pending"
       }
     }
   }
