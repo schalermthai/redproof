@@ -2,6 +2,29 @@
 
 Independent of the Redproof npm library. Release versions are immutable.
 
+## 0.3.0
+
+- Discover writes every answer for a reader new to Redproof, in chat as well as
+  in files. It opens with the decision, defines Redproof terms once, and keeps
+  internal status labels out of the prose.
+- Every discovery request except a time-boxed one produces a Markdown summary
+  and an HTML report. The chat message summarises the handoff; it no longer
+  replaces it.
+- The review page from the bundled helper is the only HTML report. Discover no
+  longer writes its own HTML page.
+- Discover ranks recommendations by the uncovered gap. A promise that existing
+  tests already guard stays visible as existing protection and is offered at most
+  as a one-time proof. A top recommendation names the case no test exercises.
+  Finding no uncovered case is a valid result.
+- design, build, challenge, review-pr, the review UI and the Stop hook are
+  unchanged from 0.2.0.
+
+Measured on a headless discover eval with Claude Sonnet 5.5 and Claude Opus 5.5
+against pinned open-source repositories (ky, Express, Click, chi), with Express
+and chi held out of every skill edit. Limitations: about one Sonnet
+recommendation in eight still claims a case is untested when a test covers it.
+Opus 5.5 was checked only on Express for the ranking change.
+
 ## 0.2.0
 
 - Claude Code Stop hook: runs the project's own `redproof check` when the agent

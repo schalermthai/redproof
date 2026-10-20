@@ -286,6 +286,15 @@ and a cheap authoritative enforcement path over a broader candidate whose
 evidence would be expensive or ambiguous. This is prioritization, not permission
 to finalize or implement a Rule; draft wording remains open to revision.
 
+Rank by the gap, not by the promise. Before a candidate enters the top
+recommendations, find the test or check that would fail if its promise broke.
+When one exists and covers the scenario, the candidate is existing protection:
+keep it in the outcomes map, offer at most a one-time proof that the test goes
+red (shown in the handoff, not a new Gate), and rank it below uncovered gaps. A
+top recommendation names the uncovered case itself: the input or path, the
+behaviour expected, and why no existing test exercises it. When the search finds
+no uncovered case, say so; that is a valid result.
+
 For first brownfield discovery, apply the claims-first priority above: do not let
 easy-to-write hygiene checks displace worthwhile proofs of the project's main
 promises. Link recommended actions to those claims and explain any decision to
@@ -353,12 +362,31 @@ but do not offer premature implementation or adoption in the discovery selector.
 
 ## Produce the handoff
 
-Read [beginner-handoff.md](references/beginner-handoff.md) before presenting the
-results. Lead with what to protect, why it matters, what already works, and the
-next decision—not the research schema. For broad discovery, provide a short
-Markdown summary and a self-contained HTML report alongside the detailed
-research. Use diagrams, concrete examples and short source excerpts only when
-they make the finding or choice easier to understand. They must not turn a
+Read [beginner-handoff.md](references/beginner-handoff.md) before presenting any
+result: broad, narrow, priority, time-boxed or follow-up, in files or only in
+chat. Your final chat message is a reader-facing handoff too. Write every
+reader-facing answer for someone who has never used Redproof:
+
+- Open with what to protect, why it matters, what already covers it and the one
+  decision you recommend next, in the first few sentences. What you inspected,
+  what you skipped and other limits come after the findings, in one short line;
+  never open with them.
+- Define each Redproof term in one plain sentence where it first appears (Gate,
+  Rule, Check, proof, describe block, PASS/FAIL/REFUSE).
+- Keep the brief's record labels out of the prose: policy-status and
+  stage-authorization values, `approve-for-*` recommendations, coverage classes
+  and names of internal passes. Say what they mean instead, for example “not
+  approved yet; nothing is designed until you choose”.
+- Put inventories and evidence tables after the recommendation, and end with one
+  recommended action.
+
+For every request except a time-boxed one, provide a short Markdown summary and
+an HTML report rendered by the bundled review helper (never hand-written HTML)
+alongside the detailed research, scaled to the request: a narrow or follow-up
+report can hold one Gate. The chat message
+summarises that handoff; it never replaces the files. Use diagrams, concrete
+examples and short source excerpts only when they make the finding or choice
+easier to understand. They must not turn a
 hypothesis into a confirmed defect or a proposal into implemented protection.
 
 Keep the outcome map, evidence, exceptions and reviewer reconciliation linked
@@ -389,7 +417,7 @@ Ordinary fixes and rejected/no-Gate outcomes need their disposition, not invente
 Gates. Missing drafts for presented Gates make the handoff incomplete.
 
 For each surviving Gate candidate, retain a compact technical brief behind that
-summary:
+summary (in a file or collapsed detail; do not paste its fields into chat):
 
 ```text
 Gate:
