@@ -86,6 +86,11 @@ baseline. Matching known violations are ignored; new violations still breach
 their selected Redproof Rules. Checks run without dependency-cruiser caching so
 proof mutations cannot reuse stale architecture results.
 
+Each Check loads its configuration and options in a fresh worker, including
+modules loaded through relative imports and `extends`. Config mutations and
+restoration are visible on the next Check in the same process. Configuration
+paths stay unchanged, and no temporary config files are written.
+
 Every selected dependency-cruiser Rule must also be active. A Rule configured
 with severity `ignore` produces REFUSE, because Redproof cannot honestly claim
 that an architecture boundary holds when dependency-cruiser has disabled it.

@@ -1,5 +1,5 @@
 import { dependencyCruiser } from '@redproof/dependency-cruiser';
-import { defineGate, defineProofs, mutate, proof } from 'redproof';
+import { defineGate, defineProofs, locate, mutate, proof } from 'redproof';
 
 const adapter = dependencyCruiser({
   configFile: '.dependency-cruiser.cjs',
@@ -37,6 +37,30 @@ export const proofs = defineProofs(gate, [
     'refuses when dependency-cruiser configuration is unavailable',
     mutate.rename('.dependency-cruiser.cjs', '.dependency-cruiser.off.cjs'),
   ),
+  proof.refuse(
+    'refuses a corrupt dependency-cruiser configuration after earlier checks',
+    mutate.writeText('.dependency-cruiser.cjs', 'module.exports = { forbidden: [ };\n'),
+  ),
+  proof.refuse(
+    'refuses when a selected rule is disabled after earlier checks',
+    mutate.replaceText(
+      locate.text({ files: '.dependency-cruiser.cjs', find: "severity: 'error'", occurrence: 'first' }),
+      "severity: 'ignore'",
+    ),
+  ),
+  proof.refuse(
+    'refuses when selected rules are removed after earlier checks',
+    mutate.writeText('.dependency-cruiser.cjs', 'module.exports = { forbidden: [] };\n'),
+  ),
+  proof.red(
+    adapter.rules.applicationNoAdapters,
+    'detects a changed rule boundary after earlier checks',
+    mutate.replaceText(
+      locate.text({ files: '.dependency-cruiser.cjs', find: "to: { path: '^src/adapters' }" }),
+      "to: { path: '^src/domain' }",
+    ),
+  ),
+  proof.green('accepts restored configuration after config mutations'),
 ]);
 
 export default gate;

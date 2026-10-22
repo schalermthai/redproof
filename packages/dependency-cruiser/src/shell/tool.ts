@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Worker } from 'node:worker_threads';
+import type { DependencyCruiserConfig } from '../core/model.ts';
 import {
   parseKnownViolations,
   parseSelfManifest,
@@ -18,6 +20,45 @@ type DependencyCruiserOptions = NonNullable<
   Parameters<DependencyCruiserModules['cruise']>[1]
 >;
 export type KnownViolations = NonNullable<DependencyCruiserOptions['knownViolations']>;
+
+export type ConfigExtraction = {
+  readonly config: DependencyCruiserConfig;
+  readonly options: DependencyCruiserOptions;
+};
+
+export type ConfigWorkerJob = {
+  readonly root: string;
+  readonly configPath: string;
+};
+
+const configWorkerFile = import.meta.url.endsWith('.ts')
+  ? new URL('./config-worker.ts', import.meta.url)
+  : new URL('./config-worker.js', import.meta.url);
+
+/** A fresh module cache also reloads configs reached through imports or extends. */
+export function extractFreshConfig(root: string, configPath: string): Promise<ConfigExtraction> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(configWorkerFile, {
+      workerData: { root, configPath } satisfies ConfigWorkerJob,
+      execArgv: ['--disable-warning=ExperimentalWarning', '--experimental-strip-types'],
+    });
+    let settled = false;
+
+    worker.once('message', (extracted: ConfigExtraction) => {
+      settled = true;
+      // Config modules may leave timers or other handles open. Do not retain
+      // those handles (or the module cache) after returning the snapshot.
+      void worker.terminate().then(() => resolve(extracted), reject);
+    });
+    worker.once('error', error => {
+      settled = true;
+      reject(error);
+    });
+    worker.once('exit', code => {
+      if (!settled) reject(new Error(`dependency-cruiser config worker exited before returning a result (code=${code}).`));
+    });
+  });
+}
 
 export function now(): string {
   return new Date().toISOString();

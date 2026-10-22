@@ -18,7 +18,7 @@ test('the fixture architecture passes, and every cruised module counts as inspec
   assert.equal(run.results[0]?.result.scan.inspected, 4);
 });
 
-test('each mapped rule is proven red by a real forbidden import, and a missing configuration refuses', async () => {
+test('real proofs detect forbidden imports and configuration mutations in one worker, then restore', async () => {
   const run = await proveProject(config);
 
   assert.equal(run.exitCode, 0);
@@ -27,8 +27,19 @@ test('each mapped rule is proven red by a real forbidden import, and a missing c
     ['red', true, 'fail'],
     ['green', true, 'pass'],
     ['refuse', true, 'refuse'],
+    ['refuse', true, 'refuse'],
+    ['refuse', true, 'refuse'],
+    ['refuse', true, 'refuse'],
+    ['red', true, 'fail'],
+    ['green', true, 'pass'],
   ]);
   assert.deepEqual(breachedRules(run, 0), ['dependency-cruiser/domain-no-infrastructure']);
   assert.deepEqual(breachedRules(run, 1), ['dependency-cruiser/application-no-adapters']);
-  assert.deepEqual(refusalCodes(run), ['dependency-cruiser-unavailable']);
+  assert.deepEqual(breachedRules(run, 7), ['dependency-cruiser/application-no-adapters']);
+  assert.deepEqual(refusalCodes(run), [
+    'dependency-cruiser-unavailable',
+    'dependency-cruiser-unavailable',
+    'dependency-cruiser-rule-inactive',
+    'dependency-cruiser-rule-missing',
+  ]);
 });
