@@ -6,7 +6,6 @@ import {
   type NoUnknownKeys,
   type Rule,
 } from 'redproof';
-import type { DependencyCruiserConfig } from './core/model.ts';
 import {
   checkDescription,
   ruleCatalog,
@@ -23,7 +22,7 @@ import {
   ruleAvailabilityRefusal,
   unavailableRefusal,
 } from './core/outcome.ts';
-import { loadDependencyCruiser, now, readKnownViolations, withCwd } from './shell/tool.ts';
+import { extractFreshConfig, loadDependencyCruiser, now, readKnownViolations, withCwd } from './shell/tool.ts';
 
 export type { DependencyCruiserAdapterOptions } from './core/options.ts';
 
@@ -56,7 +55,7 @@ export function dependencyCruiser<
           return await withCwd(ctx.root, async () => {
             const tool = await loadDependencyCruiser(ctx.root);
             const configPath = resolve(ctx.root, settings.configFile);
-            const config = await tool.extractConfig(configPath) as DependencyCruiserConfig;
+            const { config, options: cruiseOptions } = await extractFreshConfig(ctx.root, configPath);
             const unavailableRule = ruleAvailabilityRefusal(
               config,
               settings.foreignRules,
@@ -65,7 +64,6 @@ export function dependencyCruiser<
             );
             if (unavailableRule) return unavailableRule;
 
-            const cruiseOptions = await tool.extractOptions(configPath);
             const baselineFile = settings.knownViolationsFile;
             const knownViolations = baselineFile
               ? await readKnownViolations(resolve(ctx.root, baselineFile))
