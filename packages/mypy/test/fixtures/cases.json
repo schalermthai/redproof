@@ -1,0 +1,569 @@
+[
+ {
+  "code": "abstract",
+  "red": {
+   "a.py": "from abc import ABC, abstractmethod\nclass A(ABC):\n    @abstractmethod\n    def f(self) -> None: ...\nA()\n"
+  },
+  "green": {
+   "a.py": "from abc import ABC, abstractmethod\nclass A(ABC):\n    @abstractmethod\n    def f(self) -> None: ...\nclass B(A):\n    def f(self) -> None: ...\nB()\n"
+  }
+ },
+ {
+  "code": "arg-type",
+  "red": {
+   "a.py": "def f(x: int) -> None: ...\nf(\"s\")\n"
+  },
+  "green": {
+   "a.py": "def f(x: int) -> None: ...\nf(1)\n"
+  }
+ },
+ {
+  "code": "assert-type",
+  "red": {
+   "a.py": "from typing import assert_type\nx: int = 1\nassert_type(x, str)\n"
+  },
+  "green": {
+   "a.py": "from typing import assert_type\nx: int = 1\nassert_type(x, int)\n"
+  }
+ },
+ {
+  "code": "assignment",
+  "red": {
+   "a.py": "x: int = \"a\"\n"
+  },
+  "green": {
+   "a.py": "x: int = 1\n"
+  }
+ },
+ {
+  "code": "attr-defined",
+  "red": {
+   "a.py": "import os\nos.nope\n"
+  },
+  "green": {
+   "a.py": "import os\nos.name\n"
+  }
+ },
+ {
+  "code": "await-not-async",
+  "red": {
+   "a.py": "async def f() -> None: ...\ndef g() -> None:\n    await f()\n"
+  },
+  "green": {
+   "a.py": "async def f() -> None: ...\nasync def g() -> None:\n    await f()\n"
+  }
+ },
+ {
+  "code": "call-arg",
+  "red": {
+   "a.py": "def f(x: int) -> None: ...\nf()\n"
+  },
+  "green": {
+   "a.py": "def f(x: int) -> None: ...\nf(1)\n"
+  }
+ },
+ {
+  "code": "call-overload",
+  "red": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int | str) -> int | str:\n    return x\nf(1.5)\n"
+  },
+  "green": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int | str) -> int | str:\n    return x\nf(1)\n"
+  }
+ },
+ {
+  "code": "comparison-overlap",
+  "red": {
+   "a.py": "x: int = 1\nif x == \"a\":\n    pass\n"
+  },
+  "green": {
+   "a.py": "x: int = 1\nif x == 2:\n    pass\n"
+  }
+ },
+ {
+  "code": "deprecated",
+  "red": {
+   "a.py": "from warnings import deprecated\n@deprecated(\"no\")\ndef f() -> None: ...\nf()\n"
+  },
+  "green": {
+   "a.py": "from warnings import deprecated\n@deprecated(\"no\")\ndef f() -> None: ...\n"
+  }
+ },
+ {
+  "code": "dict-item",
+  "red": {
+   "a.py": "d: dict[str, int] = {1: 2}\n"
+  },
+  "green": {
+   "a.py": "d: dict[str, int] = {\"a\": 2}\n"
+  }
+ },
+ {
+  "code": "empty-body",
+  "red": {
+   "a.py": "def f() -> int: ...\n"
+  },
+  "green": {
+   "a.py": "def f() -> int:\n    return 1\n"
+  }
+ },
+ {
+  "code": "exhaustive-match",
+  "red": {
+   "a.py": "def f(x: int | str) -> None:\n    match x:\n        case int():\n            pass\n"
+  },
+  "green": {
+   "a.py": "def f(x: int | str) -> None:\n    match x:\n        case int():\n            pass\n        case str():\n            pass\n"
+  }
+ },
+ {
+  "code": "exit-return",
+  "red": {
+   "a.py": "class C:\n    def __enter__(self) -> \"C\":\n        return self\n    def __exit__(self, *a: object) -> bool:\n        return False\n"
+  },
+  "green": {
+   "a.py": "class C:\n    def __enter__(self) -> \"C\":\n        return self\n    def __exit__(self, *a: object) -> None:\n        return None\n"
+  }
+ },
+ {
+  "code": "explicit-any",
+  "red": {
+   "a.py": "from typing import Any\nx: Any = 1\n"
+  },
+  "green": {
+   "a.py": "x: int = 1\n"
+  }
+ },
+ {
+  "code": "explicit-override",
+  "red": {
+   "a.py": "class A:\n    def f(self) -> None: ...\nclass B(A):\n    def f(self) -> None: ...\n"
+  },
+  "green": {
+   "a.py": "from typing import override\nclass A:\n    def f(self) -> None: ...\nclass B(A):\n    @override\n    def f(self) -> None: ...\n"
+  }
+ },
+ {
+  "code": "func-returns-value",
+  "red": {
+   "a.py": "def f() -> None: ...\nx = f()\n"
+  },
+  "green": {
+   "a.py": "def f() -> None: ...\nf()\n"
+  }
+ },
+ {
+  "code": "ignore-without-code",
+  "red": {
+   "a.py": "x: int = \"a\"  # type: ignore\n"
+  },
+  "green": {
+   "a.py": "x: int = \"a\"  # type: ignore[assignment]\n"
+  }
+ },
+ {
+  "code": "import",
+  "red": {
+   "a.py": "import nosuchmod_zz\n"
+  },
+  "green": {
+   "a.py": "import os\n"
+  }
+ },
+ {
+  "code": "import-not-found",
+  "red": {
+   "a.py": "import nosuchmod_zz\n"
+  },
+  "green": {
+   "a.py": "import os\n"
+  }
+ },
+ {
+  "code": "import-untyped",
+  "red": {
+   "a.py": "import yaml\n"
+  },
+  "green": {
+   "a.py": "import os\n"
+  }
+ },
+ {
+  "code": "index",
+  "red": {
+   "a.py": "x: int = 1\nx[0]\n"
+  },
+  "green": {
+   "a.py": "x: list[int] = [1]\nx[0]\n"
+  }
+ },
+ {
+  "code": "list-item",
+  "red": {
+   "a.py": "x: list[int] = [\"a\"]\n"
+  },
+  "green": {
+   "a.py": "x: list[int] = [1]\n"
+  }
+ },
+ {
+  "code": "method-assign",
+  "red": {
+   "a.py": "class A:\n    def f(self) -> None: ...\nA().f = lambda: None\n"
+  },
+  "green": {
+   "a.py": "class A:\n    def f(self) -> None: ...\nA().f()\n"
+  }
+ },
+ {
+  "code": "misc",
+  "red": {
+   "a.py": "def f() -> int:\n    x: int = 1\n    yield x\n"
+  },
+  "green": {
+   "a.py": "def f() -> \"list[int]\":\n    return [1]\n"
+  }
+ },
+ {
+  "code": "mutable-override",
+  "red": {
+   "a.py": "class A:\n    x: int\nclass B(A):\n    x: bool\n"
+  },
+  "green": {
+   "a.py": "class A:\n    x: int\nclass B(A):\n    x: int\n"
+  }
+ },
+ {
+  "code": "name-defined",
+  "red": {
+   "a.py": "print(undefined_name)\n"
+  },
+  "green": {
+   "a.py": "print(1)\n"
+  }
+ },
+ {
+  "code": "name-match",
+  "red": {
+   "a.py": "from typing import NamedTuple\nB = NamedTuple(\"A\", [(\"x\", int)])\n"
+  },
+  "green": {
+   "a.py": "from typing import NamedTuple\nA = NamedTuple(\"A\", [(\"x\", int)])\n"
+  }
+ },
+ {
+  "code": "no-any-return",
+  "red": {
+   "a.py": "from typing import Any\ndef f(x: Any) -> int:\n    return x\n"
+  },
+  "green": {
+   "a.py": "from typing import Any\ndef f(x: Any) -> int:\n    return int(x)\n"
+  }
+ },
+ {
+  "code": "no-overload-impl",
+  "red": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\n"
+  },
+  "green": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int | str) -> int | str:\n    return x\n"
+  }
+ },
+ {
+  "code": "no-redef",
+  "red": {
+   "a.py": "def f() -> None: ...\ndef f() -> None: ...\n"
+  },
+  "green": {
+   "a.py": "def f() -> None: ...\n"
+  }
+ },
+ {
+  "code": "no-untyped-call",
+  "red": {
+   "a.py": "def g(): ...\ndef f() -> None:\n    g()\n"
+  },
+  "green": {
+   "a.py": "def g() -> None: ...\ndef f() -> None:\n    g()\n"
+  }
+ },
+ {
+  "code": "no-untyped-def",
+  "red": {
+   "a.py": "def f(x):\n    return x\n"
+  },
+  "green": {
+   "a.py": "def f(x: int) -> int:\n    return x\n"
+  }
+ },
+ {
+  "code": "operator",
+  "red": {
+   "a.py": "x = 1 + \"a\"\n"
+  },
+  "green": {
+   "a.py": "x = 1 + 2\n"
+  }
+ },
+ {
+  "code": "overload-cannot-match",
+  "red": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: object) -> int: ...\n@overload\ndef f(x: int) -> str: ...\ndef f(x: object) -> object:\n    return x\n"
+  },
+  "green": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int | str) -> int | str:\n    return x\n"
+  }
+ },
+ {
+  "code": "overload-overlap",
+  "red": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: object) -> str: ...\ndef f(x: object) -> object:\n    return x\n"
+  },
+  "green": {
+   "a.py": "from typing import overload\n@overload\ndef f(x: int) -> int: ...\n@overload\ndef f(x: str) -> str: ...\ndef f(x: int | str) -> int | str:\n    return x\n"
+  }
+ },
+ {
+  "code": "override",
+  "red": {
+   "a.py": "class A:\n    def f(self, x: int) -> None: ...\nclass B(A):\n    def f(self, x: str) -> None: ...\n"
+  },
+  "green": {
+   "a.py": "class A:\n    def f(self, x: int) -> None: ...\nclass B(A):\n    def f(self, x: int) -> None: ...\n"
+  }
+ },
+ {
+  "code": "possibly-undefined",
+  "red": {
+   "a.py": "def f(c: bool) -> int:\n    if c:\n        x = 1\n    return x\n"
+  },
+  "green": {
+   "a.py": "def f(c: bool) -> int:\n    x = 0\n    if c:\n        x = 1\n    return x\n"
+  }
+ },
+ {
+  "code": "redundant-cast",
+  "red": {
+   "a.py": "from typing import cast\nx = cast(int, 1)\n"
+  },
+  "green": {
+   "a.py": "from typing import cast\nx = cast(int, \"1\")\n"
+  }
+ },
+ {
+  "code": "redundant-expr",
+  "red": {
+   "a.py": "def f(x: int) -> None:\n    if x or True:\n        pass\n    y = [i for i in range(3) if isinstance(i, int)]\n"
+  },
+  "green": {
+   "a.py": "def f(x: int) -> None:\n    if x:\n        pass\n"
+  }
+ },
+ {
+  "code": "redundant-self",
+  "red": {
+   "a.py": "from typing import Self\nclass A:\n    def f(self: Self) -> None: ...\n"
+  },
+  "green": {
+   "a.py": "class A:\n    def f(self) -> None: ...\n"
+  }
+ },
+ {
+  "code": "return",
+  "red": {
+   "a.py": "def f(c: bool) -> int:\n    if c:\n        return 1\n"
+  },
+  "green": {
+   "a.py": "def f(c: bool) -> int:\n    if c:\n        return 1\n    return 0\n"
+  }
+ },
+ {
+  "code": "return-value",
+  "red": {
+   "a.py": "def f() -> str:\n    return 1\n"
+  },
+  "green": {
+   "a.py": "def f() -> str:\n    return \"a\"\n"
+  }
+ },
+ {
+  "code": "str-bytes-safe",
+  "red": {
+   "a.py": "x = b\"a\"\ny = f\"{x}\"\n"
+  },
+  "green": {
+   "a.py": "x = \"a\"\ny = f\"{x}\"\n"
+  }
+ },
+ {
+  "code": "str-format",
+  "red": {
+   "a.py": "x = \"{} {}\".format(1)\n"
+  },
+  "green": {
+   "a.py": "x = \"{} {}\".format(1, 2)\n"
+  }
+ },
+ {
+  "code": "truthy-bool",
+  "red": {
+   "a.py": "class A: ...\na = A()\nif a:\n    pass\n"
+  },
+  "green": {
+   "a.py": "class A: ...\na = A()\nif a is not None:\n    pass\n"
+  }
+ },
+ {
+  "code": "truthy-function",
+  "red": {
+   "a.py": "def f() -> None: ...\nif f:\n    pass\n"
+  },
+  "green": {
+   "a.py": "def f() -> None: ...\nif f():\n    pass\n"
+  }
+ },
+ {
+  "code": "truthy-iterable",
+  "red": {
+   "a.py": "from typing import Iterable\ndef f(x: Iterable[int]) -> None:\n    if x:\n        pass\n"
+  },
+  "green": {
+   "a.py": "from typing import Iterable\ndef f(x: Iterable[int]) -> None:\n    if list(x):\n        pass\n"
+  }
+ },
+ {
+  "code": "type-abstract",
+  "red": {
+   "a.py": "from abc import ABC, abstractmethod\nclass A(ABC):\n    @abstractmethod\n    def f(self) -> None: ...\ndef g(c: type[A]) -> None: ...\ng(A)\n"
+  },
+  "green": {
+   "a.py": "from abc import ABC, abstractmethod\nclass A(ABC):\n    @abstractmethod\n    def f(self) -> None: ...\nclass B(A):\n    def f(self) -> None: ...\ndef g(c: type[A]) -> None: ...\ng(B)\n"
+  }
+ },
+ {
+  "code": "type-arg",
+  "red": {
+   "a.py": "x: list = []\n"
+  },
+  "green": {
+   "a.py": "x: list[int] = []\n"
+  }
+ },
+ {
+  "code": "type-var",
+  "red": {
+   "a.py": "from typing import TypeVar\nT = TypeVar(\"T\", int, str)\ndef f(x: T) -> T:\n    return x\nf(1.5)\n"
+  },
+  "green": {
+   "a.py": "from typing import TypeVar\nT = TypeVar(\"T\", int, str)\ndef f(x: T) -> T:\n    return x\nf(1)\n"
+  }
+ },
+ {
+  "code": "typeddict-item",
+  "red": {
+   "a.py": "from typing import TypedDict\nclass D(TypedDict):\n    a: int\nd: D = {}\n"
+  },
+  "green": {
+   "a.py": "from typing import TypedDict\nclass D(TypedDict):\n    a: int\nd: D = {'a': 1}\n"
+  }
+ },
+ {
+  "code": "typeddict-unknown-key",
+  "red": {
+   "a.py": "from typing import TypedDict\nclass D(TypedDict):\n    a: int\nd: D = {'a': 1, 'b': 2}\n"
+  },
+  "green": {
+   "a.py": "from typing import TypedDict\nclass D(TypedDict):\n    a: int\nd: D = {'a': 1}\n"
+  }
+ },
+ {
+  "code": "unimported-reveal",
+  "red": {
+   "a.py": "reveal_type(1)\n"
+  },
+  "green": {
+   "a.py": "x = 1\n"
+  }
+ },
+ {
+  "code": "union-attr",
+  "red": {
+   "a.py": "def f(x: int | str) -> None:\n    x.upper()\n"
+  },
+  "green": {
+   "a.py": "def f(x: int | str) -> None:\n    if isinstance(x, str):\n        x.upper()\n"
+  }
+ },
+ {
+  "code": "unreachable",
+  "red": {
+   "a.py": "def f() -> int:\n    return 1\n    print(\"x\")\n"
+  },
+  "green": {
+   "a.py": "def f() -> int:\n    return 1\n"
+  }
+ },
+ {
+  "code": "untyped-decorator",
+  "red": {
+   "a.py": "def deco(f):\n    return f\n@deco\ndef g() -> None: ...\n"
+  },
+  "green": {
+   "a.py": "from typing import Callable\ndef deco(f: Callable[[], None]) -> Callable[[], None]:\n    return f\n@deco\ndef g() -> None: ...\n"
+  }
+ },
+ {
+  "code": "unused-awaitable",
+  "red": {
+   "a.py": "import asyncio\nasync def f() -> None: ...\nasync def g() -> None:\n    asyncio.create_task(f())\n"
+  },
+  "green": {
+   "a.py": "import asyncio\nasync def f() -> None: ...\nasync def g() -> None:\n    t = asyncio.create_task(f())\n    await t\n"
+  }
+ },
+ {
+  "code": "unused-coroutine",
+  "red": {
+   "a.py": "async def f() -> None: ...\nasync def g() -> None:\n    f()\n"
+  },
+  "green": {
+   "a.py": "async def f() -> None: ...\nasync def g() -> None:\n    await f()\n"
+  }
+ },
+ {
+  "code": "unused-ignore",
+  "red": {
+   "a.py": "x: int = 1  # type: ignore\n"
+  },
+  "green": {
+   "a.py": "x: int = 1\n"
+  }
+ },
+ {
+  "code": "used-before-def",
+  "red": {
+   "a.py": "def f() -> None:\n    print(y)\n    y = 1\n"
+  },
+  "green": {
+   "a.py": "def f() -> None:\n    y = 1\n    print(y)\n"
+  }
+ },
+ {
+  "code": "valid-type",
+  "red": {
+   "a.py": "x: 1 = 1\n"
+  },
+  "green": {
+   "a.py": "x: int = 1\n"
+  }
+ },
+ {
+  "code": "var-annotated",
+  "red": {
+   "a.py": "x = []\n"
+  },
+  "green": {
+   "a.py": "x: list[int] = []\n"
+  }
+ }
+]
