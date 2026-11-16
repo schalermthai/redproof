@@ -130,6 +130,23 @@ export async function decideVulture<R extends RuleRef>(input: {
   return evaluateRun(await input.runner.run(vultureArguments(input.plan, input.configFile)), input.plan, inspected, input.selected, input.displayPath);
 }
 
+/**
+ * A temp directory that could not be removed cannot make a real breach or refusal untrustworthy, but it can
+ * make a clean pass unreliable (the environment is failing), so only a clean pass becomes a REFUSE.
+ */
+export function finalOutcome<R extends RuleRef>(decision: VultureDecision<R>, cleanupError: string | undefined): VultureDecision<R> {
+  if (cleanupError === undefined || decision.kind !== 'evidence' || decision.breaches.length) return decision;
+  return refusal('vulture-cleanup-failed', 'Could not remove the temporary directory that held the empty vulture configuration.', cleanupError);
+}
+
+/** An error the shell caught. A failing environment is "unavailable"; a bug in this adapter is reported as one, not as the environment. */
+export function unexpectedFailure(error: unknown): VultureRefusal {
+  const bug = error instanceof TypeError || error instanceof RangeError || error instanceof ReferenceError || error instanceof SyntaxError;
+  return bug
+    ? refusal('vulture-internal-error', 'The vulture Adapter failed on its own error; this is a bug in the Adapter, not in the project.', String((error as Error).stack ?? error))
+    : refusal('vulture-unavailable', 'vulture could not complete the check.', String(error));
+}
+
 export function checkResult<R extends RuleRef>(decision: VultureDecision<R>, timestamps: Timestamps): CheckResult<R> {
   const scan = (inspected: number | null): Scan => ({ source: 'vulture', ...timestamps, inspected });
   if (decision.kind === 'refuse') {

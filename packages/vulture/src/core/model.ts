@@ -188,3 +188,11 @@ export function excludeMatcher(patterns: readonly string[], windows: boolean): (
     .map(pattern => new RegExp(fnmatchSource(fold(/[*?[]/u.test(pattern) ? pattern : `*${pattern}*`))));
   return path => regexes.some(regex => regex.test(fold(path)));
 }
+
+/**
+ * Whether a directory entry is one `Path.rglob('*.py')` yields: a name ending in `.py` that is a file, or a
+ * symbolic link that leads to a file. (A symbolic link to a directory is not entered; the shell never asks.)
+ */
+export function isPythonSourceEntry(name: string, kind: { readonly file: boolean; readonly symlinkToFile: boolean }): boolean {
+  return name.endsWith('.py') && (kind.file || kind.symlinkToFile);
+}

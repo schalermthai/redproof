@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRules } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
-import { checkVersion, decideVulture, displayPath, evaluateRun, vultureArguments, type VulturePlan } from '../src/core/decision.ts';
-import { VULTURE_KINDS, ruleDefinition, type VultureKind } from '../src/core/model.ts';
+import { checkVersion, decideVulture, displayPath, evaluateRun, finalOutcome, unexpectedFailure, vultureArguments, type VulturePlan } from '../src/core/decision.ts';
+import { VULTURE_KINDS, isPythonSourceEntry, ruleDefinition, type VultureKind } from '../src/core/model.ts';
 import { reports } from './support/reports.ts';
 
 const rules = defineRules(Object.fromEntries(VULTURE_KINDS.map(k => [k, ruleDefinition(k)])) as never) as Record<VultureKind, never>;
@@ -85,4 +85,45 @@ test('finding files are shown relative to the Gate root', () => {
   assert.equal(displayPath('/r', '/r/app', 'src/a.py'), 'app/src/a.py');
   assert.equal(displayPath('/r', '/r/app', '/r/app/x.py'), 'app/x.py');
   assert.equal(displayPath('/r', '/r/app', '/elsewhere/a.py'), '/elsewhere/a.py');
+});
+
+test('the verdict does not depend on the order of vulture\'s lines', () => {
+  const lines = reports.dirty.split('\n').filter(Boolean);
+  const shape = (text: string) => {
+    const decision = evaluateRun(done(3, text), plan, 1, everything as never, show);
+    assert.equal(decision.kind, 'evidence');
+    return decision.kind === 'evidence' ? decision.breaches.map(b => `${b.rule}@${b.location?.file}:${b.location?.line}`).sort() : [];
+  };
+  const expected = shape(reports.dirty);
+  assert.equal(expected.length, 17);
+  assert.deepEqual(shape([...lines].reverse().join('\n') + '\n'), expected);
+  const shuffled = lines.map((line, i) => [(i * 7) % lines.length, line] as const).sort((a, b) => a[0] - b[0]).map(entry => entry[1]);
+  assert.deepEqual(shape(shuffled.join('\n') + '\n'), expected);
+});
+
+test('which directory entries vulture reads: .py files and symlinks that lead to files, as Path.rglob finds them', () => {
+  assert.equal(isPythonSourceEntry('a.py', { file: true, symlinkToFile: false }), true);
+  assert.equal(isPythonSourceEntry('a.py', { file: false, symlinkToFile: true }), true);
+  assert.equal(isPythonSourceEntry('a.py', { file: false, symlinkToFile: false }), false, 'a broken or directory symlink');
+  assert.equal(isPythonSourceEntry('a.pyi', { file: true, symlinkToFile: false }), false);
+  assert.equal(isPythonSourceEntry('a.pyc', { file: true, symlinkToFile: false }), false);
+  assert.equal(isPythonSourceEntry('py', { file: true, symlinkToFile: false }), false);
+});
+
+test('a failed cleanup overrides only a clean pass', () => {
+  const clean = { kind: 'evidence', inspected: 1, breaches: [] } as const;
+  assert.equal(finalOutcome(clean, undefined), clean);
+  const refused = finalOutcome(clean, 'EACCES');
+  assert.equal(refused.kind === 'refuse' ? refused.code : '', 'vulture-cleanup-failed');
+  const failing = evaluateRun(done(3, reports.dirty), plan, 1, everything as never, show);
+  assert.equal(finalOutcome(failing, 'EACCES'), failing, 'a real breach stays a breach');
+  const refusal = evaluateRun(done(1, '', reports.syntaxError), plan, 1, everything as never, show);
+  assert.equal(finalOutcome(refusal, 'EACCES'), refusal, 'a refusal keeps its own reason');
+});
+
+test('a bug in the adapter is reported as one, a failing environment as unavailable', () => {
+  assert.equal(unexpectedFailure(new TypeError('x')).code, 'vulture-internal-error');
+  assert.equal(unexpectedFailure(new RangeError('x')).code, 'vulture-internal-error');
+  assert.equal(unexpectedFailure(Object.assign(new Error('EACCES'), { code: 'EACCES' })).code, 'vulture-unavailable');
+  assert.equal(unexpectedFailure('string').code, 'vulture-unavailable');
 });

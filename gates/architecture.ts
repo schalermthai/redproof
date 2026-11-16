@@ -96,6 +96,16 @@ export const proofs = defineProofs(gate, [
   ),
   proof.red(
     rules.coreNoEffectImports,
+    'keeps effect imports out of the vulture Adapter core',
+    mutate.appendText('packages/vulture/src/core/model.ts', "\nimport 'node:fs/promises';\n"),
+  ),
+  proof.red(
+    rules.coreNoAmbientInputs,
+    'keeps ambient process state out of the vulture Adapter core',
+    mutate.appendText('packages/vulture/src/core/model.ts', '\nvoid process.cwd();\n'),
+  ),
+  proof.red(
+    rules.coreNoEffectImports,
     'keeps effect imports out of an Adapter core',
     mutate.appendText('packages/testing/src/core/paths.ts', "\nimport 'node:fs/promises';\n"),
   ),

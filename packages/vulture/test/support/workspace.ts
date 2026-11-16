@@ -45,11 +45,16 @@ export async function fakeVulture(root: string, options: {
   stdout: string; stderr: string; exitCode: number; version?: string;
   /** `hang` never exits (timeout); `kill` SIGKILLs itself after printing, like an out-of-memory kill. */
   behaviour?: 'hang' | 'kill';
+  /** Leave an unreadable directory in the temp directory that holds the empty config, so removing it fails; its path goes to `temp-path.txt` in `root`. */
+  lockTemp?: boolean;
 }): Promise<string> {
   const file = join(root, 'fake-vulture.mjs');
   await writeFile(file, `#!/usr/bin/env node
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--version')) { process.stdout.write(${JSON.stringify((options.version ?? 'vulture 2.16') + '\n')}); process.exit(0); }
+${options.lockTemp ? `{ const temp = dirname(args[args.indexOf('--config') + 1]); writeFileSync(${JSON.stringify(join(root, 'temp-path.txt'))}, temp); mkdirSync(temp + '/locked'); writeFileSync(temp + '/locked/x', 'x'); chmodSync(temp + '/locked', 0); }` : ''}
 process.stdout.write(${JSON.stringify(options.stdout)});
 process.stderr.write(${JSON.stringify(options.stderr)});
 ${options.behaviour === 'hang' ? 'setInterval(() => {}, 1000);' : options.behaviour === 'kill' ? "process.kill(process.pid, 'SIGKILL');" : `process.exit(${options.exitCode});`}

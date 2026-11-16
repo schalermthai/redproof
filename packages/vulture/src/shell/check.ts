@@ -5,9 +5,9 @@ import type { Check, Rule, RuleRef } from 'redproof';
 import { counting } from 'redproof';
 import { executeCommand } from 'redproof/command';
 import {
-  checkResult, decideVulture, displayPath, refusal, withinRoot, type VultureDecision, type VultureRefusal,
+  checkResult, decideVulture, displayPath, finalOutcome, refusal, unexpectedFailure, withinRoot, type VultureDecision, type VultureRefusal,
 } from '../core/decision.ts';
-import { excludeMatcher, type VultureKind } from '../core/model.ts';
+import { excludeMatcher, isPythonSourceEntry, type VultureKind } from '../core/model.ts';
 import type { VultureOptions } from '../core/options.ts';
 
 /** The canonical path when it exists inside the Gate root; otherwise the reason to REFUSE. */
@@ -34,9 +34,10 @@ async function pythonFiles(directory: string): Promise<string[]> {
   for (const entry of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) found.push(...await pythonFiles(path));
-    else if (entry.name.endsWith('.py') && (entry.isFile() || (entry.isSymbolicLink() && (await stat(path).catch(() => undefined))?.isFile()))) {
-      found.push(path);
-    }
+    else if (isPythonSourceEntry(entry.name, {
+      file: entry.isFile(),
+      symlinkToFile: entry.isSymbolicLink() && ((await stat(path).catch(() => undefined))?.isFile() ?? false),
+    })) found.push(path);
   }
   return found;
 }
@@ -104,11 +105,15 @@ export function vultureCheck<R extends RuleRef>(
             configFile,
           });
         } catch (error) {
-          return refusal('vulture-unavailable', 'vulture could not complete the check.', String(error));
+          return unexpectedFailure(error);
         }
       })();
-      if (temp) await rm(temp, { recursive: true, force: true }).catch(() => undefined);
-      return checkResult(decision, { startedAt, finishedAt: new Date().toISOString() });
+      let cleanupError: string | undefined;
+      if (temp) {
+        try { await rm(temp, { recursive: true, force: true }); }
+        catch (error) { cleanupError = String(error); }
+      }
+      return checkResult(finalOutcome(decision, cleanupError), { startedAt, finishedAt: new Date().toISOString() });
     },
   };
 }

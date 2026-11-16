@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { chmod, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import test from 'node:test';
 import { defineGate, runGate } from 'redproof';
 import { vulture } from '../src/index.ts';
@@ -61,3 +63,27 @@ test('a real breach still FAILS and a clean exit 0 still PASSES through the stan
   assert.deepEqual(await verdicts({ stdout: FINDING, stderr: '', exitCode: 3 }), ['fail', ...VULTURE_KINDS.slice(1).map(() => 'pass')]);
   assert.deepEqual(await verdicts({ stdout: '', stderr: '', exitCode: 0 }), VULTURE_KINDS.map(() => 'pass'));
 });
+
+async function one(root: string, options: Record<string, unknown>): Promise<string> {
+  const verdict = await runGate(defineGate({ id: 'v', adapter: vulture({ rules: { r: 'unused-import' }, ...options } as never) as never }), root);
+  return verdict.verdict === 'refuse' ? `refuse:${verdict.why.code}` : verdict.verdict;
+}
+
+test('a temp directory that cannot be removed turns a clean PASS into a REFUSE, and leaves a FAIL or a REFUSE as it was', () => withProject(PROJECT, async root => {
+  const leftovers: string[] = [];
+  const outcome = async (run: Run): Promise<string> => {
+    const command = await fakeVulture(root, { ...run, lockTemp: true });
+    const result = await one(root, { command });
+    const temp = await readFile(join(root, 'temp-path.txt'), 'utf8');
+    await chmod(join(temp, 'locked'), 0o755);
+    leftovers.push(temp);
+    return result;
+  };
+  try {
+    assert.equal(await outcome({ stdout: '', stderr: '', exitCode: 0 }), 'refuse:vulture-cleanup-failed');
+    assert.equal(await outcome({ stdout: FINDING, stderr: '', exitCode: 3 }), 'fail');
+    assert.equal(await outcome({ stdout: '', stderr: SYNTAX, exitCode: 1 }), 'refuse:vulture-input-unread');
+  } finally {
+    for (const temp of leftovers) await rm(temp, { recursive: true, force: true });
+  }
+}));
