@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import { hiddenSources, interfacesAnchored, layersAssigned, nestedRepositories, symlinkedSources, type ConfigFacts, type SourceTree } from './config.ts';
+import { hiddenSources, interfacesAnchored, layersAssigned, nestedRepositories, overlappingRoots, symlinkedSources, unsafeExcludes, type ConfigFacts, type SourceTree } from './config.ts';
 import type { TachRuleKind } from './model.ts';
 
 export type GuardRefusal = { readonly code: string; readonly message: string; readonly detail: string };
@@ -7,8 +7,10 @@ export type GuardRefusal = { readonly code: string; readonly message: string; re
 export type GuardOptions = {
   /** Accept that a selected rule may have nothing configured to enforce. */
   readonly allowInactiveRules?: boolean | undefined;
-  /** Accept that tach may skip Python files under a source root: an `exclude`, an ignore file, a nested repository, a symbolic link. */
+  /** Accept that tach may skip Python files under a source root: an ignore file, a nested repository, a symbolic link. */
   readonly allowIgnoredSources?: boolean | undefined;
+  /** Accept an `exclude` that is more than environment and cache directories. */
+  readonly allowExcludedSources?: boolean | undefined;
 };
 
 const list = (items: readonly string[]): string => `${items.slice(0, 5).join(', ')}${items.length > 5 ? `, and ${items.length - 5} more` : ''}`;
@@ -76,12 +78,13 @@ export function needsIgnoredListing(options: GuardOptions): boolean {
 }
 
 export function sourcesRefusal(ignored: IgnoredFiles, tree: SourceTree, facts: ConfigFacts, options: GuardOptions): GuardRefusal | undefined {
-  if (!needsIgnoredListing(options)) return undefined;
-  // The adapter does not model tach's glob syntax, so any exclude may remove code from the walk.
-  if (facts.exclude.length) {
-    return { code: 'tach-ignored-sources', message: '`exclude` removes paths from tach\'s walk, and the adapter does not interpret tach\'s glob syntax, so it cannot say whether code a module owns is among them.',
-      detail: `${list(facts.exclude.map(pattern => JSON.stringify(pattern)))}\nRemove the exclude, or set allowIgnoredSources to accept that tach may skip those paths.` };
+  // The adapter does not interpret tach's glob syntax, so an exclude entry that is not a plain environment or cache directory may remove code.
+  const unsafe = unsafeExcludes(facts);
+  if (unsafe.length && !options.allowExcludedSources) {
+    return { code: 'tach-ignored-sources', message: '`exclude` may remove first-party code from tach\'s walk, and the adapter does not interpret tach\'s glob syntax. `tach init` writes an exclude for tests and docs, so an initialised project lands here.',
+      detail: `${list(unsafe.map(pattern => JSON.stringify(pattern)))}\nRemove those entries, or set allowExcludedSources to accept that tach skips those paths. Plain environment and cache entries (.venv, venv, node_modules, __pycache__, .git, .tox, build, dist, egg-info) are not refused.` };
   }
+  if (!needsIgnoredListing(options)) return undefined;
   // git does not show the ignore files of a repository nested in this one.
   const nested = nestedRepositories(tree, facts);
   if (nested.length) {
@@ -111,5 +114,14 @@ export function symlinkRefusal(tree: SourceTree, facts: ConfigFacts, options: Gu
   return links.length
     ? { code: 'tach-symlinked-sources', message: 'A symbolic link under a source root is not followed by tach, so the code behind it is never checked.',
       detail: `${list(links)}\nReplace the link with the real directory or file, exclude it knowingly, or set allowIgnoredSources.` }
+    : undefined;
+}
+
+/** Source roots tach would walk twice, or that cannot be told apart: its result is then random, so there is no opt-out. */
+export function overlapRefusal(facts: ConfigFacts): GuardRefusal | undefined {
+  const overlap = overlappingRoots(facts);
+  return overlap.length
+    ? { code: 'tach-overlapping-source-roots', message: 'Overlapping source roots make tach drop findings at random, so the same project can PASS on one run and FAIL on the next.',
+      detail: `${list(overlap)}\nUse source roots that do not contain each other, with no glob beside another root.` }
     : undefined;
 }

@@ -19,7 +19,7 @@ const undeclared = located('UndeclaredDependency', { dependency: 'b.x', usage_mo
 const check = (exec: Parameters<typeof evaluateCheck>[0], selected = only('undeclared-dependency')): TachDecision<string> =>
   evaluateCheck(exec, selected, f => f);
 const READY = readConfig('forbid_circular_dependencies = true\n');
-const inputs = { facts: READY, tree: { python: [], symlinks: [], nestedRepos: [], ignoreFiles: [] }, ignored: [] as readonly string[], options: { allowInactiveRules: true } };
+const inputs = { facts: READY, tree: { python: [], symlinks: [], nestedRepos: [], domainFiles: [], environments: [], ignoreFiles: [] }, ignored: [] as readonly string[], options: { allowInactiveRules: true } };
 const codeOf = (d: { kind: string; code?: string }) => d.kind === 'refuse' ? d.code : d.kind;
 
 // The verdict table needs values, not processes.

@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  ConfigError, hiddenSources, interfacesAnchored, layersAssigned, mergeDomain, nestedRepositories, normalRoot, symlinkedSources,
+  ConfigError, hiddenSources, interfacesAnchored, layersAssigned, mergeDomain, nestedRepositories, normalRoot, overlappingRoots, symlinkedSources, unsafeExcludes,
   type SourceTree,
 } from '../src/core/config.ts';
-import { configRefusal, escapingRoots, sourcesRefusal, symlinkRefusal } from '../src/core/guards.ts';
+import { configRefusal, escapingRoots, overlapRefusal, sourcesRefusal, symlinkRefusal } from '../src/core/guards.ts';
 import type { TachRuleKind } from '../src/core/model.ts';
 import { facts as readConfig } from './support/toml.ts';
 
-const EMPTY: SourceTree = { python: [], symlinks: [], nestedRepos: [], ignoreFiles: [] };
+const EMPTY: SourceTree = { python: [], symlinks: [], nestedRepos: [], domainFiles: [], environments: [], ignoreFiles: [] };
 const tree = (python: readonly string[], more: Partial<SourceTree> = {}): SourceTree => ({ ...EMPTY, python, ...more });
 
 const MODULES = '[[modules]]\npath = "a"\ndepends_on = ["b"]\n[[modules]]\npath = "b"\ndepends_on = []\n';
@@ -149,16 +149,39 @@ test('a tach.domain.toml [root] is a module with the same keys, named by the fil
   assert.deepEqual(readConfig('[root]\nunchecked = true\n').modules, [], 'a [root] table means nothing in tach.toml itself');
 });
 
-test('exclude is kept as written and never interpreted: any entry refuses, none does not', () => {
+test('exclude is kept as written and never interpreted: environment and cache names pass, anything else refuses', () => {
   const found = tree(['src/a/x.py']);
   assert.deepEqual(readConfig('').exclude, [], 'tach 0.35 has no default list');
   assert.equal(sourcesRefusal([], found, readConfig('source_roots = ["src"]\n'), {}), undefined);
-  for (const pattern of ['src/a', '**/{a,b}', 'zzz', '[!x]*']) {
+  for (const pattern of ['src/a', '**/{a,b}', 'zzz', '[!x]*', '**/tests', '**/docs', 'venv ', 'build/x', '**/venv/../a']) {
     const refusal = sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), {});
     assert.equal(refusal?.code, 'tach-ignored-sources', pattern);
-    assert.match(refusal?.detail ?? '', /exclude/u);
-    assert.equal(sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), { allowIgnoredSources: true }), undefined, 'the opt-in');
+    assert.match(refusal?.detail ?? '', /allowExcludedSources/u);
+    assert.equal(sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), { allowExcludedSources: true }), undefined, 'the exclude hatch');
+    assert.equal(sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), { allowIgnoredSources: true })?.code, 'tach-ignored-sources', 'the ignore hatch does not cover it');
   }
+  for (const pattern of ['venv', '**/venv', '**/*__pycache__', '**/*egg-info', '.venv', 'node_modules/', '/build', 'dist', '**/.tox', '.git', '**/build/**']) {
+    assert.equal(sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), {}), undefined, pattern);
+  }
+  assert.equal(unsafeExcludes(readConfig('exclude = ["**/venv"]\n[[modules]]\npath = "app.venv"\n')).length, 1, 'an entry that names a module is not an environment');
+});
+
+test('source roots: a glob covers the whole tree; roots that contain each other, or a glob beside another root, overlap', () => {
+  const globbed = readConfig('source_roots = ["s*"]\n');
+  assert.deepEqual(hiddenSources(['a/x.py'], tree(['a/x.py']), globbed), ['a/x.py']);
+  assert.deepEqual(symlinkedSources(tree([], { symlinks: ['q/l'] }), globbed), ['q/l']);
+  const overlap = (roots: string): number => overlappingRoots(readConfig(`source_roots = ${roots}\n`)).length;
+  for (const roots of ['[".", "src"]', '["src", "src/a"]', '["src", "./src/"]', '["s*", "src"]', '["src/**"]', '["{a,b}"]', '["src", "src"]']) assert.ok(overlap(roots) > 0, roots);
+  for (const roots of ['["src"]', '["src", "lib"]', '["src/a", "src/b"]', '["s*"]', '["a?"]', '["src", "srcs"]']) assert.equal(overlap(roots), 0, roots);
+  assert.equal(overlapRefusal(readConfig('source_roots = ["src", "src/a"]\n'))?.code, 'tach-overlapping-source-roots');
+  assert.equal(overlapRefusal(readConfig('source_roots = ["src"]\n')), undefined);
+});
+
+test('environments and domain files: a venv-named directory with pyvenv.cfg is not hidden code; a domain file counts as a source', () => {
+  const facts = readConfig('source_roots = ["src"]\n');
+  const found = { ...EMPTY, python: ['src/venv/bin/a.py', 'src/legacy/b.py'], symlinks: ['src/venv/lib64'], environments: ['src/venv'], domainFiles: ['src/a/tach.domain.toml'] };
+  assert.deepEqual(hiddenSources(['src/venv/bin/a.py', 'src/legacy/b.py', 'src/a/tach.domain.toml'], found, facts), ['src/legacy/b.py', 'src/a/tach.domain.toml']);
+  assert.deepEqual(symlinkedSources(found, facts), []);
 });
 
 test('nested repositories refuse as unknown when inside a source root (or above it), unless accepted or tach switches nothing off', () => {

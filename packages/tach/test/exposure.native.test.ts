@@ -35,13 +35,13 @@ const FAIL = ['fail', 'UndeclaredDependency@src/a/legacy/impl.py'];
 const SOURCES = ['refuse', 'tach-ignored-sources'];
 const UNKNOWN = ['refuse', 'tach-ignored-sources-unknown'];
 
-t('B1: ANY exclude refuses, whatever its glob syntax, because the adapter does not model tach\'s globs; no exclude, FAIL', async () => {
+t('B1: any exclude beyond plain environment and cache names refuses, whatever its glob syntax, because the adapter does not model tach\'s globs; no exclude, FAIL', async () => {
   const patterns = ['src/a/legacy', '**/impl.py', 'src/a/{legacy,zzz}', 'src/{a,b}/legacy', 'src/a/legacy/{impl,zz}.py', 'src/a/leg{a,b}cy',
     '**/{legacy,zz}/**', 'src/a/[!x]egacy', 'src/a/[^x]egacy', 'src/a/leg\\acy', 'src/a/legacy ', 'src/a/legacy/impl.py\n', 'zzz-matches-nothing'];
   for (const [index, pattern] of patterns.entries()) {
     await withFiles({ ...LEGACY, 'tach.toml': `exclude = [${JSON.stringify(pattern)}]\n${TOML}` }, async root => {
       assert.deepEqual(await verdict(root, RULE), SOURCES, JSON.stringify(pattern));
-      if (index === 0) assert.notEqual((await verdict(root, RULE, { allowIgnoredSources: true }))[0], 'refuse', 'accepted knowingly');
+      if (index === 0) assert.notEqual((await verdict(root, RULE, { allowExcludedSources: true }))[0], 'refuse', 'accepted knowingly');
     });
   }
   await withFiles(LEGACY, async root => assert.deepEqual(await verdict(root, RULE), FAIL));

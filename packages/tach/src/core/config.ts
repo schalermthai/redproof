@@ -137,6 +137,10 @@ export type SourceTree = {
   readonly python: readonly string[];
   /** Directories below the project that hold their own `.git`: a nested repository's ignore files are invisible to the outer git. */
   readonly nestedRepos: readonly string[];
+  /** `tach.domain.toml` files tach reads: inside a source root. */
+  readonly domainFiles: readonly string[];
+  /** Directories that are virtual environments by name (`venv`, `env`, `virtualenv`) and by marker (`pyvenv.cfg`). Not first-party code. */
+  readonly environments: readonly string[];
   /** Symbolic links to a directory or to a `.py` file: tach does not follow them. */
   readonly symlinks: readonly string[];
   /** `.ignore` files in the project, and in every directory above it. tach reads them like a `.gitignore`. */
@@ -149,21 +153,69 @@ export function normalRoot(root: string): string {
   return clean === '.' || clean === '' ? '' : clean;
 }
 
-const inRoots = (file: string, facts: ConfigFacts): boolean =>
-  facts.sourceRoots.map(normalRoot).some(root => root === '' || file === root || file.startsWith(`${root}/`));
+/** tach resolves a source root containing these as a glob over directories, which this adapter does not expand. */
+export const isGlobRoot = (root: string): boolean => /[*?[\]{}]/u.test(root);
 
-/** Python files in a source root, from the walk. */
-const inSourceRoots = (tree: SourceTree, facts: ConfigFacts): readonly string[] => tree.python.filter(file => inRoots(file, facts));
+/** A glob root may name any directory, so the whole tree counts as inside it. */
+export const inRoots = (file: string, facts: ConfigFacts): boolean =>
+  facts.sourceRoots.some(isGlobRoot) || facts.sourceRoots.map(normalRoot).some(root => root === '' || file === root || file.startsWith(`${root}/`));
 
-/** The ignored `.py` files that would hide first-party code from tach: those the walk found inside a source root. */
-export function hiddenSources(ignored: readonly string[], tree: SourceTree, facts: ConfigFacts): readonly string[] {
-  const listed = new Set(ignored);
-  return inSourceRoots(tree, facts).filter(file => listed.has(file));
+/**
+ * Source roots that tach would walk twice (one inside or equal to another), or that the adapter cannot prove disjoint
+ * (a glob beside another root, or a glob that can match nested directories). tach walks roots in parallel and drops
+ * findings from such a project at random, so there is nothing to give a verdict on.
+ */
+export function overlappingRoots(facts: ConfigFacts): readonly string[] {
+  const roots = facts.sourceRoots;
+  const found: string[] = [];
+  const open = roots.filter(root => /\*\*|\{/u.test(root));
+  if (open.length) found.push(`${open.join(', ')} (a glob that can match nested directories)`);
+  if (roots.length > 1 && roots.some(isGlobRoot)) found.push(`${roots.join(', ')} (a glob root beside another root)`);
+  const literal = roots.filter(root => !isGlobRoot(root)).map(normalRoot);
+  for (const [i, a] of literal.entries()) {
+    for (const [j, b] of literal.entries()) {
+      if (i < j && (a === b || a === '' || b === '' || a.startsWith(`${b}/`) || b.startsWith(`${a}/`))) found.push(`${a || '.'} and ${b || '.'}`);
+    }
+  }
+  return found;
 }
 
-/** Symbolic links tach does not follow, inside a source root. */
+const underAny = (file: string, directories: readonly string[]): boolean => directories.some(dir => file === dir || file.startsWith(`${dir}/`));
+
+/** Python and domain files in a source root, from the walk. */
+const inSourceRoots = (tree: SourceTree, facts: ConfigFacts): readonly string[] =>
+  [...tree.python, ...tree.domainFiles].filter(file => inRoots(file, facts));
+
+/** The ignored files that would hide first-party code or configuration from tach: those the walk found inside a source root, outside environments. */
+export function hiddenSources(ignored: readonly string[], tree: SourceTree, facts: ConfigFacts): readonly string[] {
+  const listed = new Set(ignored);
+  return inSourceRoots(tree, facts).filter(file => listed.has(file) && !underAny(file, tree.environments));
+}
+
+/** Symbolic links tach does not follow, inside a source root and outside environments (a venv holds `lib64 -> lib`). */
 export function symlinkedSources(tree: SourceTree, facts: ConfigFacts): readonly string[] {
-  return tree.symlinks.filter(link => inRoots(link, facts));
+  return tree.symlinks.filter(link => inRoots(link, facts) && !underAny(link, tree.environments));
+}
+
+const SAFE_NAMES = ['venv', '.venv', 'node_modules', '__pycache__', '.git', '.tox', 'build', 'dist'] as const;
+/** The spellings that name one directory and nothing else; compared as whole strings, never interpreted as a glob. */
+const SAFE_EXCLUDES: ReadonlySet<string> = new Set([
+  ...SAFE_NAMES.flatMap(name => [name, `${name}/`, `/${name}`, `/${name}/`, `**/${name}`, `**/${name}/`, `**/${name}/**`, `${name}/**`, `/${name}/**`]),
+  '**/*__pycache__', '**/*egg-info', '**/*.egg-info', '*egg-info', '*.egg-info',
+]);
+
+/**
+ * The `exclude` entries that are not a plain spelling of an environment or cache directory (`.venv`, `venv`,
+ * `node_modules`, `__pycache__`, `.git`, `.tox`, `build`, `dist`, egg-info). Those may remove first-party code, and
+ * the adapter does not interpret tach's globs to find out. An entry for such a name is also unsafe when a module
+ * path contains that name: then it removes a module.
+ */
+export function unsafeExcludes(facts: ConfigFacts): readonly string[] {
+  const segments = new Set(facts.modules.flatMap(module => module.paths.flatMap(path => path.split(/[./:]/u))));
+  return facts.exclude.filter(entry => {
+    if (!SAFE_EXCLUDES.has(entry)) return true;
+    return [...segments].some(segment => segment !== '' && entry.includes(segment) && SAFE_NAMES.includes(segment as never));
+  });
 }
 
 /** Nested repositories inside a source root. */

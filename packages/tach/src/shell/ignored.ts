@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { executeCommand } from 'redproof/command';
 import { parse } from 'smol-toml';
-import { ConfigError, mergeDomain, readConfig, type ConfigFacts, type SourceTree } from '../core/config.ts';
+import { ConfigError, inRoots, mergeDomain, readConfig, type ConfigFacts, type SourceTree } from '../core/config.ts';
 import type { IgnoredFiles } from '../core/guards.ts';
 
 export class DomainConfigError extends Error {
@@ -25,6 +25,9 @@ function parseConfig(text: string, kind: 'project' | 'domain' = 'project'): Conf
  * Directories tach's own walker never reads: hidden ones, and only those. node_modules, __pycache__, site-packages
  * and directories holding pyvenv.cfg are read by tach, so they are walked here too.
  */
+/** A directory with one of these names and a `pyvenv.cfg` is a virtual environment, not first-party code. */
+const ENVIRONMENT_NAMES: ReadonlySet<string> = new Set(['venv', 'env', 'virtualenv']);
+
 const NOT_WALKED = /^\./u;
 
 /**
@@ -38,6 +41,8 @@ export async function readProject(cwd: string, configText: string): Promise<{ re
   const python: string[] = [];
   const symlinks: string[] = [];
   const nestedRepos: string[] = [];
+  const domainFiles: string[] = [];
+  const environments: string[] = [];
   const ignoreFiles: string[] = [];
   const walk = async (dir: string, path: string): Promise<void> => {
     let entries;
@@ -46,6 +51,7 @@ export async function readProject(cwd: string, configText: string): Promise<{ re
     } catch (error) {
       throw new DomainConfigError(`A directory under the project could not be read, so what tach reads there is unknown: ${path || '.'}`, error);
     }
+    if (path && ENVIRONMENT_NAMES.has(path.split('/').pop()!) && entries.some(entry => entry.name === 'pyvenv.cfg' && entry.isFile())) environments.push(path);
     for (const entry of entries) {
       const child = path ? `${path}/${entry.name}` : entry.name;
       const full = join(dir, entry.name);
@@ -58,6 +64,9 @@ export async function readProject(cwd: string, configText: string): Promise<{ re
       } else if (entry.isFile()) {
         if (entry.name === '.ignore') ignoreFiles.push(child);
         else if (entry.name === 'tach.domain.toml') {
+          // tach reads domain files inside its source roots only; a file elsewhere configures nothing.
+          if (!inRoots(child, facts)) continue;
+          domainFiles.push(child);
           try {
             facts = mergeDomain(facts, parseConfig(await readFile(full, 'utf8'), 'domain'), path || '.');
           } catch (error) {
@@ -74,14 +83,24 @@ export async function readProject(cwd: string, configText: string): Promise<{ re
     if (await stat(file).then(s => s.isFile(), () => false)) ignoreFiles.push(relative(cwd, file).replaceAll('\\', '/'));
     if (dirname(dir) === dir) break;
   }
-  return { facts, tree: { python, symlinks, nestedRepos, ignoreFiles } };
+  return { facts, tree: { python, symlinks, nestedRepos, domainFiles, environments, ignoreFiles } };
 }
 
 /** tach never reads hidden directories, so a hidden path is not a hidden source. */
 const HIDDEN_DIRECTORIES = [':(exclude,glob)**/.*/**'];
 
+/**
+ * The environment git runs in. tach reads the repository and the user's git configuration from disk, not from the
+ * environment, so variables that point git somewhere else (another repository, no global config) would make its answer
+ * differ from tach's. They are removed for the subprocess.
+ */
+function gitEnvironment(): Readonly<Record<string, string | undefined>> {
+  const steering = /^(?:GIT_DIR|GIT_WORK_TREE|GIT_INDEX_FILE|GIT_COMMON_DIR|GIT_OBJECT_DIRECTORY|GIT_NAMESPACE|GIT_CEILING_DIRECTORIES|GIT_DISCOVERY_ACROSS_FILESYSTEM|GIT_CONFIG(?:_GLOBAL|_SYSTEM|_NOSYSTEM|_COUNT|_PARAMETERS|_KEY_\d+|_VALUE_\d+)?|GIT_EXCLUDE_FILE)$/u;
+  return { ...Object.fromEntries(Object.keys(process.env).filter(key => steering.test(key)).map(key => [key, undefined])), GIT_OPTIONAL_LOCKS: '0' };
+}
+
 const git = (cwd: string, args: readonly string[], limit: number) =>
-  executeCommand({ command: 'git', args, cwd, label: 'git', timeoutMs: 30_000, maxOutputBytes: limit, env: { GIT_OPTIONAL_LOCKS: '0' } });
+  executeCommand({ command: 'git', args, cwd, label: 'git', timeoutMs: 30_000, maxOutputBytes: limit, env: gitEnvironment() });
 
 /**
  * With `respect_gitignore = false` tach switches off `.gitignore` and `.ignore` but still reads the repository's own
@@ -101,7 +120,7 @@ async function hiddenByRepository(cwd: string, limit: number): Promise<IgnoredFi
   const exclude = await git(cwd, ['rev-parse', '--git-path', 'info/exclude'], limit);
   if (top.kind === 'refused' || top.exitCode !== 0 || exclude.kind === 'refused' || exclude.exitCode !== 0) return undefined;
   const root = top.stdout.trim();
-  const listed = await git(root, ['ls-files', '--cached', '--others', '--ignored', `--exclude-from=${resolve(cwd, exclude.stdout.trim())}`, '-z', '--', '*.py', ...HIDDEN_DIRECTORIES], limit);
+  const listed = await git(root, ['ls-files', '--cached', '--others', '--ignored', `--exclude-from=${resolve(cwd, exclude.stdout.trim())}`, '-z', '--', '*.py', '*tach.domain.toml', ...HIDDEN_DIRECTORIES], limit);
   if (listed.kind === 'refused' || listed.exitCode !== 0) return undefined;
   return listed.stdout.split('\0').filter(Boolean).map(file => relative(cwd, resolve(root, file))).filter(file => !file.startsWith('..'));
 }
@@ -115,7 +134,7 @@ async function hiddenByRepository(cwd: string, limit: number): Promise<IgnoredFi
 export async function ignoredPython(cwd: string, limit: number, respect: ConfigFacts['respectGitignore']): Promise<IgnoredFiles> {
   if (respect === 'false') return hiddenByRepository(cwd, limit);
   // Tracked files count: a file committed before its .gitignore rule is still skipped by tach, which never reads the index.
-  const listing = ['ls-files', '--cached', '--others', '--ignored', '--exclude-standard', '-z', '--', '*.py', ...HIDDEN_DIRECTORIES];
+  const listing = ['ls-files', '--cached', '--others', '--ignored', '--exclude-standard', '-z', '--', '*.py', '*tach.domain.toml', ...HIDDEN_DIRECTORIES];
   const top = await git(cwd, ['rev-parse', '--show-toplevel'], limit);
   if (top.kind === 'refused') return undefined;
   if (top.exitCode === 0) {

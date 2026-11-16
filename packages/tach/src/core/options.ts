@@ -13,8 +13,10 @@ export type TachOptions<M extends Selection = Selection> = {
   readonly command?: string;
   /** Accept a selected rule that has nothing configured to enforce (see the README). */
   readonly allowInactiveRules?: boolean;
-  /** Accept Python files under a source root that tach will not read: hidden by an ignore file, or reached only through a symbolic link. */
+  /** Accept that tach may skip Python files under a source root: an ignore file, a nested repository, a symbolic link. */
   readonly allowIgnoredSources?: boolean;
+  /** Accept an `exclude` that is more than environment and cache directories (see the README). */
+  readonly allowExcludedSources?: boolean;
   /** Run a tach newer than the newest verified minor. */
   readonly allowUnverifiedVersion?: boolean;
   readonly timeoutMs?: number;
@@ -29,7 +31,7 @@ function validatePath(name: string, value: string | undefined): void {
 }
 
 export function validateTachOptions(options: TachOptions): void {
-  rejectUnknownKeys(options, ['rules', 'cwd', 'command', 'allowInactiveRules', 'allowIgnoredSources', 'allowUnverifiedVersion', 'timeoutMs', 'maxOutputBytes'], 'tach adapter');
+  rejectUnknownKeys(options, ['rules', 'cwd', 'command', 'allowInactiveRules', 'allowIgnoredSources', 'allowExcludedSources', 'allowUnverifiedVersion', 'timeoutMs', 'maxOutputBytes'], 'tach adapter');
   const entries = Object.entries(options.rules ?? {});
   if (!entries.length) throw new Error('tach requires at least one Redproof rule.');
   for (const [alias, kind] of entries) {
@@ -45,7 +47,7 @@ export function validateTachOptions(options: TachOptions): void {
   if (options.command !== undefined && (typeof options.command !== 'string' || !options.command.trim())) {
     throw new Error('tach command must not be empty.');
   }
-  for (const name of ['allowInactiveRules', 'allowIgnoredSources', 'allowUnverifiedVersion'] as const) {
+  for (const name of ['allowInactiveRules', 'allowIgnoredSources', 'allowExcludedSources', 'allowUnverifiedVersion'] as const) {
     if (options[name] !== undefined && typeof options[name] !== 'boolean') throw new Error(`tach ${name} must be boolean.`);
   }
   for (const name of ['timeoutMs', 'maxOutputBytes'] as const) {

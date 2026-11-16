@@ -154,7 +154,7 @@ t('B6: a symlink outside the source roots, or a dot-directory, is not tach input
 }));
 
 t('a directory holding pyvenv.cfg is not special to tach: ignored .py files and symlinks inside it refuse like any others', () => withFiles({
-  ...BASE, 'src/env/pyvenv.cfg': 'home = /x\n', 'src/env/bin/activate_this.py': 'x = 1\n', '.gitignore': 'env/\n', 'real/z.py': 'z = 1\n',
+  ...BASE, 'src/legacy/pyvenv.cfg': 'home = /x\n', 'src/legacy/bin/activate_this.py': 'x = 1\n', '.gitignore': 'legacy/\n', 'real/z.py': 'z = 1\n',
 }, async root => {
   git(root, 'init', '-q');
   assert.deepEqual(await verdict(root, RULE), SOURCES);
@@ -168,12 +168,12 @@ t('I1: depends_on = ["**"] lets a module import anything, like a module with no 
   }
 });
 
-t('I2 (superseded by round 3): any exclude refuses, because the adapter does not interpret tach\'s globs; allowIgnoredSources accepts it', async () => {
+t('I2 (superseded by round 3): any exclude refuses, because the adapter does not interpret tach\'s globs; allowExcludedSources accepts it', async () => {
   const files = { ...BASE, 'src/a/__init__.py': 'x = 1\n', 'src/a/impl.py': 'from b import thing\n' };
   for (const pattern of ['src/a/legacy', '**/impl.py', 'tests']) {
     await withFiles({ ...files, 'tach.toml': `exclude = [${JSON.stringify(pattern)}]\n${TOML}` }, async root => {
       assert.deepEqual(await verdict(root, RULE), SOURCES, pattern);
-      assert.deepEqual(await verdict(root, RULE, { allowIgnoredSources: true }), pattern === '**/impl.py' ? ['pass'] : ['fail', 'UndeclaredDependency@src/a/impl.py'], `${pattern}: accepted knowingly`);
+      assert.deepEqual(await verdict(root, RULE, { allowExcludedSources: true }), pattern === '**/impl.py' ? ['pass'] : ['fail', 'UndeclaredDependency@src/a/impl.py'], `${pattern}: accepted knowingly`);
     });
   }
 });
