@@ -1,0 +1,6 @@
+Failed to parse project config: TOML parse error at line 1, column 10
+  |
+1 | [[modules
+  |          ^
+unclosed array table, expected `]]`
+

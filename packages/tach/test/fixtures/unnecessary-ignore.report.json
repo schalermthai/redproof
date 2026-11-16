@@ -1,0 +1,15 @@
+[
+  {
+    "Located": {
+      "file_path": "src/a/__init__.py",
+      "line_number": 1,
+      "original_line_number": null,
+      "severity": "Warning",
+      "details": {
+        "Code": {
+          "UnusedIgnoreDirective": []
+        }
+      }
+    }
+  }
+]

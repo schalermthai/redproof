@@ -1,0 +1,24 @@
+[
+  {
+    "Global": {
+      "severity": "Warning",
+      "details": {
+        "Configuration": {
+          "ModuleNotFound": {
+            "file_mod_path": "a"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Global": {
+      "severity": "Warning",
+      "details": {
+        "Configuration": {
+          "NoFirstPartyImportsFound": []
+        }
+      }
+    }
+  }
+]
