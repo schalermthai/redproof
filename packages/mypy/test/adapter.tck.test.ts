@@ -19,7 +19,8 @@ const checked = (name: string): Promise<EvidenceObservation> => withFiles({ 'a.p
 
 /** A tree that breaks only an unselected rule: real mypy reports an arg-type error, which this Gate did not ask about. */
 const unselected = (): Promise<EvidenceObservation> => withFiles({ 'a.py': 'def f(x: int) -> None: ...\nf("s")\n' }, async root => {
-  const subject = mypy({ rules, python: hasMypy ? python : '/nonexistent/python', pythonVersion: '3.13', platform: 'linux', isolated: true });
+  if (!hasMypy) return checked('unselected');
+  const subject = mypy({ rules, python, pythonVersion: '3.13', platform: 'linux', isolated: true });
   return { kind: 'checked', result: await subject.check.run({ root, rules: ['mypy/assignment'] }) };
 });
 
