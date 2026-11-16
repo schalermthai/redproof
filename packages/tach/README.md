@@ -51,6 +51,16 @@ A run that did not finish, or whose output cannot be trusted, REFUSES: missing/o
 
 A project whose modules import nothing of each other has nothing for tach to inspect (it warns `NoFirstPartyImportsFound`), so it REFUSES rather than passes. That is deliberate: the report would be empty whether the boundaries hold or not.
 
+**Which outcome wins.** Every step before the last can only end in REFUSE, so an ambiguous run never passes. First match wins:
+
+1. Path outside the Gate root, no `tach.toml` in the working directory, a directory or `tach.domain.toml` that could not be read (`tach-domain-config-unreadable`), or a thrown error.
+2. `tach --version`: command refused, not tach, too old, or newer than the verified minor.
+3. Configuration guards: source root outside the Gate root, cycle check off, an inactive selected rule, ignored sources.
+4. `tach check`: command refused or timed out, exit code other than 0 or 1, report not JSON, an `{"error": ...}` object, exit code and report disagreeing, a structural stop, any configuration diagnostic, an unknown diagnostic variant.
+5. Only then Breaches (FAIL) or none (PASS).
+
+So REFUSE beats FAIL: a real violation printed beside a skipped file or an unknown diagnostic REFUSES, because a partial view must not fail (or pass) a Gate on its own. Distributed `tach.domain.toml` files are looked for in every directory below the working directory, to any depth, except hidden directories, `node_modules`, `venv`, `__pycache__` and `site-packages` (tach's own walker skips hidden ones; the others are environments).
+
 **Version policy.** The evidence is tach 0.35.3. Older releases REFUSE (`tach-version-unsupported`). A patch release of 0.35 runs. A newer minor (0.36, 1.0) REFUSES (`tach-version-unverified`) until someone re-runs the battery, because tach is 0.x and has changed defaults between minors, which would not show up as an unknown diagnostic. `allowUnverifiedVersion` runs it anyway. A diagnostic variant this adapter has never seen always REFUSES.
 
 ## A selected rule must have its evidence switched on

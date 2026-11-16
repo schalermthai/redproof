@@ -127,7 +127,16 @@ function guards(selected: ReadonlyMap<TachRuleKind, Rule<RuleRef>>, facts: Confi
   return found ? refusal(found.code, found.message, found.detail) : undefined;
 }
 
-/** The order of a check, in the core so it is testable without tach: version, then the configuration guards, then the check. */
+/**
+ * The order of a check, in the core so it is testable without tach. Every step can only end in REFUSE, except the
+ * last, so an ambiguous run never passes. Full precedence, first match wins:
+ *  1. shell: path outside the Gate root, no `tach.toml` in the working directory, unreadable `tach.domain.toml`, thrown error
+ *  2. `tach --version`: command refused, not tach, too old, newer than the verified minor
+ *  3. guards: source root outside the Gate root, cycle check off, inactive rule, ignored sources
+ *  4. `tach check`: command refused, exit code not 0 or 1, report not JSON, error object, exit/report disagree,
+ *     structural stop, configuration diagnostic, unknown variant, exit/severity mismatch
+ *  5. only then breaches (FAIL) or none (PASS)
+ */
 export async function decideTach<R extends RuleRef>(input: {
   readonly run: RunTach;
   /** The text of tach.toml, as the shell read it, plus any distributed `tach.domain.toml` facts already merged by the shell. */

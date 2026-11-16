@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { excludedModules, globToRegExp, hiddenSources, readConfig, statements } from '../src/core/config.ts';
+import { excludedModules, globToRegExp, hiddenSources, mergeDomain, readConfig, statements } from '../src/core/config.ts';
 import { configRefusal, escapingRoots, ignoredRefusal } from '../src/core/guards.ts';
 import type { TachRuleKind } from '../src/core/model.ts';
 
@@ -124,4 +124,13 @@ test('globs: gitignore-style patterns tach uses for exclude', () => {
   assert.ok(m('src/a', 'src/a/x.py') && !m('src/a', 'other/src/a'));
   assert.ok(m('*.py', 'x.py') && m('/build', 'build/x') && !m('/build', 'src/build'));
   assert.deepEqual(excludedModules(readConfig('source_roots = ["src"]\nexclude = ["src/a"]\n[[modules]]\npath = "a"\n[[modules]]\npath = "b.c"\n')), ['a']);
+});
+
+test('a tach.domain.toml [root] is a module with the same keys, named by the file that defines it', () => {
+  const domain = readConfig('[root]\nunchecked = true\n[[modules]]\npath = "service"\ndepends_on = []\n');
+  assert.deepEqual(domain.modules.map(m => [m.paths, m.unchecked]), [[['<root>'], true], [['service'], false]]);
+  const merged = mergeDomain(readConfig('source_roots = ["src"]\n'), domain, 'src/a');
+  assert.deepEqual(merged.modules.map(m => m.paths), [['src/a::<root>'], ['src/a::service']]);
+  assert.match(configRefusal(['undeclared-dependency'], merged, {})?.detail ?? '', /unchecked.*src\/a::<root>/u);
+  assert.deepEqual(excludedModules(mergeDomain(readConfig('exclude = ["service"]\n'), domain, 'src/a')), [], 'domain paths are relative to the domain, never matched against exclude');
 });

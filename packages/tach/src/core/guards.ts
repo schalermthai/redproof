@@ -60,8 +60,13 @@ export function escapingRoots(roots: readonly string[]): readonly string[] {
 /** What the shell learned about files the walker skips because of ignore files; undefined when it could not find out. */
 export type IgnoredFiles = readonly string[] | undefined;
 
+/** Whether the ignored-file listing is needed at all. The one copy of this policy: the shell asks it before spawning git, the guard asks it before judging. */
+export function needsIgnoredListing(facts: ConfigFacts, options: GuardOptions): boolean {
+  return !options.allowIgnoredSources && facts.respectGitignore !== 'false';
+}
+
 export function ignoredRefusal(ignored: IgnoredFiles, facts: ConfigFacts, options: GuardOptions): GuardRefusal | undefined {
-  if (options.allowIgnoredSources || facts.respectGitignore === 'false') return undefined;
+  if (!needsIgnoredListing(facts, options)) return undefined;
   if (ignored === undefined) {
     return { code: 'tach-ignored-sources-unknown', message: 'tach skips files that ignore files name, and git could not say which Python files those are.',
       detail: 'Install git, set `respect_gitignore = false` in tach.toml, or set allowIgnoredSources.' };

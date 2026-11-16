@@ -5,20 +5,42 @@ import { executeCommand } from 'redproof/command';
 import { mergeDomain, readConfig, type ConfigFacts } from '../core/config.ts';
 import type { IgnoredFiles } from '../core/guards.ts';
 
-/** tach.toml plus every distributed `tach.domain.toml` below it (not inside environments). */
+export class DomainConfigError extends Error {
+  constructor(message: string, cause: unknown) { super(message, { cause }); }
+}
+
+/**
+ * Directories tach's own walker never reads: hidden ones, and environments and caches that are not project sources.
+ * Everything else is walked to any depth, because a `tach.domain.toml` anywhere below can mark a module `unchecked`.
+ */
+const NOT_WALKED = /^(?:\..*|node_modules|venv|__pycache__|site-packages)$/u;
+
+/**
+ * tach.toml plus every distributed `tach.domain.toml` below it. A directory or file that cannot be read throws
+ * `DomainConfigError`: a module that could not be seen must not be assumed checked.
+ */
 export async function readFacts(cwd: string, configText: string): Promise<ConfigFacts> {
   let facts = readConfig(configText);
-  const skip = /^(?:\..*|node_modules|venv|__pycache__|site-packages)$/u;
-  const walk = async (dir: string, depth: number): Promise<void> => {
-    if (depth > 6) return;
-    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      if (entry.isDirectory() && !skip.test(entry.name)) await walk(join(dir, entry.name), depth + 1);
+  const walk = async (dir: string): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      throw new DomainConfigError(`A directory under the project could not be read, so a tach.domain.toml in it might have been missed: ${relative(cwd, dir) || '.'}`, error);
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && !NOT_WALKED.test(entry.name)) await walk(join(dir, entry.name));
       else if (entry.isFile() && entry.name === 'tach.domain.toml') {
-        facts = mergeDomain(facts, readConfig(await readFile(join(dir, entry.name), 'utf8')));
+        const file = join(dir, entry.name);
+        try {
+          facts = mergeDomain(facts, readConfig(await readFile(file, 'utf8')), relative(cwd, dir) || '.');
+        } catch (error) {
+          throw new DomainConfigError(`A tach.domain.toml could not be read: ${relative(cwd, file)}`, error);
+        }
       }
     }
   };
-  await walk(cwd, 0);
+  await walk(cwd);
   return facts;
 }
 

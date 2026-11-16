@@ -48,6 +48,19 @@ for (const [name, exec, expected] of VERDICTS) {
   test(`verdict table: ${name} -> ${expected}`, () => assert.equal(codeOf(check(exec)), expected));
 }
 
+// REFUSE dominates FAIL: a real finding beside a problem with what tach was asked to check must not fail the Gate on a partial view.
+const finding = located('UndeclaredDependency', { dependency: 'b.x', usage_module: 'a', definition_module: 'b' });
+const unreadable = global('SkippedFileIoError', { file_path: 'a/latin.py' });
+for (const [name, report] of [['finding first', [finding, unreadable]], ['finding last', [unreadable, finding]]] as const) {
+  test(`REFUSE beats FAIL: a real error and a skipped file, ${name}`, () => {
+    assert.equal(codeOf(check(done(1, JSON.stringify(report)))), 'tach-configuration-diagnostic');
+    assert.equal(codeOf(check(done(1, JSON.stringify([finding])))), 'evidence', 'the same finding alone FAILs');
+  });
+}
+test('REFUSE beats FAIL: a real error beside a variant this adapter does not know', () => {
+  assert.equal(codeOf(check(done(1, JSON.stringify([finding, located('TeleportDependency', { dependency: 'b' })])))), 'tach-unrecognised-diagnostic');
+});
+
 test('a cycle or visibility stop is a Breach only for a Gate that asks for nothing else', () => {
   const cycle = done(1, '{"error": "Circular dependency", "dependencies": ["a", "b", "c"]}');
   const alone = check(cycle, only('circular-dependency'));

@@ -112,7 +112,7 @@ export function readConfig(text: string): ConfigFacts {
     const keys = moduleKeys;
     const dependsOn = keys.get('depends_on') ?? '';
     modules.push({
-      paths: [...stringsIn(keys.get('path') ?? ''), ...stringsIn(keys.get('paths') ?? '')],
+      paths: moduleKeys === keys && table === 'root' ? ['<root>'] : [...stringsIn(keys.get('path') ?? ''), ...stringsIn(keys.get('paths') ?? '')],
       hasDependsOn: keys.has('depends_on'),
       hasLayer: keys.has('layer'),
       unchecked: masked(keys.get('unchecked') ?? '').trim() === 'true',
@@ -126,11 +126,12 @@ export function readConfig(text: string): ConfigFacts {
     if (s.kind === 'header') {
       closeModule();
       table = s.name;
-      if (s.array && s.name === 'modules') moduleKeys = new Map();
+      // `[root]` in a tach.domain.toml defines the module that owns the directory, with the same keys as a `[[modules]]` entry.
+      if ((s.array && s.name === 'modules') || (!s.array && s.name === 'root')) moduleKeys = new Map();
       if (s.array && s.name === 'interfaces') interfaces++;
       continue;
     }
-    if (table === 'modules' && moduleKeys) { moduleKeys.set(s.key, s.value); continue; }
+    if ((table === 'modules' || table === 'root') && moduleKeys) { moduleKeys.set(s.key, s.value); continue; }
     if (table === 'interfaces' && s.key === 'visibility') interfaceVisibility = true;
     top.set(table ? `${table}.${s.key}` : s.key, s.value);
   }
@@ -162,10 +163,12 @@ export function readConfig(text: string): ConfigFacts {
 }
 
 /** Merge facts from a distributed `tach.domain.toml`: modules and interfaces defined there count too. */
-export function mergeDomain(root: ConfigFacts, domain: ConfigFacts): ConfigFacts {
+export function mergeDomain(root: ConfigFacts, domain: ConfigFacts, where: string): ConfigFacts {
+  // Domain module paths are relative to the domain, so they are named by the file that defines them and never matched against `exclude`.
+  const named = domain.modules.map(m => ({ ...m, paths: m.paths.map(p => `${where}::${p}`) }));
   return {
     ...root,
-    modules: [...root.modules, ...domain.modules],
+    modules: [...root.modules, ...named],
     hasInterfaces: root.hasInterfaces || domain.hasInterfaces,
     hasInterfaceVisibility: root.hasInterfaceVisibility || domain.hasInterfaceVisibility,
     hasLayers: root.hasLayers || domain.hasLayers,
@@ -202,7 +205,7 @@ export function excludedModules(facts: ConfigFacts): readonly string[] {
   const hidden: string[] = [];
   for (const module of facts.modules) {
     for (const path of module.paths) {
-      if (/[*?[\]]/u.test(path) || path === '<root>') continue;
+      if (/[*?[\]]/u.test(path) || path === '<root>' || path.includes('::')) continue;
       const dir = path.replaceAll('.', '/');
       const roots = facts.sourceRoots.map(r => r.replace(/^\.\//u, '').replace(/\/$/u, '')).map(r => (r === '.' || r === '' ? dir : `${r}/${dir}`));
       if (roots.length && roots.some(candidate => isExcluded(candidate, facts))) hidden.push(path);

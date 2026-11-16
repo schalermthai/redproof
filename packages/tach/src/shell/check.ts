@@ -4,8 +4,8 @@ import type { Check, Rule, RuleRef } from 'redproof';
 import { counting } from 'redproof';
 import { executeCommand } from 'redproof/command';
 import { checkResult, decideTach, refusal, withinRoot, type TachDecision } from '../core/decision.ts';
-import { escapingRoots } from '../core/guards.ts';
-import { ignoredPython, readFacts } from './ignored.ts';
+import { escapingRoots, needsIgnoredListing } from '../core/guards.ts';
+import { DomainConfigError, ignoredPython, readFacts } from './ignored.ts';
 import type { TachRuleKind } from '../core/model.ts';
 import type { TachOptions } from '../core/options.ts';
 
@@ -42,10 +42,9 @@ export function tachCheck<R extends RuleRef>(
             const real = await realpath(resolve(cwd, sourceRoot)).catch(() => undefined);
             if (real !== undefined && !withinRoot(root, real)) return refusal('tach-path-outside-root', 'A source root resolves outside the Gate root.', real);
           }
-          const needIgnored = !settings.allowIgnoredSources && facts.respectGitignore !== 'false';
           return await decideTach({
             facts,
-            ignored: needIgnored ? await ignoredPython(cwd, limit) : [],
+            ignored: needsIgnoredListing(facts, settings) ? await ignoredPython(cwd, limit) : [],
             options: settings,
             run: args => executeCommand({
               command: settings.command ?? 'tach', args, cwd, label: 'tach',
@@ -56,6 +55,7 @@ export function tachCheck<R extends RuleRef>(
             displayPath: file => relative(root, join(cwd, file)),
           });
         } catch (error) {
+          if (error instanceof DomainConfigError) return refusal('tach-domain-config-unreadable', error.message, String(error.cause));
           return refusal('tach-unavailable', 'tach could not complete the check.', String(error));
         }
       })();

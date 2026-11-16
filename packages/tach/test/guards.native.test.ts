@@ -176,3 +176,67 @@ t('an ignore rule that lives only in .git/info/exclude hides it too (only the re
   await write(root, '.git/info/exclude', '');
   assert.deepEqual(await verdict(root, RULE), FAIL);
 }));
+
+// tach.domain.toml: modules defined next to the code. A module marked unchecked there must never be missed.
+const DOMAIN = {
+  'tach.toml': 'source_roots = ["src"]\n',
+  'src/a/__init__.py': 'from b import thing\n', 'src/a/tach.domain.toml': '[root]\ndepends_on = []\n',
+  'src/b/__init__.py': 'thing = 1\n', 'src/b/tach.domain.toml': '[root]\ndepends_on = []\n',
+};
+t('tach.domain.toml: modules defined there are read, and a real violation FAILs', () => withFiles(DOMAIN, async root => {
+  assert.deepEqual(await verdict(root, RULE), FAIL);
+}));
+
+t('tach.domain.toml: an unchecked [root] is seen, so the rule REFUSES instead of passing; checked again, it FAILs', () => withFiles({
+  ...DOMAIN, 'src/a/tach.domain.toml': '[root]\nunchecked = true\n', 'src/c/__init__.py': 'from b import thing\n', 'src/c/tach.domain.toml': '[root]\ndepends_on = ["//b"]\n',
+}, async root => {
+  assert.deepEqual(await verdict(root, RULE), ['refuse', 'tach-rule-inactive']);
+  await write(root, 'src/a/tach.domain.toml', '[root]\ndepends_on = []\n');
+  assert.deepEqual(await verdict(root, RULE), FAIL);
+}));
+
+t('tach.domain.toml: depth is no limit: an unchecked module nine directories down is still seen', () => withFiles({
+  ...DOMAIN, 'src/p/q/r/s/t/u/v/w/x/__init__.py': 'from b import thing\n', 'src/p/q/r/s/t/u/v/w/x/tach.domain.toml': '[root]\nunchecked = true\n',
+}, async root => {
+  assert.deepEqual(await verdict(root, RULE), ['refuse', 'tach-rule-inactive']);
+  await rm(join(root, 'src/p'), { recursive: true });
+  assert.deepEqual(await verdict(root, RULE), FAIL);
+}));
+
+t('tach.domain.toml: a directory that cannot be read REFUSES instead of being skipped', () => withFiles({
+  ...DOMAIN, 'src/locked/x.py': 'x = 1\n',
+}, async root => {
+  const { chmod } = await import('node:fs/promises');
+  await chmod(join(root, 'src/locked'), 0o000);
+  try {
+    assert.deepEqual(await verdict(root, RULE), ['refuse', 'tach-domain-config-unreadable']);
+  } finally {
+    await chmod(join(root, 'src/locked'), 0o755);
+  }
+  assert.deepEqual(await verdict(root, RULE), FAIL);
+}));
+
+t('REFUSE beats FAIL on real tach: a real violation beside a file tach cannot decode REFUSES, never FAILs', () => withFiles({
+  ...HIDDEN, 'tach.toml': `forbid_circular_dependencies = true\n${HIDDEN['tach.toml']}`,
+}, async root => {
+  assert.deepEqual(await verdict(root, RULE), FAIL, 'the violation alone');
+  await writeFile(join(root, 'src/a/latin.py'), Buffer.from([0xff, 0xfe, 0x0a]));
+  assert.deepEqual(await verdict(root, RULE), ['refuse', 'tach-configuration-diagnostic']);
+}));
+
+t('precedence: a missing tach.toml is reported before a missing executable', () => withFiles({ 'src/a/__init__.py': 'x = 1\n' }, async root => {
+  assert.deepEqual(await verdict(root, RULE, { command: 'redproof-no-such-tach' }), ['refuse', 'tach-config-missing']);
+  await write(root, 'tach.toml', 'source_roots = ["src"]\n[[modules]]\npath = "a"\ndepends_on = []\n');
+  assert.deepEqual(await verdict(root, RULE, { command: 'redproof-no-such-tach' }), ['refuse', 'command-unavailable']);
+}));
+
+t('tach.domain.toml: a domain file that cannot be read REFUSES instead of being skipped', () => withFiles(DOMAIN, async root => {
+  const { chmod } = await import('node:fs/promises');
+  await chmod(join(root, 'src/a/tach.domain.toml'), 0o000);
+  try {
+    assert.deepEqual(await verdict(root, RULE), ['refuse', 'tach-domain-config-unreadable']);
+  } finally {
+    await chmod(join(root, 'src/a/tach.domain.toml'), 0o644);
+  }
+  assert.deepEqual(await verdict(root, RULE), FAIL);
+}));
