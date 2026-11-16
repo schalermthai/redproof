@@ -54,7 +54,7 @@ async function censusOf(paths: readonly string[], exclude: readonly string[]): P
     const files = (await lstat(path).then(() => stat(path))).isDirectory() ? await pythonFiles(path, unreadable) : [path];
     for (const file of files.filter(candidate => !excluded(candidate))) {
       count += 1;
-      if (/[\r\n]/u.test(file)) unsafeNames.push(file);
+      if (/[\r\n\u2028\u2029]/u.test(file)) unsafeNames.push(file);
     }
   }
   return { count, unreadable, unsafeNames };

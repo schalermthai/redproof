@@ -99,5 +99,22 @@ test('vulture treats `test_*` functions and `*Test*` classes as used when ANY an
   assert.equal(testDirectoryAncestor('/home/me/proj', false), undefined);
   assert.equal(testDirectoryAncestor('/home/me/contests/proj', false), undefined, 'a name that merely contains it does not count');
   assert.equal(testDirectoryAncestor('/home/me/Tests/proj', false), undefined, 'fnmatch is case-sensitive on POSIX');
+  for (const segment of ['testing', 'testbed', 'test-runner', 'test_projects', 'test']) {
+    assert.equal(testDirectoryAncestor(`/home/runner/work/${segment}/proj`, false), segment, `vulture's rule is */test*.py: ${segment} counts`);
+  }
+  assert.equal(testDirectoryAncestor('/home/me/latest/proj', false), undefined);
+  assert.equal(testDirectoryAncestor('/home/me/my_test/proj', false), undefined, 'a suffix is not a prefix (vulture\'s *[-_]test.py only matches a FILE)');
   assert.equal(testDirectoryAncestor('C:\\Work\\Tests\\proj', true), 'tests', 'and folded on Windows');
+});
+
+test('? and [...] match one code point, as in Python, so a non-BMP file name is excluded exactly when fnmatch says so', () => {
+  const m = (pattern: string, path: string) => excludeMatcher([pattern], false)(path);
+  assert.equal(m('*a?.py', '/p/a😀.py'), true);
+  assert.equal(m('*a??.py', '/p/a😀.py'), false);
+  assert.equal(m('*a[😀].py', '/p/a😀.py'), true);
+  assert.equal(m('*a[!x].py', '/p/a😀.py'), true);
+  assert.equal(m('*a[😀-😂].py', '/p/a😁.py'), true);
+  assert.equal(m('*😀?', '/p/😀😀'), true);
+  assert.equal(m('*😀[!😀]', '/p/😀😀'), false);
+  assert.equal(m('*[a-😀]*', '/p/z'), true, 'a range across the BMP boundary');
 });

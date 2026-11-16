@@ -13,10 +13,14 @@ const tool = (label: string, python: string): Tool => ({ label, python, binary: 
  * The vultures under test: REDPROOF_VULTURE_PYTHON (the battle-test venv by default) and, when set,
  * REDPROOF_VULTURE_PYTHON_OLDEST, the python of a virtualenv with the oldest supported vulture.
  */
-export const tools: readonly Tool[] = [
+const configured: readonly Tool[] = [
   tool('latest', process.env.REDPROOF_VULTURE_PYTHON ?? fileURLToPath(new URL('../../../../../24-vulture/.venv/bin/python', import.meta.url))),
   ...(process.env.REDPROOF_VULTURE_PYTHON_OLDEST ? [tool('oldest', process.env.REDPROOF_VULTURE_PYTHON_OLDEST)] : []),
-].filter(candidate => existsSync(candidate.binary));
+];
+export const tools: readonly Tool[] = configured.filter(candidate => existsSync(candidate.binary));
+
+/** Every configured vulture that is not there. With REDPROOF_VULTURE_REQUIRED=1 each one is a failing test, so a bad path cannot drop its tests unseen. */
+export const missingTools: readonly Tool[] = configured.filter(candidate => !existsSync(candidate.binary));
 
 /** CI sets this beside the virtualenv: a missing vulture there must fail, not silently unregister the native tests. */
 export const vultureRequired: boolean = process.env.REDPROOF_VULTURE_REQUIRED === '1';

@@ -147,7 +147,7 @@ export async function decideVulture<R extends RuleRef>(input: {
     return refusal('vulture-path-unreadable', 'vulture will skip directories that cannot be read, so the code in them would never be analysed.', files.unreadable.join('\n'));
   }
   if (files.unsafeNames.length) {
-    return refusal('vulture-unsafe-file-name', 'A file name holds a line break, which can forge a line of the report.', JSON.stringify(files.unsafeNames));
+    return refusal('vulture-unsafe-file-name', 'A file name holds a line break (CR, LF, U+2028 or U+2029), which can forge or split a line of the report.', JSON.stringify(files.unsafeNames));
   }
   if (files.count === 0) {
     return refusal('vulture-nothing-inspected', 'vulture would read no Python files, so a pass would mean nothing.', input.plan.paths.join('\n'));

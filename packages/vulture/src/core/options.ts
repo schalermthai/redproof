@@ -28,7 +28,7 @@ export type VultureOptions<M extends Selection = Selection> = {
   /** vulture `--ignore-decorators` patterns, e.g. `@app.route`. */
   readonly ignoreDecorators?: readonly string[];
   /**
-   * Accept a Gate root with a `test` or `tests` directory among its ancestors. vulture then treats every file as a
+   * Accept a Gate root with a `test*` directory (`test`, `tests`, `testing`, `testbed`, `test-runner`, ...) among its ancestors. vulture then treats every file as a
    * test file (`test_*` functions and `*Test*` classes count as used), so the verdict would differ from a checkout
    * elsewhere; by default the check REFUSES instead.
    */

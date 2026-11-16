@@ -127,7 +127,10 @@ export function unreadInput(stderr: string): readonly string[] {
 }
 
 /** CPython's `fnmatch.translate` (3.12), line for line, so a pattern means here what it means to vulture. */
-function fnmatchSource(pat: string): string {
+function fnmatchSource(pattern: string): string {
+  // Python indexes by code point, JavaScript by UTF-16 unit: walk code points, or an emoji is two characters.
+  const pat = Array.from(pattern);
+  const text = (from: number, to: number): string => pat.slice(from, to).join('');
   let res = '';
   let i = 0;
   const n = pat.length;
@@ -142,7 +145,7 @@ function fnmatchSource(pat: string): string {
       while (j < n && pat[j] !== ']') j += 1;
       if (j >= n) { res += '\\['; continue; }
       let stuff: string;
-      if (!pat.slice(i, j).includes('-')) stuff = pat.slice(i, j).replaceAll('\\', '\\\\');
+      if (!pat.slice(i, j).includes('-')) stuff = text(i, j).replaceAll('\\', '\\\\');
       else {
         const chunks: string[] = [];
         let start = i;
@@ -150,21 +153,24 @@ function fnmatchSource(pat: string): string {
         for (;;) {
           k = pat.indexOf('-', k);
           if (k < 0 || k >= j) break;
-          chunks.push(pat.slice(start, k));
+          chunks.push(text(start, k));
           start = k + 1;
           k += 3;
         }
-        const chunk = pat.slice(start, j);
+        const chunk = text(start, j);
         if (chunk) chunks.push(chunk); else chunks[chunks.length - 1] += '-';
         for (let m = chunks.length - 1; m > 0; m -= 1) {
-          if (chunks[m - 1]!.slice(-1) > chunks[m]![0]!) {
-            chunks[m - 1] = chunks[m - 1]!.slice(0, -1) + chunks[m]!.slice(1);
+          const before = Array.from(chunks[m - 1]!);
+          const after = Array.from(chunks[m]!);
+          // Python compares and cuts code points; `>` on strings compares code points only when each side is one.
+          if ((before.at(-1)?.codePointAt(0) ?? 0) > (after[0]?.codePointAt(0) ?? 0)) {
+            chunks[m - 1] = before.slice(0, -1).join('') + after.slice(1).join('');
             chunks.splice(m, 1);
           }
         }
         stuff = chunks.map(part => part.replaceAll('\\', '\\\\').replaceAll('-', '\\-')).join('-');
       }
-      stuff = stuff.replace(/([&~|\]])/gu, '\\$1');
+      stuff = stuff.replace(/([\]])/gu, '\\$1');
       i = j + 1;
       if (!stuff) res += '(?!)';
       else if (stuff === '!') res += '[\\s\\S]';
@@ -173,7 +179,7 @@ function fnmatchSource(pat: string): string {
         else if (stuff[0] === '^' || stuff[0] === '[') stuff = `\\${stuff}`;
         res += `[${stuff}]`;
       }
-    } else res += c.replace(/[.*+?^${}()|[\]\\/-]/gu, '\\$&');
+    } else res += c.replace(/[.*+?^${}()|[\]\\/]/gu, '\\$&');
   }
   return `^(?:${res})$`;
 }
@@ -185,7 +191,7 @@ function fnmatchSource(pat: string): string {
 export function excludeMatcher(patterns: readonly string[], windows: boolean): (absolutePath: string) => boolean {
   const fold = (text: string): string => (windows ? text.toLowerCase().replaceAll('/', '\\') : text);
   const regexes = patterns.filter(pattern => pattern)
-    .map(pattern => new RegExp(fnmatchSource(fold(/[*?[]/u.test(pattern) ? pattern : `*${pattern}*`))));
+    .map(pattern => new RegExp(fnmatchSource(fold(/[*?[]/u.test(pattern) ? pattern : `*${pattern}*`)), 'u'));
   return path => regexes.some(regex => regex.test(fold(path)));
 }
 
@@ -199,10 +205,11 @@ export function isPythonSourceEntry(name: string, kind: { readonly file: boolean
 
 /**
  * vulture reads `test_*` functions and `*Test*` classes as used in a "test file", and it decides that from the
- * absolute path: any ancestor directory named `test` or `tests` makes every file below it one (`fnmatch`:
- * case-sensitive on POSIX, folded on Windows). So the same commit gets a different verdict in a checkout under
+ * absolute path: its rules are four fnmatch patterns (a `test` or `tests` directory, a `test*.py` file, a `*_test.py` file), `*` crosses the slash, so any ancestor
+ * directory whose name STARTS with `test` (`test`, `tests`, `testing`, `testbed`, `test-runner`, ...) makes every
+ * file below it one (`fnmatch`: case-sensitive on POSIX, folded on Windows). So the same commit gets a different verdict in a checkout under
  * `/ci/tests/work/`. Returns the offending segment of `root`, or undefined.
  */
 export function testDirectoryAncestor(root: string, windows: boolean): string | undefined {
-  return root.split(/[\\/]/u).map(segment => (windows ? segment.toLowerCase() : segment)).find(segment => segment === 'test' || segment === 'tests');
+  return root.split(/[\\/]/u).map(segment => (windows ? segment.toLowerCase() : segment)).find(segment => segment.startsWith('test'));
 }
