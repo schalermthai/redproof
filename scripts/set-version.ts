@@ -14,6 +14,7 @@ const PACKAGE_DIRS = [
   'packages/stryker',
   'packages/testing',
   'packages/istanbul',
+  'packages/ruff',
 ] as const;
 
 const INTERNAL_DEPENDENCIES = new Set([

@@ -34,6 +34,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The @redproof/ruff tests run the real Ruff.
+      - name: Install Ruff
+        run: pipx install ruff==0.17.5
+
       - name: Run quality and integration checks
         run: npm run check:quality
 
@@ -82,6 +86,10 @@ jobs:
 
       - name: Build the proof runtime
         run: npm run build
+
+      # The test-health Gate runs the @redproof/ruff tests, which run the real Ruff.
+      - name: Install Ruff
+        run: pipx install ruff==0.17.5
 
       - name: Run the proofs of one Gate
         run: npm run check:proofs -- gates/${{ matrix.gate }}.ts

@@ -1,0 +1,59 @@
+[
+  {
+    "cell": null,
+    "code": "S101",
+    "end_location": {
+      "column": 7,
+      "row": 1
+    },
+    "filename": "<ROOT>/S101.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Use of `assert` detected",
+    "name": "assert",
+    "noqa_row": 1,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/assert"
+  },
+  {
+    "cell": null,
+    "code": "S101",
+    "end_location": {
+      "column": 11,
+      "row": 6
+    },
+    "filename": "<ROOT>/S101.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 6
+    },
+    "message": "Use of `assert` detected",
+    "name": "assert",
+    "noqa_row": 6,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/assert"
+  },
+  {
+    "cell": null,
+    "code": "S101",
+    "end_location": {
+      "column": 11,
+      "row": 7
+    },
+    "filename": "<ROOT>/S101.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 7
+    },
+    "message": "Use of `assert` detected",
+    "name": "assert",
+    "noqa_row": 7,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/assert"
+  }
+]
