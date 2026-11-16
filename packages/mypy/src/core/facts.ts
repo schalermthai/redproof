@@ -3,7 +3,7 @@ import type { Allowance } from './options.ts';
 import { ignoreCodes, parseMypyVersion, relatedCodes, signalCodes } from './model.ts';
 
 /** One file mypy loaded, with what no option shows about it. */
-export type LoadedFile = {
+type LoadedFile = {
   readonly module: string;
   /** Absolute. */
   readonly path: string;
