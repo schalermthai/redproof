@@ -7,7 +7,7 @@ import { firstEscapingModule, isInsideDirectory } from '../core/copy.ts';
 import { classifyStepFailure, type CosmicRayStep, type StepFailure } from '../core/failure.ts';
 import { copyProject } from './sandbox.ts';
 import { cosmicRayArgs, type CosmicRayConfig } from '../core/options.ts';
-import { parseCosmicRayDump } from '../core/report.ts';
+import { jobsDiffer, parseCosmicRayDump } from '../core/report.ts';
 import { decideCosmicRayRun, type CosmicRayPolicies } from '../core/verdict.ts';
 
 export type RunCommand = (options: CommandExecutionOptions) => Promise<CommandExecution>;
@@ -57,10 +57,10 @@ export async function runCosmicRayCheck<R extends string>(
       temp = await mkdtemp(join(tmpdir(), 'redproof-cosmic-ray-'));
       // cosmic-ray rewrites source files in place and a kill (timeout, abort) leaves them mutated, so every step runs on a copy.
       const sandbox = join(temp, 'project');
-      const copied = await copyProject(root, sandbox, config.maxCopyBytes);
+      const copied = await copyProject(root, sandbox, config.maxCopyBytes, config.maxCopyEntries);
       if (copied.kind === 'too-large') {
         return refuse('cosmic-ray-copy-too-large', 'The project is too large to copy for a mutation run.',
-          `More than ${config.maxCopyBytes} bytes. Raise maxCopyBytes or point cwd at a smaller project.`);
+          `Over ${config.maxCopyBytes} bytes or ${config.maxCopyEntries} entries (seen ${copied.bytes} bytes, ${copied.entries} entries). Raise maxCopyBytes or maxCopyEntries, or point cwd at a smaller project.`);
       }
       const sandboxCwd = join(sandbox, relative(root, cwd));
       const session = join(temp, 'session.sqlite');
@@ -97,7 +97,7 @@ export async function runCosmicRayCheck<R extends string>(
       }
       const escaping = firstEscapingModule(items);
       if (escaping) {
-        return refuse('cosmic-ray-module-path-escapes', 'A module path is absolute or outside the working directory, so it would be mutated outside the sandbox.', escaping.modulePath);
+        return refuse('cosmic-ray-module-path-escapes', 'A module path is absolute, so it would be mutated outside the sandbox.', escaping.modulePath);
       }
       // The spelling can look innocent while a link leads out of the copy (a linked environment, a link that survived the copy).
       const sandboxReal = await realpath(sandbox);
@@ -116,6 +116,9 @@ export async function runCosmicRayCheck<R extends string>(
       const mutants = parseCosmicRayDump(dump);
       if (mutants instanceof Error) {
         return refuse('cosmic-ray-report-invalid', 'The cosmic-ray dump could not be read.', mutants.message);
+      }
+      if (jobsDiffer(items, mutants)) {
+        return refuse('cosmic-ray-report-invalid', 'The final dump does not describe the jobs that were planned.', `${items.length} planned, ${mutants.length} in the final dump.`);
       }
       return decideCosmicRayRun({ scan: scan(startedAt, mutants.length), root, cwd, mutants, timeouts: config.timeouts, policies });
     } catch (error) {
@@ -136,6 +139,8 @@ export async function runCosmicRayCheck<R extends string>(
     if (outcome.verdict === 'refuse') {
       return result.refuse(outcome.scan, { ...outcome.why, detail: [outcome.why.detail, leaked].filter(Boolean).join('\n') });
     }
-    return outcome;
+    // A FAIL keeps its breaches, and the first one names what was left behind.
+    const [first, ...rest] = outcome.breaches;
+    return result.fail(outcome.scan, [{ ...first, detail: [first.detail, leaked].filter(Boolean).join('\n') }, ...rest]);
   }
 }

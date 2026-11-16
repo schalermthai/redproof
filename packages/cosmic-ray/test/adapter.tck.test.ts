@@ -34,11 +34,15 @@ const spec = {
     invalidValues: [{
       name: 'rejects an invalid mutation-score threshold',
       run: () => cosmicRay({ rules: { mutationScore: { minimum: 101 } } }),
-      message: /minimum must be greater than 0 and at most 100/u,
+      message: /minimum must be at least 0\.000001 and at most 100/u,
     }, {
       name: 'rejects a zero mutation-score threshold, which could never go red',
       run: () => cosmicRay({ rules: { mutationScore: { minimum: 0 } } }),
-      message: /greater than 0/u,
+      message: /could never go red/u,
+    }, {
+      name: 'rejects a minimum so small it rounds to zero, which could never go red',
+      run: () => cosmicRay({ rules: { mutationScore: { minimum: 1e-7 } } }),
+      message: /at least 0\.000001/u,
     }, {
       name: 'rejects an unknown timeouts policy',
       run: () => cosmicRay({ timeouts: 'maybe', rules: { mutantsDetected: true } } as never),

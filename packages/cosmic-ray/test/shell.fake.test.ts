@@ -213,3 +213,60 @@ test('links never lead back to the real tree: absolute and relative links are re
   assert.equal(await readFile(join(outside, 'vendored.py'), 'utf8'), 'y = 2\n');
   assert.equal(await readFile(join(root, 'env', 'src.py'), 'utf8'), 'z = 3\n');
 })));
+
+test('a final dump whose jobs differ from the planned jobs refuses (a partial-but-valid dump cannot pass)', () => withProject(async root => {
+  const calls: string[] = [];
+  const full = dumpText('all-killed');
+  const fewer = full.split('\n').filter(Boolean).slice(0, 5).join('\n');
+  const run = async (options: { args?: readonly string[] }) => {
+    const step = options.args?.[2] ?? '';
+    calls.push(step);
+    const dumps = calls.filter(call => call === 'dump').length;
+    return done(step === 'dump' ? (dumps === 1 ? full : fewer) : '');
+  };
+  const adapter = createCosmicRayAdapter({ rules: { mutationScore: { minimum: 1 } } }, run as never);
+  const verdict = await adapter.check.run({ root, rules: ['cosmic-ray/mutation-score'] });
+  assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-report-invalid');
+}));
+
+test('a project with more entries than maxCopyEntries refuses before any step runs', () => withProject(async root => {
+  for (const name of ['a', 'b', 'c', 'd']) await writeFile(join(root, `${name}.txt`), '');
+  const { calls, run } = fake({});
+  const adapter = createCosmicRayAdapter({ rules, maxCopyEntries: 3 }, run);
+  const verdict = await adapter.check.run({ root, rules: ['cosmic-ray/mutants-detected'] });
+  assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-copy-too-large');
+  assert.equal(calls.length, 0);
+}));
+
+test('a module path that climbs out of a sub-directory but stays inside the project is accepted', () => withProject(async root => {
+  await mkdir(join(root, 'svc'));
+  const climbing = dumpText('all-killed').replaceAll('"module_path": "mod.py"', '"module_path": "../mod.py"');
+  const adapter = createCosmicRayAdapter({ rules, cwd: 'svc' }, fake({ dump: done(climbing) }).run);
+  const verdict = await adapter.check.run({ root, rules: ['cosmic-ray/mutants-detected'] });
+  assert.equal(verdict.verdict, 'pass');
+}));
+
+test('a FAIL with a cleanup leak keeps its breaches and names the leftover in the first breach', () => withProject(async root => {
+  const adapter = createCosmicRayAdapter({ rules: { mutantsDetected: true } }, fake({}, 'survivors').run, failing);
+  const verdict = await adapter.check.run({ root, rules: ['cosmic-ray/mutants-detected'] });
+  assert.equal(verdict.verdict, 'fail');
+  if (verdict.verdict === 'fail') {
+    assert.equal(verdict.breaches.length, 7);
+    assert.match(verdict.breaches[0].detail ?? '', /Could not remove .*EBUSY/u);
+  }
+}));
+
+test('documented boundary: a test may write into a linked environment directory, but never into source files', () => withProject(async root => {
+  await mkdir(join(root, '.venv'));
+  await writeFile(join(root, '.venv', 'pyvenv.cfg'), 'home = /x\n');
+  const run = async (options: { cwd: string; args?: readonly string[] }) => {
+    if (options.args?.[2] === 'exec') {
+      await writeFile(join(options.cwd, '.venv', 'cache.bin'), 'written by a test');
+      await writeFile(join(options.cwd, 'mod.py'), 'MUTATED');
+    }
+    return done(options.args?.[2] === 'dump' ? dumpText('all-killed') : '');
+  };
+  await createCosmicRayAdapter({ rules }, run as never).check.run({ root, rules: ['cosmic-ray/mutants-detected'] });
+  assert.equal(existsSync(join(root, '.venv', 'cache.bin')), true, 'linked environments are shared, as the README says');
+  assert.equal(await readFile(join(root, 'mod.py'), 'utf8'), 'def add(a, b):\n    return a + b\n');
+}));

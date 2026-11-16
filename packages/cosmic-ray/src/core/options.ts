@@ -38,6 +38,8 @@ export type CosmicRayAdapterOptions<O extends CosmicRayRuleOptions> = {
   readonly timeouts?: 'detected' | 'refuse';
   /** Size cap for the sandbox copy of the Gate root. Default 512 MiB; over it the run REFUSES. */
   readonly maxCopyBytes?: number;
+  /** Entry (file and directory) cap for the sandbox copy, because millions of empty files cost time, not bytes. Default 200000. */
+  readonly maxCopyEntries?: number;
 };
 
 export type CosmicRayConfig = {
@@ -48,6 +50,7 @@ export type CosmicRayConfig = {
   readonly maxOutputBytes: number;
   readonly timeouts: 'detected' | 'refuse';
   readonly maxCopyBytes: number;
+  readonly maxCopyEntries: number;
   readonly rules: CosmicRayRuleOptions;
   readonly catalog: Readonly<Record<string, Rule>>;
 };
@@ -55,6 +58,7 @@ export type CosmicRayConfig = {
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_COPY_BYTES = 512 * 1024 * 1024;
+const DEFAULT_MAX_COPY_ENTRIES = 200_000;
 
 const RULE_NAMES = ['mutantsDetected', 'mutationScore'] as const;
 
@@ -75,7 +79,7 @@ function positiveInteger(name: string, value: unknown): void {
 export function parseCosmicRayOptions(
   options: CosmicRayAdapterOptions<CosmicRayRuleOptions>,
 ): CosmicRayConfig {
-  rejectUnknownKeys(options, ['rules', 'config', 'python', 'cwd', 'timeoutMs', 'maxOutputBytes', 'timeouts', 'maxCopyBytes'], 'cosmic-ray adapter');
+  rejectUnknownKeys(options, ['rules', 'config', 'python', 'cwd', 'timeoutMs', 'maxOutputBytes', 'timeouts', 'maxCopyBytes', 'maxCopyEntries'], 'cosmic-ray adapter');
   rejectUnknownKeys(options.rules, RULE_NAMES, 'cosmic-ray rule');
 
   if (!options.rules.mutantsDetected && !options.rules.mutationScore) {
@@ -85,8 +89,9 @@ export function parseCosmicRayOptions(
     rejectUnknownKeys(options.rules.mutationScore, ['minimum'], 'cosmic-ray mutationScore');
     const { minimum } = options.rules.mutationScore;
     // 0 would pass a suite that kills nothing, so the rule could never go red.
-    if (!Number.isFinite(minimum) || minimum <= 0 || minimum > 100) {
-      throw new Error('cosmic-ray mutationScore.minimum must be greater than 0 and at most 100.');
+    // The score law compares to six decimals, so anything that rounds to 0 could never go red either.
+    if (!Number.isFinite(minimum) || Math.round(minimum * 1_000_000) === 0 || minimum < 0 || minimum > 100) {
+      throw new Error('cosmic-ray mutationScore.minimum must be at least 0.000001 and at most 100 (a minimum of 0 could never go red).');
     }
   }
   if (options.config !== undefined) relativePath('config', options.config);
@@ -97,6 +102,7 @@ export function parseCosmicRayOptions(
   if (options.timeoutMs !== undefined) positiveInteger('timeoutMs', options.timeoutMs);
   if (options.maxOutputBytes !== undefined) positiveInteger('maxOutputBytes', options.maxOutputBytes);
   if (options.maxCopyBytes !== undefined) positiveInteger('maxCopyBytes', options.maxCopyBytes);
+  if (options.maxCopyEntries !== undefined) positiveInteger('maxCopyEntries', options.maxCopyEntries);
   if (options.timeouts !== undefined && options.timeouts !== 'detected' && options.timeouts !== 'refuse') {
     throw new Error("cosmic-ray timeouts must be 'detected' or 'refuse'.");
   }
@@ -123,6 +129,7 @@ export function parseCosmicRayOptions(
     maxOutputBytes: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
     timeouts: options.timeouts ?? 'detected',
     maxCopyBytes: options.maxCopyBytes ?? DEFAULT_MAX_COPY_BYTES,
+    maxCopyEntries: options.maxCopyEntries ?? DEFAULT_MAX_COPY_ENTRIES,
     rules: options.rules,
     catalog,
   };

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineGate, runGate } from 'redproof';
@@ -27,7 +28,7 @@ const MODULE = 'def add(a, b):\n    return a + b\n';
 const STRONG = 'from mod import add\n\ndef test_add():\n    assert add(2, 3) == 5\n';
 const WEAK = 'from mod import add\n\ndef test_add():\n    assert add(0, 0) == 0\n';
 const BROKEN = 'from mod import add\n\ndef test_add():\n    assert add(2, 3) == 99\n';
-const SLOW = 'import time\nfrom mod import add\n\ndef test_add():\n    time.sleep(0.2 if add(1, 1) == 2 else 20)\n    assert add(2, 3) == 5\n';
+const SLOW = 'import time\nfrom mod import add\n\ndef test_add():\n    time.sleep(0.05 if add(1, 1) == 2 else 30)\n    assert add(2, 3) == 5\n';
 const LOOP = 'def count(n):\n    i = 0\n    while i < n:\n        i += 1\n    return i\n';
 const LOOP_TEST = 'from mod import count\n\ndef test_count():\n    assert count(3) == 3\n    assert count(0) == 0\n    assert count(-5) == 0\n';
 
@@ -78,9 +79,10 @@ nativeTest('real cosmic-ray: a suite failing on unmutated code REFUSES for each 
 }));
 
 nativeTest('real cosmic-ray: every mutant timing out REFUSES (the timeout is too short), whatever the timeouts option says', () => withWorkspace(async root => {
-  await project(root, SLOW, 1);
+  // 3s leaves the baseline (about 0.5s with pytest start-up) a wide margin under load; every mutant sleeps far past it.
+  await project(root, SLOW, 3);
   assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-timeouts-excessive']);
-  assert.deepEqual(await outcome(root, SCORE), ['refuse', 'cosmic-ray-timeouts-excessive']);
+  // The score rule's excessive-timeouts refusal is the same code path, covered by the verdict core and fake tests.
   assert.deepEqual(await outcome(root, SCORE, { timeouts: 'refuse' }), ['refuse', 'cosmic-ray-incomplete']);
 }));
 
@@ -209,10 +211,42 @@ nativeTest('real cosmic-ray: a source package that happens to be called env cann
 
 nativeTest('real cosmic-ray: a module path that goes through a linked environment REFUSES before exec and the target stays untouched', () => withOutside(async (root, outside) => {
   await writeFile(join(outside, 'mod.py'), MODULE);
+  await writeFile(join(outside, 'pyvenv.cfg'), 'home = /x\n');
   await symlink(outside, join(root, '.venv'), 'dir');
   await project(root, STRONG);
   await writeFile(join(root, 'cosmic-ray.toml'), (await readFile(join(root, 'cosmic-ray.toml'), 'utf8')).replace('module-path = "mod.py"', 'module-path = ".venv/mod.py"'));
   const before = await snapshot(outside);
   assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-module-path-escapes']);
   assert.deepEqual(await snapshot(outside), before);
+}));
+
+// A test that SIGKILLs itself whenever the module under test is mutated. cosmic-ray records that as `killed` with EMPTY output,
+// the shape an OOM-kill or a stray `pkill` gives. A weak assertion follows, so only a real assertion failure may count as a kill.
+const SELF_KILL = 'import os, signal\nfrom mod import add\n\ndef test_add():\n    if add(1, 1) != 2:\n        os.kill(os.getpid(), signal.SIGKILL)\n    assert add(0, 0) == 0\n';
+
+nativeTest('real cosmic-ray: mutants whose tests were SIGKILLed (killed, empty output) are not evidence of detection', () => withWorkspace(async root => {
+  await project(root, SELF_KILL);
+  assert.deepEqual(await outcome(root, SCORE), ['refuse', 'cosmic-ray-incomplete']);
+  assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-incomplete']);
+}));
+
+nativeTest('real cosmic-ray: a real source package called venv is mutated like any other, not mistaken for an environment', () => withWorkspace(async root => {
+  await mkdir(join(root, 'pkg', 'venv'), { recursive: true });
+  await writeFile(join(root, 'pkg', 'venv', 'core.py'), MODULE);
+  await project(root, 'from pkg.venv.core import add\n\ndef test_add():\n    assert add(2, 3) == 5\n');
+  await writeFile(join(root, 'cosmic-ray.toml'), (await readFile(join(root, 'cosmic-ray.toml'), 'utf8')).replace('module-path = "mod.py"', 'module-path = "pkg/venv/core.py"'));
+  assert.deepEqual(await outcome(root, DETECTED), ['pass']);
+}));
+
+nativeTest('real cosmic-ray: a relative link to a shared environment outside the project still works in the sandbox', () => withOutside(async (root, outside) => {
+  const shared = join(outside, 'shared-venv');
+  await symlink(dirname(dirname(python)), shared, 'dir');
+  const inner = join(root, 'proj');
+  await mkdir(inner);
+  await symlink('../../' + outside.split('/').pop() + '/shared-venv', join(inner, '.venv'), 'dir');
+  await project(inner, STRONG);
+  const toml = join(inner, 'cosmic-ray.toml');
+  await writeFile(toml, (await readFile(toml, 'utf8')).replace(python, '.venv/bin/python'));
+  const verdict = await runGate(defineGate({ id: 'mutation', adapter: cosmicRay({ cwd: 'proj', python: '.venv/bin/python', rules: DETECTED }) as never }), root);
+  assert.equal(verdict.verdict, 'pass', JSON.stringify(verdict).slice(0, 300));
 }));

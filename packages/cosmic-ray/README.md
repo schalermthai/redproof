@@ -36,20 +36,25 @@ export default defineGate({ id: 'python-test-strength', adapter });
 ```
 
 Each Check copies the Gate root into a temporary sandbox and runs `cosmic_ray.cli baseline`, `init`, `dump`, `exec`, `dump` there.
-cosmic-ray rewrites source files in place, and killing it (a timeout, an abort) leaves them mutated, so it must never run on the real tree: your files stay byte-identical on every exit path.
-The copy skips `.git`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.hypothesis` and `*.egg-info`, and symlinks `.venv`, `venv`, `node_modules`, `.tox` and `.nox` instead of copying them (`env` is copied: it is a common name for a real source package), so a relative test command such as `.venv/bin/python -m pytest` still works. The copy costs one pass over the project's files; over `maxCopyBytes` (default 512 MiB) the run REFUSES `cosmic-ray-copy-too-large`.
-Nothing in the copy may lead back to your tree: a symlink that stays inside the project is rebuilt inside the sandbox, one that leaves it is copied by value, a dangling one is dropped. After `init`, every module path is resolved through the sandbox's links; one that is absolute, leaves the working directory, resolves outside the sandbox (for example through a linked `.venv`) or does not exist there REFUSES before `exec` (`cosmic-ray-module-path-escapes`).
+cosmic-ray rewrites source files in place, and killing it (a timeout, an abort) leaves them mutated, so it never runs on the real tree: your source files stay byte-identical on every exit path.
+**One exception, by design:** environment directories (`node_modules`, `.tox`, `.nox`, and `venv`/`.venv` when they hold a `pyvenv.cfg`) are linked, not copied, so a test that writes into one (bytecode, caches, logs) writes into the real directory. Writes anywhere else in the project land in the sandbox and are discarded.
+The copy skips `.git`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.hypothesis` and `*.egg-info`, and links environment directories instead of copying them (a directory named `venv`, `.venv` or `env` without a `pyvenv.cfg` is a real package and is copied), so a relative test command such as `.venv/bin/python -m pytest` still works. The copy costs one pass over the project's files; over `maxCopyBytes` (default 512 MiB) or `maxCopyEntries` (default 200000) the run REFUSES `cosmic-ray-copy-too-large`.
+Nothing in the copy may lead back to your tree: a symlink that stays inside the project is rebuilt inside the sandbox, one that leaves it is copied by value, a dangling one is dropped. After `init`, every module path is resolved through the sandbox's links; one that is absolute, resolves outside the sandbox (for example through a linked `.venv`) or does not exist there REFUSES before `exec` (`cosmic-ray-module-path-escapes`).
 Real-tool tests check the real tree is byte-identical after PASS, FAIL, REFUSE and a timeout kill, with an absolute symlinked source directory, a source package called `env`, and a module path through a linked environment.
 
 `timeoutMs` is one deadline for the whole run: each step gets what is left, and an exhausted deadline REFUSES `command-timeout`.
-The sandbox is removed on every path. Error precedence: the check's own outcome wins. A cleanup failure demotes a PASS to REFUSE `cosmic-ray-cleanup-unavailable`; a REFUSE keeps its code and gains the leftover path in its detail; a FAIL keeps its breaches. If the host process itself is killed, the sandbox (up to `maxCopyBytes`) stays in the system temp directory.
+The sandbox is removed on every path. Error precedence: the check's own outcome wins. A cleanup failure demotes a PASS to REFUSE `cosmic-ray-cleanup-unavailable`; a REFUSE keeps its code and gains the leftover path in its detail; a FAIL keeps its breaches and the first one names the leftover path. If the host process itself is killed, the sandbox (up to `maxCopyBytes`) stays in the system temp directory.
+
+## Your tests run on the copy
+
+The test command imports from the sandbox, not from your tree. An editable install of the project itself (`pip install -e .`, a `.pth` file pointing at `src/`) makes the tests import the real, unmutated code, so every mutant survives and a strong suite FAILS. The adapter cannot tell that from a genuinely weak suite. Put the project on the path relatively instead (`PYTHONPATH=src`, pytest's `pythonpath` setting, or run from the project root), and keep the project out of the environment's site-packages.
 
 ## Rules
 
 | Rule | Breach |
 | --- | --- |
 | `cosmic-ray/mutants-detected` | one `mutant-survived` per survivor, at `file:line:column`, with the operator and changed line |
-| `cosmic-ray/mutation-score` | `mutation-score-below-minimum` when killed / (killed + survived) is under `minimum`, compared in integers so exact boundaries (29 of 50 at 58%) do not breach (greater than 0: a minimum of 0 could never go red, so it is rejected) |
+| `cosmic-ray/mutation-score` | `mutation-score-below-minimum` when killed / (killed + survived) is under `minimum`, compared in integers so exact boundaries (29 of 50 at 58%) do not breach (at least 0.000001: a minimum that rounds to 0 could never go red, so it is rejected) |
 
 ## It refuses instead of passing
 
@@ -61,10 +66,10 @@ cosmic-ray's own exit codes and `cr-rate` look healthy in all of these. The adap
 | the Python has no cosmic-ray, or the config cannot be loaded (exit 78) | `cosmic-ray-not-installed`, `cosmic-ray-config-invalid` |
 | `init`, `exec` or `dump` exit non-zero (killed process, bad config, no module) | `cosmic-ray-producer-unsuccessful` |
 | process timeout, signal, or output limit | `command-timeout`, `command-signaled`, `command-output-limit` |
-| a job has no result, a worker failed, a test could not start, or a job was skipped (and, with `timeouts: 'refuse'`, a mutant timed out) | `cosmic-ray-incomplete` |
+| a job has no result, a mutant is `killed` with no output (a SIGKILLed test process, not an assertion), a worker failed, a test could not start, or a job was skipped (and, with `timeouts: 'refuse'`, a mutant timed out) | `cosmic-ray-incomplete` |
 | more than half of the mutants timed out | `cosmic-ray-timeouts-excessive` |
 | zero mutants (module excluded, nothing to mutate) | `cosmic-ray-no-mutants` |
-| a dump that is not the 8.3+ format | `cosmic-ray-report-invalid` |
+| a dump that is not the 8.3+ format, or whose final jobs differ from the planned jobs | `cosmic-ray-report-invalid` |
 | a mutated module outside the Gate root | `cosmic-ray-module-outside-root` |
 
 ## Timeouts
@@ -72,6 +77,8 @@ cosmic-ray's own exit codes and `cr-rate` look healthy in all of these. The adap
 cosmic-ray records a mutant whose tests ran past its `timeout` as `killed` with the output `timeout`; the adapter tells them apart by that output.
 `timeouts: 'detected'` (the default) counts such a mutant as detected, like the Stryker adapter: an infinite-loop mutant (`i += 1` becoming `i += 0`) is the textbook way a mutation is caught, and refusing it would make a perfect suite unpassable.
 `timeouts: 'refuse'` refuses any run with a timed-out mutant, for projects that want every mutant to fail on an assertion.
+A real kill leaves output (an assertion, a traceback). `killed` with empty output is what a SIGKILL (the OOM killer, a stray `pkill`) looks like, so it is not counted as a kill and the run REFUSES; a custom test command that exits non-zero while printing nothing refuses too.
+
 Either way, if more than half of the mutants time out the run REFUSES (`cosmic-ray-timeouts-excessive`): a `timeout` that is too short makes every mutant look killed. The guard looks at the share rather than comparing `timeout` with the baseline's duration, because the adapter does not parse your TOML. When a score is breached, the timed-out mutants are listed in the breach detail; a passing result carries no detail.
 
 ## Dump size

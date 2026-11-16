@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { moduleFileInsideRoot, parseCosmicRayDump } from '../src/core/report.ts';
+import { jobsDiffer, moduleFileInsideRoot, parseCosmicRayDump } from '../src/core/report.ts';
 import { dumpText, mutants } from './support/fixtures.ts';
 
 const count = (name: Parameters<typeof mutants>[0], status: string) =>
@@ -52,4 +52,22 @@ test('module paths are confined below the root', () => {
 test('cosmic-ray 8.3.15 output (oldest verified) parses; the flat 8.1.0 shape is an error', () => {
   assert.equal(parseCosmicRayDump(dumpText('oldest-supported-8.3.15')) instanceof Error, false);
   assert.ok(parseCosmicRayDump(dumpText('old-format-8.1.0')) instanceof Error);
+});
+
+test('a kill with no output is not evidence of detection (a SIGKILLed test process looks like this)', () => {
+  const killed = (output: string) => parseCosmicRayDump(JSON.stringify([
+    { job_id: 'j', mutations: [{ module_path: 'm.py', operator_name: 'o', occurrence: 0, start_pos: [1, 0], end_pos: [1, 1], operator_args: {} }] },
+    { worker_outcome: 'normal', output, test_outcome: 'killed', diff: '' },
+  ]));
+  assert.equal((killed('') as readonly { status: string }[])[0]?.status, 'invalid');
+  assert.equal((killed('  \n') as readonly { status: string }[])[0]?.status, 'invalid');
+  assert.equal((killed('F\nFAILED test_x') as readonly { status: string }[])[0]?.status, 'killed');
+  assert.equal((killed('timeout') as readonly { status: string }[])[0]?.status, 'timeout');
+});
+
+test('final jobs must be exactly the planned jobs', () => {
+  const a = mutants('all-killed');
+  assert.equal(jobsDiffer(a, a), false);
+  assert.equal(jobsDiffer(a, a.slice(1)), true);
+  assert.equal(jobsDiffer(a, [...a.slice(1), { ...a[0]!, id: 'someone-else' }]), true);
 });
