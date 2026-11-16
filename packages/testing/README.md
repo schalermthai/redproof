@@ -73,6 +73,7 @@ format.
 | `noFlakyTests: true` | `testing/no-flaky-tests` | No test passes only after a retry. | Jest-compatible JSON with retry evidence |
 | `noSkippedTests: true` | `testing/no-skipped-tests` | No tests are skipped. | Jest-compatible JSON, JUnit XML |
 | `noTodoTests: true` | `testing/no-todo-tests` | No tests are marked TODO. | Jest-compatible JSON |
+| `noXfailTests: true` | `testing/no-xfail-tests` | No tests are marked as expected failures. | pytest JUnit XML (`report.pytestJunitXml()`) |
 
 JUnit XML cannot establish retries or TODO status; selecting `noFlakyTests` or
 `noTodoTests` with that format throws when the Adapter is constructed.
@@ -133,6 +134,47 @@ in a pnpm workspace, a proof run refuses with `workspace-not-restored`. Pass
 `args: ['--configLoader', 'runner']` to load the config without that bundle.
 The flag needs Vitest 3.1 or later, and Vitest marks the loader experimental.
 
+## pytest
+
+```ts
+import { pytest } from '@redproof/testing';
+
+const adapter = pytest({
+  command: '.venv/bin/pytest',
+  files: ['tests'],
+  rules: { testsPass: true, noSkippedTests: true, noXfailTests: true },
+});
+```
+
+`pytest()` runs `pytest -q --junitxml=<private report>`, then your `args`, then
+`files`, and reads the report with `report.pytestJunitXml()`. `command` defaults
+to `pytest`. It takes the same `cwd`, `timeoutMs`, and `maxOutputBytes` as the
+other runners. Point `command` at the `pytest` entry point rather than
+`python -m pytest`, because the adapter's flags come first.
+
+`files` entries are passed to pytest as written (only `cwd` is confined to the Gate
+root), so treat them as trusted configuration, as with `vitest()`.
+
+The adapter asks pytest for the `xunit1` JUnit family so each breach carries the
+test's file and line (a decorated test reports its first decorator line). `file`
+is relative to pytest's rootdir. Your own `-o junit_family=...` in `args` wins,
+and locations then become null. pytest writes a failing call and its teardown
+error as two entries with one name; the adapter folds them into one failed test
+and keeps both messages. For the same reason a test retried by
+`pytest-rerunfailures` counts once.
+
+A Rule about absent tests (`noSkippedTests`, `noXfailTests`) can only pass if every
+test ran. If pytest stopped early (`-x` or `--maxfail`, `pytest.exit()`, a collection
+error, or any exit code other than 0, 1 and 5) and nothing breached, the Check REFUSES with
+`test-run-incomplete` instead of passing. pytest prints its stop banner even when
+`-x` stops on the very last test, so that case refuses too although every test ran. The stop is read from any `!!! text !!!` banner pytest prints on stdout (colour codes removed) and from the exit code, so a plugin that ends the session silently at exit 0, or drops tests from the run (`pytest_runtestloop` returning early, `pytest_collection_modifyitems` deleting items), is not detected: like `-k`, that changes which tests are selected. A breach still FAILs, because a breach decides the result either way.
+`testsPass` is unaffected. A test that skipped and then errored in teardown still
+counts as skipped.
+
+pytest's JUnit XML cannot show retries or TODO tests, so `noFlakyTests` and
+`noTodoTests` are not available here. Use the generic `testing()` adapter with
+another report format if you need them.
+
 ## Other test runners
 
 You do not need a dedicated Redproof package for every test framework. Use the
@@ -152,16 +194,27 @@ const adapter = testing({
     ],
   }),
 
-  report: report.junitXml(),
+  report: report.pytestJunitXml(),
 
   rules: {
     testsPass: true,
     noSkippedTests: true,
+    noXfailTests: true,
   },
 });
 ```
 
-Built-in report formats are `report.jestJson()` and `report.junitXml()`.
+Built-in report formats are `report.jestJson()`, `report.junitXml()` and
+`report.pytestJunitXml()`.
+
+pytest writes an expected failure (xfail) as `<skipped type="pytest.xfail">`,
+the same element it uses for a real skip. Generic `report.junitXml()` cannot
+tell them apart, so it counts both as skipped. Use `report.pytestJunitXml()` to
+read xfail as its own status: `noSkippedTests` then counts only real skips, and
+`noXfailTests` breaches on the expected failures. Selecting `noXfailTests` with
+any other format throws when the Adapter is constructed. pytest's JUnit XML
+still cannot show retries, TODOs, or an unexpected pass (xpass is a plain
+pass), so `noFlakyTests` and `noTodoTests` stay unavailable with it.
 
 Set `cwd` to run a generic test command below the Gate root. Redproof rejects
 both `..` escapes and symbolic links that resolve outside the root. The

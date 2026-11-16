@@ -7,7 +7,7 @@ import {
   type RuleRef,
 } from 'redproof';
 
-export type TestStatus = 'passed' | 'failed' | 'skipped' | 'todo';
+export type TestStatus = 'passed' | 'failed' | 'skipped' | 'todo' | 'xfail';
 
 export type TestFailure = {
   readonly message: string;
@@ -26,7 +26,14 @@ export type TestCase = {
   readonly location: Location | null;
   readonly durationMs?: number;
   readonly failure?: TestFailure;
+  /** Other statuses this test showed besides `status` (a skip that also errored in teardown). */
+  readonly alsoStatuses?: readonly TestStatus[];
 };
+
+/** Whether a test showed `status`, as its main status or as an extra one. */
+function showedStatus(test: TestCase, status: TestStatus): boolean {
+  return test.status === status || (test.alsoStatuses?.includes(status) ?? false);
+}
 
 export type TestRun = {
   readonly tests: readonly TestCase[];
@@ -37,6 +44,7 @@ export type TestRuleOptions = {
   readonly noFlakyTests?: true;
   readonly noSkippedTests?: true;
   readonly noTodoTests?: true;
+  readonly noXfailTests?: true;
 };
 
 export type TestRuleCatalog<O extends TestRuleOptions> = {
@@ -49,11 +57,15 @@ export type TestRuleCatalog<O extends TestRuleOptions> = {
           ? Rule<'testing/no-skipped-tests'>
           : K extends 'noTodoTests'
             ? Rule<'testing/no-todo-tests'>
-            : never;
+            : K extends 'noXfailTests'
+              ? Rule<'testing/no-xfail-tests'>
+              : never;
 };
 
 export type TestReportCapabilities = {
   readonly todo: boolean;
+  /** Whether a known-failing (expected failure) test is distinct from a skipped one. */
+  readonly xfail?: boolean;
   /** Whether a passing test preserves failure evidence from earlier attempts. */
   readonly flaky?: boolean;
 };
@@ -63,6 +75,15 @@ export type TestReportFormat = {
   readonly extension: string;
   readonly capabilities: TestReportCapabilities;
   parse(input: string): TestRun;
+  /**
+   * Why the run stopped before every test ran, or null. A rule that claims something never
+   * happened (no skips, no xfails) cannot be decided on such a run.
+   */
+  incomplete?(evidence: {
+    readonly run: TestRun;
+    readonly stdout: string;
+    readonly exitCode: number;
+  }): string | null;
 };
 
 export type TestRunnerContext = {
@@ -122,6 +143,7 @@ export function testRunBreaches<R extends RuleRef>(
     readonly noFlakyTests?: Rule<R>;
     readonly noSkippedTests?: Rule<R>;
     readonly noTodoTests?: Rule<R>;
+    readonly noXfailTests?: Rule<R>;
   },
 ): readonly Breach<R>[] {
   const breaches: Breach<R>[] = [];
@@ -145,7 +167,7 @@ export function testRunBreaches<R extends RuleRef>(
   }
 
   if (rules.noSkippedTests) {
-    for (const test of run.tests.filter(item => item.status === 'skipped')) {
+    for (const test of run.tests.filter(item => showedStatus(item, 'skipped'))) {
       breaches.push(breach(rules.noSkippedTests, {
         code: 'test-skipped',
         message: displayName(test),
@@ -155,9 +177,19 @@ export function testRunBreaches<R extends RuleRef>(
   }
 
   if (rules.noTodoTests) {
-    for (const test of run.tests.filter(item => item.status === 'todo')) {
+    for (const test of run.tests.filter(item => showedStatus(item, 'todo'))) {
       breaches.push(breach(rules.noTodoTests, {
         code: 'test-todo',
+        message: displayName(test),
+        location: test.location,
+      }));
+    }
+  }
+
+  if (rules.noXfailTests) {
+    for (const test of run.tests.filter(item => showedStatus(item, 'xfail'))) {
+      breaches.push(breach(rules.noXfailTests, {
+        code: 'test-xfail',
         message: displayName(test),
         location: test.location,
       }));
@@ -173,5 +205,6 @@ export function testCounts(run: TestRun): Readonly<Record<TestStatus, number>> {
     failed: run.tests.filter(test => test.status === 'failed').length,
     skipped: run.tests.filter(test => test.status === 'skipped').length,
     todo: run.tests.filter(test => test.status === 'todo').length,
+    xfail: run.tests.filter(test => test.status === 'xfail').length,
   };
 }

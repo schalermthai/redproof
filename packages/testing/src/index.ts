@@ -21,7 +21,18 @@ import {
   type TestRunner,
 } from './core/model.ts';
 import { jestJson, parseJestJson } from './core/reports/jest-json.ts';
-import { junitXml, parseJunitXml } from './core/reports/junit-xml.ts';
+import {
+  junitXml,
+  parseJunitXml,
+  parsePytestJunitXml,
+  pytestJunitXml,
+} from './core/reports/junit-xml.ts';
+import {
+  pytestArgs,
+  validatePytestOptions,
+  type PytestAdapterOptions,
+  type PytestRuleOptions,
+} from './core/pytest-options.ts';
 import { validateVitestOptions, vitestArgs, type VitestAdapterOptions } from './core/vitest-options.ts';
 import { testingCheck } from './shell/check.ts';
 import { command } from './shell/command-runner.ts';
@@ -78,8 +89,29 @@ export function vitest<const O extends VitestAdapterOptions<TestRuleOptions>>(
   });
 }
 
+export function pytest<const O extends PytestAdapterOptions<PytestRuleOptions>>(
+  options: O
+    & NoUnknownKeys<O, PytestAdapterOptions<PytestRuleOptions>>
+    & { readonly rules: NoUnknownKeys<O['rules'], PytestRuleOptions> },
+): Adapter<TestRuleCatalog<O['rules']>> {
+  validatePytestOptions(options);
+
+  return testing({
+    runner: command({
+      command: options.command ?? 'pytest',
+      cwd: options.cwd ?? '.',
+      description: 'run pytest',
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+      ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),
+      args: ({ reportFile }) => pytestArgs(options, reportFile),
+    }),
+    report: pytestJunitXml(),
+    rules: options.rules,
+  });
+}
+
 export const runner = { command } as const;
-export const report = { jestJson, junitXml } as const;
+export const report = { jestJson, junitXml, pytestJunitXml } as const;
 
 export {
   command,
@@ -87,11 +119,14 @@ export {
   junitXml,
   parseJestJson,
   parseJunitXml,
+  parsePytestJunitXml,
+  pytestJunitXml,
   testCounts,
   testRunBreaches,
 };
 
 export type { TestingAdapterOptions } from './core/check.ts';
+export type { PytestAdapterOptions, PytestRuleOptions } from './core/pytest-options.ts';
 export type { VitestAdapterOptions } from './core/vitest-options.ts';
 export type {
   CommandArgs,

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -38,3 +38,25 @@ export const failingReport = jestReport([{
   status: 'failed',
   failureMessages: ['expected 1 to be 2'],
 }]);
+
+/** An executable that stands in for pytest: it writes `xml` to the --junitxml path it is given. */
+export async function installFakePytest(project: string, xml: string): Promise<string> {
+  await mkdir(project, { recursive: true });
+  const path = join(project, 'fake-pytest');
+  await writeFile(path, `#!/usr/bin/env node
+const fs = require('node:fs');
+const target = process.argv.find(arg => arg.startsWith('--junitxml=')).slice('--junitxml='.length);
+fs.writeFileSync(target, ${JSON.stringify(xml)});
+`, 'utf8');
+  await chmod(path, 0o755);
+  return path;
+}
+
+function junit(testcases: string): string {
+  return `<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest">${testcases}</testsuite></testsuites>`;
+}
+
+export const pytestPassingXml = junit('<testcase classname="t" name="works"/>');
+export const pytestFailingXml = junit('<testcase classname="t" name="breaks"><failure message="assert 1 == 2"/></testcase>');
+export const pytestSkippedXml = junit('<testcase classname="t" name="later"><skipped type="pytest.skip" message="later"/></testcase>');
+export const pytestXfailXml = junit('<testcase classname="t" name="known bug"><skipped type="pytest.xfail" message="known bug"/></testcase>');

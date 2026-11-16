@@ -1,6 +1,7 @@
 import { runAdapterTck, type AdapterTckSpec, type EvidenceObservation } from '@redproof/adapter-tck';
 import { defineRule } from 'redproof';
 import {
+  pytest,
   report,
   runner,
   testing,
@@ -11,8 +12,13 @@ import {
 } from '../src/index.ts';
 import {
   failingReport,
+  installFakePytest,
   installFakeVitest,
   passingReport,
+  pytestFailingXml,
+  pytestPassingXml,
+  pytestSkippedXml,
+  pytestXfailXml,
   withWorkspace,
   writesPrivateReport,
 } from './support/workspace.ts';
@@ -106,6 +112,7 @@ const testingSpec = {
       'packages/testing/src/core/model.ts',
       'packages/testing/src/core/normalize.ts',
       'packages/testing/src/core/paths.ts',
+      'packages/testing/src/core/pytest-options.ts',
       'packages/testing/src/core/reports/jest-json.ts',
       'packages/testing/src/core/reports/junit-xml.ts',
       'packages/testing/src/core/vitest-options.ts',
@@ -144,6 +151,14 @@ const testingSpec = {
         rules: { noFlakyTests: true },
       }),
       message: /cannot distinguish flaky tests/u,
+    }, {
+      name: 'rejects an expected-failure Rule when the report cannot tell xfail from skip',
+      run: () => testing({
+        runner: completedRunner,
+        report: report.junitXml(),
+        rules: { noXfailTests: true },
+      }),
+      message: /cannot distinguish expected-failure tests/u,
     }],
   },
 } as const satisfies AdapterTckSpec;
@@ -222,4 +237,99 @@ const vitestSpec = {
   },
 } as const satisfies AdapterTckSpec;
 
-runAdapterTck([testingSpec, vitestSpec]);
+async function pytestChecked(
+  xml: string,
+  rules: Parameters<typeof pytest>[0]['rules'],
+): Promise<EvidenceObservation> {
+  return withWorkspace(async root => {
+    const command = await installFakePytest(root, xml);
+    const adapter = pytest({ command, rules });
+    const checked = await adapter.check.run({
+      root,
+      rules: Object.values(adapter.rules).map(selected => selected.id),
+    });
+    return { kind: 'checked', result: checked };
+  });
+}
+
+const pytestSpec = {
+  name: 'pytest',
+  kind: 'testing',
+  construction: {
+    valid: () => pytest({ rules: { testsPass: true, noSkippedTests: true, noXfailTests: true } }),
+    emptyRules: {
+      name: 'rejects an empty Rule selection',
+      run: () => pytest({ rules: {} }),
+      message: /requires at least one Redproof rule/u,
+    },
+    unknownOption: {
+      name: 'rejects an unknown top-level option',
+      run: () => pytest({ rules: { testsPass: true }, mystery: true } as never),
+      message: /Unknown pytest adapter option: "mystery"/u,
+    },
+    invalidValues: [{
+      name: 'rejects an absolute cwd',
+      run: () => pytest({ cwd: '/outside', rules: { testsPass: true } }),
+      message: /cwd must be relative/u,
+    }, {
+      name: 'rejects an absolute test file path',
+      run: () => pytest({ files: ['/elsewhere'], rules: { testsPass: true } }),
+      message: /files\[0\] must be relative/u,
+    }, {
+      name: 'rejects an empty command',
+      run: () => pytest({ command: '', rules: { testsPass: true } }),
+      message: /command must not be empty/u,
+    }],
+  },
+  unavailable: [{
+    name: 'REFUSES when the pytest process cannot start',
+    code: 'test-runner-unavailable',
+    run: () => withWorkspace(async root => pytest({
+      command: 'redproof-tck-no-such-pytest',
+      rules: { testsPass: true },
+    }).check.run({ root, rules: ['testing/tests-pass'] })),
+  }],
+  evidence: [{
+    rule: 'testing/tests-pass',
+    expectedBreaches: [{ code: 'test-failed' }],
+    violating: () => pytestChecked(pytestFailingXml, { testsPass: true }),
+    clean: () => pytestChecked(pytestPassingXml, { testsPass: true }),
+    unselected: () => pytestChecked(pytestFailingXml, { noSkippedTests: true }),
+  }, {
+    rule: 'testing/no-skipped-tests',
+    expectedBreaches: [{ code: 'test-skipped' }],
+    violating: () => pytestChecked(pytestSkippedXml, { noSkippedTests: true }),
+    // an expected failure is not a skip
+    clean: () => pytestChecked(pytestXfailXml, { noSkippedTests: true }),
+    unselected: () => pytestChecked(pytestSkippedXml, { testsPass: true }),
+  }, {
+    rule: 'testing/no-xfail-tests',
+    expectedBreaches: [{ code: 'test-xfail' }],
+    violating: () => pytestChecked(pytestXfailXml, { noXfailTests: true }),
+    // a plain skip is not an expected failure
+    clean: () => pytestChecked(pytestSkippedXml, { noXfailTests: true }),
+    unselected: () => pytestChecked(pytestXfailXml, { testsPass: true }),
+  }],
+  purity: { kind: 'delegated', to: 'testing' },
+  capabilities: {
+    kind: 'declared',
+    supported: [{
+      name: 'accepts every Rule its fixed pytest JUnit report can support',
+      construct: () => pytest({
+        rules: { testsPass: true, noSkippedTests: true, noXfailTests: true },
+      }),
+      rules: ['testing/tests-pass', 'testing/no-skipped-tests', 'testing/no-xfail-tests'],
+    }],
+    unsupported: [{
+      name: 'rejects a flaky Rule, which pytest JUnit cannot show',
+      run: () => pytest({ rules: { noFlakyTests: true } } as never),
+      message: /cannot distinguish flaky tests/u,
+    }, {
+      name: 'rejects a TODO Rule, which pytest has no concept of',
+      run: () => pytest({ rules: { noTodoTests: true } } as never),
+      message: /cannot distinguish TODO tests/u,
+    }],
+  },
+} as const satisfies AdapterTckSpec;
+
+runAdapterTck([testingSpec, vitestSpec, pytestSpec]);
