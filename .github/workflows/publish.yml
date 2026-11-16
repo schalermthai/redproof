@@ -85,6 +85,19 @@ jobs:
       - name: Install Ruff
         run: pipx install ruff==0.17.5
 
+      # The @redproof/cosmic-ray tests run the real cosmic-ray.
+      - name: Set up Python for cosmic-ray
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Point the native tests at cosmic-ray
+        run: |
+          python -m venv "$RUNNER_TEMP/cosmic-ray-venv"
+          "$RUNNER_TEMP/cosmic-ray-venv/bin/python" -m pip install cosmic-ray==8.9.0 pytest==9.2.0
+          echo "REDPROOF_COSMIC_RAY_PYTHON=$RUNNER_TEMP/cosmic-ray-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_COSMIC_RAY_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Run the full project check
         run: npm run check
 
