@@ -145,6 +145,11 @@ export const proofs = defineProofs(gate, [
     mutate.appendText('packages/coverage-py/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps the cosmic-ray adapter inside the scan and public API boundary',
+    mutate.appendText('packages/cosmic-ray/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
     rules.adaptersNoCrossAdapterImports,
     'keeps one Adapter from importing another',
     mutate.appendText('packages/istanbul/src/index.ts', "\nimport '../../knip/src/index.ts';\n"),
