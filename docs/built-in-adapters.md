@@ -14,6 +14,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Mutation-testing requirements hold | [`@redproof/stryker`](#stryker) |
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
+| Python module boundaries, layers, and interfaces hold | [`@redproof/tach`](#tach) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
 | A command succeeds based on its exit code | [Command Checks](./commands.md) |
 | Something not covered here | [Custom Adapter](./custom-adapter.md) |
@@ -615,6 +616,25 @@ Your Ruff configuration decides the scope, so `exclude`, `per-file-ignores` and 
 A missing Ruff, an unknown rule code, a broken configuration, an unreadable or unparseable file, a missing path, an empty file list, or a Ruff older than 0.4.10 is REFUSE, not PASS.
 
 See the [Ruff package](../packages/ruff/README.md) for every REFUSE code and what the configuration can hide.
+
+## tach
+
+`tach()` runs `tach check --output json` on a Python project and fails on the kinds of finding you select:
+
+```ts
+import { tach } from '@redproof/tach';
+import { defineGate } from 'redproof';
+
+const adapter = tach({
+  rules: { undeclared: 'undeclared-dependency', layers: 'layer-violation', interfaces: 'interface-violation' },
+});
+
+export default defineGate({ id: 'python-boundaries', adapter });
+```
+
+`tach.toml` must be in the working directory. A skipped file, a project with nothing to inspect, a crash, a timeout, or an unknown diagnostic is REFUSE, not PASS. Unused module dependencies are not available: tach prints them only as text. Project settings such as `unchecked`, `exclude`, and `# tach-ignore` still decide what tach reports.
+
+See the [tach package](../packages/tach/README.md) for every rule and the blind spots.
 
 ## Coverage
 

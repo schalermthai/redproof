@@ -50,6 +50,12 @@ jobs:
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
 
+      - name: Point the native tests at tach
+        run: |
+          python -m venv "$RUNNER_TEMP/tach-venv"
+          "$RUNNER_TEMP/tach-venv/bin/python" -m pip install tach==0.35.3
+          echo "REDPROOF_TACH_PYTHON=$RUNNER_TEMP/tach-venv/bin/python" >> "$GITHUB_ENV"
+
       - name: Run quality and integration checks
         run: npm run check:quality
 
@@ -110,6 +116,13 @@ jobs:
           python -m venv "$RUNNER_TEMP/coverage-venv"
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Point the native tests at tach
+        if: matrix.gate == 'test-health'
+        run: |
+          python -m venv "$RUNNER_TEMP/tach-venv"
+          "$RUNNER_TEMP/tach-venv/bin/python" -m pip install tach==0.35.3
+          echo "REDPROOF_TACH_PYTHON=$RUNNER_TEMP/tach-venv/bin/python" >> "$GITHUB_ENV"
 
       - name: Build the proof runtime
         run: npm run build
