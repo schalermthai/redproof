@@ -69,7 +69,7 @@ t('real tach: a project whose exclude removes every file REFUSES for every rule 
   ...projects.undeclared, 'tach.toml': `forbid_circular_dependencies = true\nexclude = ["src"]\n${projects.undeclared['tach.toml']}`,
 }, async root => {
   for (const kind of KINDS) {
-    const result = await gate(root, kind, tachBinary, { allowIgnoredSources: false, allowInactiveRules: true });
+    const result = await gate(root, kind, tachBinary, { allowIgnoredSources: true, allowInactiveRules: true });
     assert.equal(result.verdict, 'refuse', kind);
     if (result.verdict === 'refuse') assert.equal(result.why.code, 'tach-configuration-diagnostic');
   }
@@ -87,7 +87,7 @@ t('real tach: a file tach cannot decode is skipped with a warning and exit 0, so
   const { writeFile } = await import('node:fs/promises');
   await writeFile(`${root}/src/a/latin.py`, Buffer.from([0xff, 0xfe, 0x0a, ...Buffer.from('from c import y\n')]));
   for (const kind of KINDS) {
-    const result = await gate(root, kind, tachBinary, { allowIgnoredSources: false, allowInactiveRules: true });
+    const result = await gate(root, kind, tachBinary, { allowIgnoredSources: true, allowInactiveRules: true });
     assert.equal(result.verdict, 'refuse', `${kind}: ${JSON.stringify(result)}`);
     if (result.verdict === 'refuse') assert.equal(result.why.code, 'tach-configuration-diagnostic');
   }
@@ -97,7 +97,7 @@ t('real tach: a source root that does not exist REFUSES for every rule', () => w
   ...hidden, 'tach.toml': hidden['tach.toml'].replace('"src"', '"elsewhere"'),
 }, async root => {
   for (const kind of KINDS) {
-    const result = await gate(root, kind, tachBinary, { allowIgnoredSources: false, allowInactiveRules: true });
+    const result = await gate(root, kind, tachBinary, { allowIgnoredSources: true, allowInactiveRules: true });
     assert.equal(result.verdict, 'refuse', kind);
   }
 }));

@@ -70,8 +70,8 @@ t('allowIgnoredSources accepts the blind spot knowingly', () => withFiles({ ...H
   assert.deepEqual(await verdict(root, RULE, { allowIgnoredSources: true }), ['pass']);
 }));
 
-t('ignored environments and caches are not first-party sources: a normal project is not refused', () => withFiles({
-  ...HIDDEN, '.gitignore': '.venv/\n__pycache__/\nnode_modules/\n', '.venv/lib/site-packages/x.py': 'x = 1\n', 'src/b/__pycache__/m.py': 'z = 1\n',
+t('a hidden directory (.venv) is never read by tach, so ignoring it hides nothing: a normal project is not refused', () => withFiles({
+  ...HIDDEN, '.gitignore': '.venv/\n', '.venv/lib/site-packages/x.py': 'x = 1\n',
 }, async root => {
   git(root, 'init', '-q');
   assert.deepEqual(await verdict(root, RULE), FAIL);
@@ -113,8 +113,6 @@ const INACTIVE: readonly Inactive[] = [
     good: mods('depends_on = ["b"]'), red: ['fail', 'UnusedIgnoreDirective@src/a/__init__.py'] },
   { name: 'depends_on omitted', kind: 'undeclared-dependency', bad: mods('').replace('\n[[modules]]\npath = "b"', '\n[[modules]]\npath = "b"'),
     good: mods('depends_on = ["b"]'), red: ['fail', 'UndeclaredDependency@src/a/__init__.py'] },
-  { name: 'whole module excluded', kind: 'undeclared-dependency', bad: mods('depends_on = []', '', 'exclude = ["src/a"]\n'),
-    good: mods('depends_on = []'), red: ['fail', 'UndeclaredDependency@src/a/__init__.py', 'UndeclaredDependency@src/a/__init__.py'] },
   { name: 'unchecked module', kind: 'undeclared-dependency', bad: mods('depends_on = []\nunchecked = true'),
     good: mods('depends_on = []'), red: ['fail', 'UndeclaredDependency@src/a/__init__.py', 'UndeclaredDependency@src/a/__init__.py'] },
   { name: 'local_imports off', kind: 'undeclared-dependency', bad: mods('depends_on = []', '[rules]\nlocal_imports = "off"\n'),

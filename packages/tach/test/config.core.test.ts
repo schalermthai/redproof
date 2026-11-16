@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  ConfigError, excludedModules, excludedSources, globToRegExp, hiddenSources, interfacesAnchored, layersAssigned, mergeDomain, normalRoot, symlinkedSources,
+  ConfigError, hiddenSources, interfacesAnchored, layersAssigned, mergeDomain, nestedRepositories, normalRoot, symlinkedSources,
   type SourceTree,
 } from '../src/core/config.ts';
-import { configRefusal, escapingRoots, ignoredRefusal, symlinkRefusal } from '../src/core/guards.ts';
+import { configRefusal, escapingRoots, sourcesRefusal, symlinkRefusal } from '../src/core/guards.ts';
 import type { TachRuleKind } from '../src/core/model.ts';
 import { facts as readConfig } from './support/toml.ts';
 
-const EMPTY: SourceTree = { python: [], symlinks: [], ignoreFiles: [] };
+const EMPTY: SourceTree = { python: [], symlinks: [], nestedRepos: [], ignoreFiles: [] };
 const tree = (python: readonly string[], more: Partial<SourceTree> = {}): SourceTree => ({ ...EMPTY, python, ...more });
 
 const MODULES = '[[modules]]\npath = "a"\ndepends_on = ["b"]\n[[modules]]\npath = "b"\ndepends_on = []\n';
@@ -63,7 +63,7 @@ test('module facts: depends_on, layer, unchecked, cannot_depend_on, deprecated (
 const everything = 'forbid_circular_dependencies = true\nlayers = ["h", "l"]\n[[interfaces]]\nexpose = ["x"]\nfrom = ["b"]\n[[modules]]\npath = "a"\nlayer = "h"\ndepends_on = [{ path = "b", deprecated = true }]\ncannot_depend_on = ["c"]\nvisibility = ["z"]\n[[modules]]\npath = "b"\ndepends_on = []\n';
 const ALL: readonly TachRuleKind[] = ['undeclared-dependency', 'forbidden-dependency', 'deprecated-dependency', 'layer-violation', 'interface-violation', 'ignore-directive', 'circular-dependency', 'visibility-violation'];
 
-test('a fully configured project has nothing to refuse', () => assert.equal(configRefusal(ALL, readConfig(everything), EMPTY, {}), undefined));
+test('a fully configured project has nothing to refuse', () => assert.equal(configRefusal(ALL, readConfig(everything), {}), undefined));
 
 // The rule that is selected has its evidence switched off or never configured: a clean report would prove nothing.
 const INACTIVE: ReadonlyArray<readonly [TachRuleKind, string, RegExp]> = [
@@ -77,34 +77,31 @@ const INACTIVE: ReadonlyArray<readonly [TachRuleKind, string, RegExp]> = [
   ['undeclared-dependency', everything.replace('depends_on = []\n', ''), /may import anything: b/u],
   ['undeclared-dependency', `[rules]\nlocal_imports = "off"\n${everything}`, /local_imports/u],
   ['undeclared-dependency', everything.replace('path = "b"\n', 'path = "b"\nunchecked = true\n'), /unchecked/u],
-  ['undeclared-dependency', `exclude = ["b"]\n${everything}`, /whole modules.*b/u],
-  ['layer-violation', `exclude = ["src/a"]\nsource_roots = ["src"]\n${everything}`, /whole modules.*a/u],
 ];
 for (const [kind, text, pattern] of INACTIVE) {
   test(`${kind} selected but inactive REFUSES, naming why: ${pattern.source}`, () => {
-    const refusal = configRefusal([kind], readConfig(text), EMPTY, {});
+    const refusal = configRefusal([kind], readConfig(text), {});
     assert.ok(refusal, 'expected a refusal');
     assert.equal(refusal.code, kind === 'circular-dependency' ? 'tach-cycle-check-off' : 'tach-rule-inactive');
     assert.match(`${refusal.message}\n${refusal.detail}`, pattern);
-    if (kind !== 'circular-dependency') assert.equal(configRefusal([kind], readConfig(text), EMPTY, { allowInactiveRules: true }), undefined, 'the opt-in');
-    else assert.equal(configRefusal([kind], readConfig(text), EMPTY, { allowInactiveRules: true })?.code, 'tach-cycle-check-off', 'no opt-in: set the key');
+    if (kind !== 'circular-dependency') assert.equal(configRefusal([kind], readConfig(text), { allowInactiveRules: true }), undefined, 'the opt-in');
+    else assert.equal(configRefusal([kind], readConfig(text), { allowInactiveRules: true })?.code, 'tach-cycle-check-off', 'no opt-in: set the key');
   });
 }
 
 test('a rule not selected is not held to its configuration', () => {
-  assert.equal(configRefusal(['undeclared-dependency'], readConfig('[[modules]]\npath = "a"\ndepends_on = []\n'), EMPTY, {}), undefined);
+  assert.equal(configRefusal(['undeclared-dependency'], readConfig('[[modules]]\npath = "a"\ndepends_on = []\n'), {}), undefined);
 });
 
 test('source roots that leave the Gate root are named', () => {
   assert.deepEqual(escapingRoots(['src', './lib', 'a/../b', '../x', '/etc', 'C:\\x', '..', 'a/../../x']), ['../x', '/etc', 'C:\\x', '..', 'a/../../x']);
 });
 
-test('ignored sources: only first-party Python the walk found under a source root, and not excluded', () => {
+test('ignored sources: only the Python the walk found under a source root', () => {
   const facts = readConfig('source_roots = ["src"]\n');
   const found = tree(['src/a/x.py', 'src/a/readme.py', 'tools/t.py', 'src/tests/t.py']);
   assert.deepEqual(hiddenSources(['src/a/x.py', 'tools/t.py', 'src/tests/t.py', 'src/other/gone.py'], found, facts), ['src/a/x.py', 'src/tests/t.py'], 'no default exclude: tests/ is read by tach');
   assert.deepEqual(hiddenSources(['x.py', 'a/y.py'], tree(['x.py', 'a/y.py']), readConfig('')), ['x.py', 'a/y.py'], 'default source root is the project');
-  assert.deepEqual(hiddenSources(['src/gen/x.py'], tree(['src/gen/x.py']), readConfig('source_roots = ["src"]\nexclude = ["src/gen"]\n')), [], 'an excluded path is skipped by tach anyway');
 });
 
 test('source roots are compared as paths, not as text', () => {
@@ -119,37 +116,28 @@ test('source roots are compared as paths, not as text', () => {
 test('ignoredRefusal: hidden files, unknown, .ignore files, opt-in, respect_gitignore = false', () => {
   const facts = readConfig('source_roots = ["src"]\n');
   const found = tree(['src/a/x.py']);
-  assert.equal(ignoredRefusal(['src/a/x.py'], found, facts, {})?.code, 'tach-ignored-sources');
-  assert.equal(ignoredRefusal(undefined, found, facts, {})?.code, 'tach-ignored-sources-unknown');
-  assert.equal(ignoredRefusal([], found, facts, {}), undefined);
-  assert.equal(ignoredRefusal([], tree([], { ignoreFiles: ['src/.ignore'] }), facts, {})?.code, 'tach-ignored-sources', 'a .ignore file: git cannot say what it hides');
-  assert.equal(ignoredRefusal(undefined, tree([], { ignoreFiles: ['../.ignore'] }), facts, {})?.code, 'tach-ignored-sources');
-  assert.equal(ignoredRefusal(['src/a/x.py'], found, facts, { allowIgnoredSources: true }), undefined);
-  assert.equal(ignoredRefusal([], tree([], { ignoreFiles: ['.ignore'] }), facts, { allowIgnoredSources: true }), undefined);
+  assert.equal(sourcesRefusal(['src/a/x.py'], found, facts, {})?.code, 'tach-ignored-sources');
+  assert.equal(sourcesRefusal(undefined, found, facts, {})?.code, 'tach-ignored-sources-unknown');
+  assert.equal(sourcesRefusal([], found, facts, {}), undefined);
+  assert.equal(sourcesRefusal([], tree([], { ignoreFiles: ['src/.ignore'] }), facts, {})?.code, 'tach-ignored-sources', 'a .ignore file: git cannot say what it hides');
+  assert.equal(sourcesRefusal(undefined, tree([], { ignoreFiles: ['../.ignore'] }), facts, {})?.code, 'tach-ignored-sources');
+  assert.equal(sourcesRefusal(['src/a/x.py'], found, facts, { allowIgnoredSources: true }), undefined);
+  assert.equal(sourcesRefusal([], tree([], { ignoreFiles: ['.ignore'] }), facts, { allowIgnoredSources: true }), undefined);
   const off = readConfig('source_roots = ["src"]\nrespect_gitignore = false\n');
-  assert.equal(ignoredRefusal(['src/a/x.py'], found, off, {})?.code, 'tach-ignored-sources', 'respect_gitignore = false leaves .git/info/exclude on: the listing is its');
-  assert.equal(ignoredRefusal(undefined, found, off, {})?.code, 'tach-ignored-sources-unknown');
-  assert.equal(ignoredRefusal([], found, off, {}), undefined);
-  assert.equal(ignoredRefusal([], tree([], { ignoreFiles: ['.ignore'] }), off, {}), undefined, 'tach switches .ignore off with respect_gitignore = false');
-  assert.equal(ignoredRefusal(['src/a/x.py'], found, off, { allowIgnoredSources: true }), undefined);
+  assert.equal(sourcesRefusal(['src/a/x.py'], found, off, {})?.code, 'tach-ignored-sources', 'respect_gitignore = false leaves .git/info/exclude on: the listing is its');
+  assert.equal(sourcesRefusal(undefined, found, off, {})?.code, 'tach-ignored-sources-unknown');
+  assert.equal(sourcesRefusal([], found, off, {}), undefined);
+  assert.equal(sourcesRefusal([], tree([], { ignoreFiles: ['.ignore'] }), off, {}), undefined, 'tach switches .ignore off with respect_gitignore = false');
+  assert.equal(sourcesRefusal(['src/a/x.py'], found, off, { allowIgnoredSources: true }), undefined);
 });
 
-test('symbolic links under a source root are named, unless excluded, outside the roots, or accepted', () => {
-  const facts = readConfig('source_roots = ["src"]\nexclude = ["src/vendor"]\n');
-  const links = tree([], { symlinks: ['src/a', 'src/b/x.py', 'src/vendor/v', 'tools/t'] });
+test('symbolic links under a source root are named, unless outside the roots or accepted', () => {
+  const facts = readConfig('source_roots = ["src"]\n');
+  const links = tree([], { symlinks: ['src/a', 'src/b/x.py', 'tools/t'] });
   assert.deepEqual(symlinkedSources(links, facts), ['src/a', 'src/b/x.py']);
   assert.equal(symlinkRefusal(links, facts, {})?.code, 'tach-symlinked-sources');
   assert.equal(symlinkRefusal(links, facts, { allowIgnoredSources: true }), undefined);
   assert.equal(symlinkRefusal(tree([], { symlinks: ['tools/t'] }), facts, {}), undefined);
-});
-
-test('globs: gitignore-style patterns tach uses for exclude', () => {
-  const m = (pattern: string, path: string) => globToRegExp(pattern).test(path);
-  assert.ok(m('**/tests', 'src/a/tests/x.py') && m('**/tests', 'tests/x.py') && !m('**/tests', 'src/attests/x.py'));
-  assert.ok(m('a', 'src/a') && m('a', 'a/b.py') && !m('a', 'src/ab'));
-  assert.ok(m('src/a', 'src/a/x.py') && !m('src/a', 'other/src/a'));
-  assert.ok(m('*.py', 'x.py') && m('/build', 'build/x') && !m('/build', 'src/build'));
-  assert.deepEqual(excludedModules(readConfig('source_roots = ["src"]\nexclude = ["src/a"]\n[[modules]]\npath = "a"\n[[modules]]\npath = "b.c"\n')), ['a']);
 });
 
 test('a tach.domain.toml [root] is a module with the same keys, named by the file that defines it', () => {
@@ -157,30 +145,31 @@ test('a tach.domain.toml [root] is a module with the same keys, named by the fil
   assert.deepEqual(domain.modules.map(m => [m.paths, m.unchecked]), [[['service'], false], [['<root>'], true]]);
   const merged = mergeDomain(readConfig('source_roots = ["src"]\n'), domain, 'src/a');
   assert.deepEqual(merged.modules.map(m => m.paths), [['src/a::service'], ['src/a::<root>']]);
-  assert.match(configRefusal(['undeclared-dependency'], merged, EMPTY, {})?.detail ?? '', /unchecked.*src\/a::<root>/u);
-  assert.deepEqual(excludedModules(mergeDomain(readConfig('exclude = ["service"]\n'), domain, 'src/a')), [], 'domain paths are relative to the domain, never matched against exclude');
+  assert.match(configRefusal(['undeclared-dependency'], merged, {})?.detail ?? '', /unchecked.*src\/a::<root>/u);
   assert.deepEqual(readConfig('[root]\nunchecked = true\n').modules, [], 'a [root] table means nothing in tach.toml itself');
 });
 
-test('exclude: no key means nothing is excluded (tach 0.35 has no default list)', () => {
-  assert.deepEqual(readConfig('').exclude, []);
-  assert.deepEqual(excludedSources(tree(['tests/t.py', 'docs/d.py', 'venv/v.py']), readConfig('[[modules]]\npath = "tests"\n')), []);
+test('exclude is kept as written and never interpreted: any entry refuses, none does not', () => {
+  const found = tree(['src/a/x.py']);
+  assert.deepEqual(readConfig('').exclude, [], 'tach 0.35 has no default list');
+  assert.equal(sourcesRefusal([], found, readConfig('source_roots = ["src"]\n'), {}), undefined);
+  for (const pattern of ['src/a', '**/{a,b}', 'zzz', '[!x]*']) {
+    const refusal = sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), {});
+    assert.equal(refusal?.code, 'tach-ignored-sources', pattern);
+    assert.match(refusal?.detail ?? '', /exclude/u);
+    assert.equal(sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), { allowIgnoredSources: true }), undefined, 'the opt-in');
+  }
 });
 
-test('excluded sources: files a declared module owns; others only when tach checks unowned code', () => {
-  const files = tree(['src/a/__init__.py', 'src/a/legacy/x.py', 'src/a/impl.py', 'src/b.py', 'src/c/y.py', 'tests/t.py']);
-  const config = (exclude: string, extra = ''): ReturnType<typeof readConfig> =>
-    readConfig(`${extra}source_roots = ["src"]\nexclude = [${exclude}]\n[[modules]]\npath = "a"\n[[modules]]\npath = "b"\n`);
-  assert.deepEqual(excludedSources(files, config('"src/a/legacy"')), ['src/a/legacy/x.py']);
-  assert.deepEqual(excludedSources(files, config('"**/impl.py"')), ['src/a/impl.py']);
-  assert.deepEqual(excludedSources(files, config('"src/b.py"')), ['src/b.py'], 'a module that is a single file');
-  assert.deepEqual(excludedSources(files, config('"src/c"')), [], 'owned by no module and root_module is ignore');
-  assert.deepEqual(excludedSources(files, config('"src/c"', 'root_module = "forbid"\n')), ['src/c/y.py'], 'unowned code is checked under forbid');
-  assert.deepEqual(excludedSources(files, config('"tests"', 'root_module = "allow"\n')), [], 'outside every source root');
-  const unchecked = readConfig('source_roots = ["src"]\nexclude = ["src/a/legacy"]\n[[modules]]\npath = "a"\nunchecked = true\n');
-  assert.deepEqual(excludedSources(files, unchecked), [], 'an unchecked module is already refused on its own');
-  const domain = mergeDomain(readConfig('source_roots = ["src"]\nexclude = ["src/a/legacy"]\n'), readConfig('[[modules]]\npath = "legacy"\ndepends_on = []\n', 'domain'), 'src/a');
-  assert.deepEqual(excludedSources(files, domain), ['src/a/legacy/x.py'], 'a module a tach.domain.toml defines');
+test('nested repositories refuse as unknown when inside a source root (or above it), unless accepted or tach switches nothing off', () => {
+  const facts = readConfig('source_roots = ["src"]\n');
+  const nested = tree(['src/a/x.py'], { nestedRepos: ['src/a'] });
+  assert.deepEqual(nestedRepositories(nested, facts), ['src/a']);
+  assert.deepEqual(nestedRepositories(tree([], { nestedRepos: ['tools/x'] }), facts), []);
+  assert.equal(sourcesRefusal([], nested, facts, {})?.code, 'tach-ignored-sources-unknown');
+  assert.equal(sourcesRefusal([], nested, facts, { allowIgnoredSources: true }), undefined);
+  assert.equal(sourcesRefusal([], tree([], { nestedRepos: ['tools/x'] }), facts, {}), undefined);
+  assert.equal(nestedRepositories(tree([], { nestedRepos: ['src'] }), readConfig('source_roots = ["src/a"]\n')).length, 1, 'the root sits inside a nested repository');
 });
 
 test('layers and interfaces must be anchored to modules to enforce anything', () => {

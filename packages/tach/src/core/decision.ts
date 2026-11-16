@@ -2,7 +2,7 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { breach, result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
 import type { ConfigFacts, SourceTree } from './config.ts';
-import { configRefusal, escapingRoots, ignoredRefusal, symlinkRefusal, type GuardOptions, type IgnoredFiles } from './guards.ts';
+import { configRefusal, escapingRoots, sourcesRefusal, symlinkRefusal, type GuardOptions, type IgnoredFiles } from './guards.ts';
 import {
   MINIMUM_TACH_VERSION, NEWEST_VERIFIED_MINOR, attribute, parseTachReport, parseTachVersion, tachVersionSupported, tachVersionVerified,
   type TachReport, type TachRuleKind,
@@ -123,7 +123,7 @@ function guards(selected: ReadonlyMap<TachRuleKind, Rule<RuleRef>>, facts: Confi
   const escaping = escapingRoots(facts.sourceRoots);
   const found = escaping.length
     ? { code: 'tach-path-outside-root', message: 'A source root leaves the Gate root, so tach would read files the Gate never named.', detail: escaping.join('\n') }
-    : configRefusal([...selected.keys()], facts, tree, options) ?? ignoredRefusal(ignored, tree, facts, options) ?? symlinkRefusal(tree, facts, options);
+    : configRefusal([...selected.keys()], facts, options) ?? sourcesRefusal(ignored, tree, facts, options) ?? symlinkRefusal(tree, facts, options);
   return found ? refusal(found.code, found.message, found.detail) : undefined;
 }
 
@@ -132,7 +132,7 @@ function guards(selected: ReadonlyMap<TachRuleKind, Rule<RuleRef>>, facts: Confi
  * last, so an ambiguous run never passes. Full precedence, first match wins:
  *  1. shell: path outside the Gate root, no `tach.toml` in the working directory, unreadable `tach.domain.toml`, thrown error
  *  2. `tach --version`: command refused, not tach, too old, newer than the verified minor
- *  3. guards: source root outside the Gate root, cycle check off, inactive rule, ignored sources, symlinked sources
+ *  3. guards: source root outside the Gate root, cycle check off, inactive rule, exclude / ignored / nested-repository / symlinked sources
  *  4. `tach check`: command refused, exit code not 0 or 1, report not JSON, error object, exit/report disagree,
  *     structural stop, configuration diagnostic, unknown variant, exit/severity mismatch
  *  5. only then breaches (FAIL) or none (PASS)

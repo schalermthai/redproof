@@ -48,10 +48,8 @@ export type ConfigFacts = {
   /** `true`, `false`, or `if_git_repo`; anything unrecognised counts as `true`, tach's default. */
   readonly respectGitignore: 'true' | 'false' | 'if_git_repo';
   readonly sourceRoots: readonly string[];
-  /** The project's exclude patterns. tach 0.35 has no default when the key is absent, so none means nothing is excluded. */
+  /** The project's exclude patterns, kept as written: the adapter does not interpret them. tach 0.35 has no default when the key is absent. */
   readonly exclude: readonly string[];
-  /** `ignore` (tach's default), `allow`, `forbid` or `dependenciesonly`: what tach does with code no module owns. */
-  readonly rootModule: string;
   readonly modules: readonly ModuleFacts[];
   /** The `from` patterns of every `[[interfaces]]` entry, one list per entry. */
   readonly interfaceFrom: readonly (readonly string[])[];
@@ -106,13 +104,11 @@ export function readConfig(tree: unknown, kind: 'project' | 'domain' = 'project'
   const rules = table(field(parsed, 'rules'), 'rules');
   const git = field(parsed, 'respect_gitignore');
   const roots = strings(field(parsed, 'source_roots'), 'source_roots');
-  const rootModule = field(parsed, 'root_module');
   return {
     forbidCircular: field(parsed, 'forbid_circular_dependencies') === true,
     respectGitignore: git === false ? 'false' : git === 'if_git_repo' ? 'if_git_repo' : 'true',
     sourceRoots: roots.length ? roots : DEFAULT_SOURCE_ROOTS,
     exclude: strings(field(parsed, 'exclude'), 'exclude'),
-    rootModule: typeof rootModule === 'string' ? rootModule : 'ignore',
     modules: [...modules, ...root],
     interfaceFrom: interfaces.map(entry => strings(field(entry, 'from'), 'interface from')),
     hasInterfaceVisibility: interfaces.some(entry => field(entry, 'visibility') !== undefined),
@@ -135,21 +131,12 @@ export function mergeDomain(root: ConfigFacts, domain: ConfigFacts, where: strin
   };
 }
 
-/** A gitignore-style glob as a RegExp over a project-relative path. Covers `**`, `*`, `?`, a leading `/`, a trailing `/`. */
-export function globToRegExp(pattern: string): RegExp {
-  const anchored = pattern.startsWith('/') || pattern.replace(/\/$/u, '').includes('/') && !pattern.startsWith('**/');
-  const body = pattern.replace(/^\//u, '').replace(/\/$/u, '')
-    .replace(/[.+^${}()|\\]/gu, '\\$&')
-    .replace(/\*\*\//gu, '\u0001').replace(/\/\*\*/gu, '\u0002').replace(/\*\*/gu, '\u0003')
-    .replace(/\*/gu, '[^/]*').replace(/\?/gu, '[^/]')
-    .replace(/\u0001/gu, '(?:.*/)?').replace(/\u0002/gu, '(?:/.*)?').replace(/\u0003/gu, '.*');
-  return new RegExp(`${anchored ? '^' : '(?:^|/)'}${body}(?:/.*)?$`, 'u');
-}
-
 /** What the shell found on disk, relative to the working directory, with `/` separators. */
 export type SourceTree = {
   /** Regular `.py` files, in directories tach walks. */
   readonly python: readonly string[];
+  /** Directories below the project that hold their own `.git`: a nested repository's ignore files are invisible to the outer git. */
+  readonly nestedRepos: readonly string[];
   /** Symbolic links to a directory or to a `.py` file: tach does not follow them. */
   readonly symlinks: readonly string[];
   /** `.ignore` files in the project, and in every directory above it. tach reads them like a `.gitignore`. */
@@ -165,65 +152,23 @@ export function normalRoot(root: string): string {
 const inRoots = (file: string, facts: ConfigFacts): boolean =>
   facts.sourceRoots.map(normalRoot).some(root => root === '' || file === root || file.startsWith(`${root}/`));
 
-const excludeMatchers = (facts: ConfigFacts): readonly RegExp[] => facts.exclude.map(globToRegExp);
-const matchesAny = (path: string, matchers: readonly RegExp[]): boolean => matchers.some(matcher => matcher.test(path));
+/** Python files in a source root, from the walk. */
+const inSourceRoots = (tree: SourceTree, facts: ConfigFacts): readonly string[] => tree.python.filter(file => inRoots(file, facts));
 
-/** The Python files in a source root, from the tree, that exclude has not already removed. */
-function readable(tree: SourceTree, facts: ConfigFacts): readonly string[] {
-  const excluded = excludeMatchers(facts);
-  return tree.python.filter(file => inRoots(file, facts) && !matchesAny(file, excluded));
-}
-
-/** The ignored `.py` files that would hide first-party code from tach: inside a source root and not excluded. */
+/** The ignored `.py` files that would hide first-party code from tach: those the walk found inside a source root. */
 export function hiddenSources(ignored: readonly string[], tree: SourceTree, facts: ConfigFacts): readonly string[] {
   const listed = new Set(ignored);
-  return readable(tree, facts).filter(file => listed.has(file));
+  return inSourceRoots(tree, facts).filter(file => listed.has(file));
 }
 
-/** Symbolic links tach does not follow, inside a source root and not excluded. */
+/** Symbolic links tach does not follow, inside a source root. */
 export function symlinkedSources(tree: SourceTree, facts: ConfigFacts): readonly string[] {
-  const excluded = excludeMatchers(facts);
-  return tree.symlinks.filter(link => inRoots(link, facts) && !matchesAny(link, excluded));
+  return tree.symlinks.filter(link => inRoots(link, facts));
 }
 
-/** Module directories (dotted path to slashes) that the project's exclude removes from the walk. */
-export function excludedModules(facts: ConfigFacts): readonly string[] {
-  const excluded = excludeMatchers(facts);
-  const hidden: string[] = [];
-  for (const module of facts.modules) {
-    for (const path of module.paths) {
-      if (/[*?[\]]/u.test(path) || path === '<root>' || path.includes('::')) continue;
-      const dir = path.replaceAll('.', '/');
-      const candidates = facts.sourceRoots.map(normalRoot).map(root => (root === '' ? dir : `${root}/${dir}`));
-      if (candidates.some(candidate => matchesAny(candidate, excluded))) hidden.push(path);
-    }
-  }
-  return hidden;
-}
-
-/** Whether a module owns a file: its directory or its single-file form, under any source root. */
-function owns(module: ModuleFacts, file: string, facts: ConfigFacts): boolean {
-  return module.paths.some(path => {
-    if (/[*?[\]]/u.test(path)) return true;
-    const [where, local] = path.includes('::') ? path.split('::') as [string, string] : [undefined, path];
-    const dir = local === '<root>' ? '' : local.replaceAll('.', '/');
-    const prefixes = where === undefined
-      ? facts.sourceRoots.map(normalRoot).map(root => posix.join(root, dir))
-      : [posix.join(where === '.' ? '' : where, dir)];
-    return prefixes.some(prefix => prefix === '' || prefix === '.' || file === `${prefix}.py` || file === prefix || file.startsWith(`${prefix}/`));
-  });
-}
-
-/**
- * The first-party `.py` files that `exclude` removes from the walk and that tach would otherwise have checked: those
- * a declared module owns, and all of them when tach checks code no module owns (`root_module` is not `ignore`).
- * Code outside every module is not checked under the default, so excluding it hides nothing.
- */
-export function excludedSources(tree: SourceTree, facts: ConfigFacts): readonly string[] {
-  if (!facts.exclude.length) return [];
-  const excluded = excludeMatchers(facts);
-  return tree.python.filter(file => inRoots(file, facts) && matchesAny(file, excluded)
-    && (facts.rootModule !== 'ignore' || facts.modules.some(module => !module.unchecked && owns(module, file, facts))));
+/** Nested repositories inside a source root. */
+export function nestedRepositories(tree: SourceTree, facts: ConfigFacts): readonly string[] {
+  return tree.nestedRepos.filter(repo => inRoots(repo, facts) || facts.sourceRoots.map(normalRoot).some(root => root !== '' && root.startsWith(`${repo}/`)));
 }
 
 /** Whether some module is checked for a layer (a `layers` list that no module uses enforces nothing). */

@@ -38,7 +38,7 @@ Options: `cwd`, `command` (default `tach`), `timeoutMs`, `maxOutputBytes`, and t
 | Option | Accepts |
 | --- | --- |
 | `allowInactiveRules` | a selected rule whose configuration is missing or off (see below) |
-| `allowIgnoredSources` | Python files under a source root that tach will not read: hidden by an ignore file, or reached only through a symbolic link |
+| `allowIgnoredSources` | that tach may skip Python files under a source root: an `exclude`, an ignore file, a nested repository, a symbolic link |
 | `allowUnverifiedVersion` | a tach newer than the newest verified minor |
 
 No flag that narrows the run is offered.
@@ -55,11 +55,11 @@ A project whose modules import nothing of each other has nothing for tach to ins
 
 1. Path outside the Gate root, no `tach.toml` in the working directory, a `tach.toml` that is not valid TOML (`tach-config-unreadable`), a directory or `tach.domain.toml` that could not be read (`tach-domain-config-unreadable`), or a thrown error.
 2. `tach --version`: command refused, not tach, too old, or newer than the verified minor.
-3. Configuration guards: source root outside the Gate root, cycle check off, an inactive selected rule, ignored sources, symlinked sources.
+3. Configuration guards: source root outside the Gate root, cycle check off, an inactive selected rule, sources tach may skip (`exclude`, ignore files, nested repository, symlinks).
 4. `tach check`: command refused or timed out, exit code other than 0 or 1, report not JSON, an `{"error": ...}` object, exit code and report disagreeing, a structural stop, any configuration diagnostic, an unknown diagnostic variant.
 5. Only then Breaches (FAIL) or none (PASS).
 
-So REFUSE beats FAIL: a real violation printed beside a skipped file or an unknown diagnostic REFUSES, because a partial view must not fail (or pass) a Gate on its own. Distributed `tach.domain.toml` files are looked for in every directory below the working directory, to any depth, except hidden directories, `node_modules`, `venv`, `__pycache__` and `site-packages` (tach's own walker skips hidden ones; the others are environments).
+So REFUSE beats FAIL: a real violation printed beside a skipped file or an unknown diagnostic REFUSES, because a partial view must not fail (or pass) a Gate on its own. Distributed `tach.domain.toml` files are looked for in every directory below the working directory, to any depth, except hidden directories (tach's own walker skips those and nothing else).
 
 **Version policy.** The evidence is tach 0.35.3. Older releases REFUSE (`tach-version-unsupported`). A patch release of 0.35 runs. A newer minor (0.36, 1.0) REFUSES (`tach-version-unverified`) until someone re-runs the battery, because tach is 0.x and has changed defaults between minors, which would not show up as an unknown diagnostic. `allowUnverifiedVersion` runs it anyway. A diagnostic variant this adapter has never seen always REFUSES.
 
@@ -70,31 +70,34 @@ tach prints a clean report for a rule whose configuration is missing or turned o
 | Selected rule | REFUSES when |
 | --- | --- |
 | `circular-dependency` | top-level `forbid_circular_dependencies = true` is not set. **No opt-in**: it is one line, and tach prints `[]` for a real cycle without it (`tach-cycle-check-off`) |
-| `undeclared-dependency` | a module has neither `depends_on` nor `layer`, or a `depends_on` entry that matches every module such as `**` (tach lets it import anything) |
+| `undeclared-dependency` | a module has neither `depends_on` nor `layer`, or a `depends_on` entry made only of wildcards such as `**` (tach lets it import anything; heuristic: `[a-z]*`, `{*}` or listing every module by name open it as well) |
 | `forbidden-dependency` | no module sets `cannot_depend_on` |
 | `deprecated-dependency` | no dependency is marked `deprecated = true` |
 | `layer-violation` | no `layers` are defined, or no checked module sets `layer` |
 | `interface-violation` | no `[[interfaces]]` are defined, or none has a `from` that matches a checked module |
 | `visibility-violation` | no module or interface sets `visibility` |
 | `ignore-directive` | `[rules] unused_ignore_directives = "off"`. (`require_ignore_directive_reasons` is off in tach by default, so reasons are enforced only when the project turns it on) |
-| any import rule | `[rules] local_imports = "off"`, a module with `unchecked = true`, or `exclude` removing a module or any Python file a module owns. Code no module owns is unchecked by default (`root_module = "ignore"`), so excluding it hides nothing; under `allow`, `forbid` or `dependenciesonly` every excluded file counts |
+| any import rule | `[rules] local_imports = "off"`, a module with `unchecked = true` |
 
-**Ignored and symlinked sources.** The adapter walks the project itself (without following links, ignoring `.gitignore`) and compares what it finds with every way tach has of skipping a file. tach 0.35 reports nothing about which files it read (`tach map` lists only files that import another module), so the comparison is by reasons, not by tach's own list, and each reason is a question about the same walk:
+**Sources tach may skip.** tach 0.35.3 cannot say which files it read: `tach check` prints no list, and `tach map`, `report` and `show` print only files that import another module, so there is nothing to compare the adapter's own walk with. Rather than re-implement tach's skipping rules (its globs, its gitignore engine) the adapter refuses whenever something that could make tach skip a file is present, and does not claim finer detection. The walk skips hidden directories, as tach does, and nothing else (`node_modules`, `__pycache__`, `site-packages` and directories holding `pyvenv.cfg` are all read by tach). REFUSES (`tach-ignored-sources`, `tach-ignored-sources-unknown`, `tach-symlinked-sources`):
 
-- *Ignore files.* tach skips every file an ignore file names, in any ancestor directory, even outside a git repository, and even for a file git tracks. In a git repository the adapter asks `git ls-files --cached --others --ignored`; outside one, a throwaway git directory pointed at the highest ancestor holding a `.gitignore`. A `.ignore` file (ripgrep style) is read by tach and not by git, so any `.ignore` in the project or above it REFUSES. Python files from the walk that match REFUSE (`tach-ignored-sources`). Directories holding `pyvenv.cfg` are environments and are not walked. If git cannot answer, that REFUSES too (`tach-ignored-sources-unknown`).
+- *Any `exclude`.* The adapter does not interpret tach's glob syntax (braces, `[!x]`, escapes, trimming), so any entry may remove code. `tach init` writes one, so an initialised project refuses until `allowIgnoredSources`.
+- *Any `.ignore` file* in the project or above it (tach reads it, git does not), unless `respect_gitignore = false` switches it off.
+- *A `.gitignore` match.* Delegated to real git: `git ls-files --cached --others --ignored` (tracked files count; tach never reads the index). Python files from the walk that match REFUSE. With no repository, a throwaway git directory is pointed at the highest ancestor holding a `.gitignore`.
+- *What git cannot show*: a repository nested under the project, an ignore file above the repository root, git missing, or a `.git` that git cannot open (dubious ownership) REFUSE as unknown. Without the `.git` check that last case would look like "no repository" and lose `.git/info/exclude`.
 - *`respect_gitignore = false`* switches off `.gitignore` and `.ignore`, not `.git/info/exclude`, which the adapter still lists.
-- *Symbolic links.* tach does not follow a link to a directory or to a `.py` file and prints nothing. Any such link under a source root REFUSES (`tach-symlinked-sources`).
-- *Source roots* are compared as paths: `src`, `src/.`, `./src//` and `././src` are one directory.
-- tach 0.35 has **no default `exclude`** when `tach.toml` sets none (its `init` writes one, the loader does not apply it): `tests/`, `docs/` and `venv/` are read like any directory.
+- *Symbolic links* to a directory or to a `.py` file under a source root, which tach does not follow.
+- *Source roots* are compared as paths: `src`, `src/.`, `./src//` and `././src` are one directory. tach 0.35 has no default `exclude`: `tests/`, `docs/` and `venv/` are read.
 
-`allowIgnoredSources` acknowledges ignored and symlinked sources alike.
+`allowIgnoredSources` accepts all of these knowingly.
+
+**One kind per import.** tach reports one kind of finding per import, in this order: layer, then forbidden, then deprecated and undeclared (`checks/internal_dependency.rs`). A Gate that selects `undeclared-dependency` alone therefore PASSES an import tach labels forbidden or layer, even if it is also undeclared. The shared adapter contract (a Gate ignores kinds it did not select) rules out refusing it, and telling the cases apart needs tach's own `depends_on` matching. To rule such imports out, select the higher kinds too. `tests/exposure.native.test.ts` pins this.
 
 **Source roots** outside the Gate root, by `..`, an absolute path or a symlink, REFUSE (`tach-path-outside-root`).
 
 ## Blind spots that remain (tach decides, and prints a clean report)
 
 These cannot be told from the JSON or from the configuration, so they are documented rather than refused:
-- `exclude` of code that no module owns while `root_module` is `ignore`: tach does not check that code in any case.
 - `# tach-ignore` on an import. The `ignore-directive` rule audits directives but a needed one still silences its import.
 - Imports under `if TYPE_CHECKING:` (`ignore_type_checking_imports` defaults to true), string imports and dynamic imports (`include_string_imports` defaults to false).
 - Files outside `source_roots`, notebooks, and a module `layer` that no `layers` entry defines (tach raises nothing).

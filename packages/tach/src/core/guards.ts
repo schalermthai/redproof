@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import { excludedModules, excludedSources, hiddenSources, interfacesAnchored, layersAssigned, symlinkedSources, type ConfigFacts, type SourceTree } from './config.ts';
+import { hiddenSources, interfacesAnchored, layersAssigned, nestedRepositories, symlinkedSources, type ConfigFacts, type SourceTree } from './config.ts';
 import type { TachRuleKind } from './model.ts';
 
 export type GuardRefusal = { readonly code: string; readonly message: string; readonly detail: string };
@@ -7,7 +7,7 @@ export type GuardRefusal = { readonly code: string; readonly message: string; re
 export type GuardOptions = {
   /** Accept that a selected rule may have nothing configured to enforce. */
   readonly allowInactiveRules?: boolean | undefined;
-  /** Accept that Python files under a source root are invisible to tach: ignored by an ignore file, or reached only through a symbolic link. */
+  /** Accept that tach may skip Python files under a source root: an `exclude`, an ignore file, a nested repository, a symbolic link. */
   readonly allowIgnoredSources?: boolean | undefined;
 };
 
@@ -20,7 +20,7 @@ const IMPORT_RULES: readonly TachRuleKind[] = ['undeclared-dependency', 'forbidd
  * configuration is missing or off, so a clean report would otherwise pass for a rule that checked nothing.
  * `circular-dependency` has no opt-in: the check is a one-line setting, so the project turns it on.
  */
-export function configRefusal(kinds: readonly TachRuleKind[], facts: ConfigFacts, tree: SourceTree, options: GuardOptions): GuardRefusal | undefined {
+export function configRefusal(kinds: readonly TachRuleKind[], facts: ConfigFacts, options: GuardOptions): GuardRefusal | undefined {
   if (kinds.includes('circular-dependency') && !facts.forbidCircular) {
     return { code: 'tach-cycle-check-off', message: 'circular-dependency is selected but tach is not told to forbid circular dependencies, so it prints a clean report for a real cycle.',
       detail: 'Set `forbid_circular_dependencies = true` at the top level of tach.toml.' };
@@ -33,10 +33,6 @@ export function configRefusal(kinds: readonly TachRuleKind[], facts: ConfigFacts
     if (facts.localImports === 'off') reasons.push('`[rules] local_imports = "off"` hides imports inside functions.');
     const unchecked = facts.modules.filter(m => m.unchecked).flatMap(m => m.paths);
     if (unchecked.length) reasons.push(`modules marked \`unchecked = true\` are not checked: ${unchecked.join(', ')}.`);
-    const excluded = excludedModules(facts);
-    if (excluded.length) reasons.push(`\`exclude\` removes whole modules from the walk: ${excluded.join(', ')}.`);
-    const files = excludedSources(tree, facts);
-    if (files.length) reasons.push(`\`exclude\` removes Python files that a module owns from the walk: ${list(files)}.`);
   }
   if (kinds.includes('undeclared-dependency')) {
     const open = checked.filter(m => (!m.hasDependsOn && !m.hasLayer) || m.dependsOnAnything).flatMap(m => m.paths);
@@ -79,8 +75,19 @@ export function needsIgnoredListing(options: GuardOptions): boolean {
   return !options.allowIgnoredSources;
 }
 
-export function ignoredRefusal(ignored: IgnoredFiles, tree: SourceTree, facts: ConfigFacts, options: GuardOptions): GuardRefusal | undefined {
+export function sourcesRefusal(ignored: IgnoredFiles, tree: SourceTree, facts: ConfigFacts, options: GuardOptions): GuardRefusal | undefined {
   if (!needsIgnoredListing(options)) return undefined;
+  // The adapter does not model tach's glob syntax, so any exclude may remove code from the walk.
+  if (facts.exclude.length) {
+    return { code: 'tach-ignored-sources', message: '`exclude` removes paths from tach\'s walk, and the adapter does not interpret tach\'s glob syntax, so it cannot say whether code a module owns is among them.',
+      detail: `${list(facts.exclude.map(pattern => JSON.stringify(pattern)))}\nRemove the exclude, or set allowIgnoredSources to accept that tach may skip those paths.` };
+  }
+  // git does not show the ignore files of a repository nested in this one.
+  const nested = nestedRepositories(tree, facts);
+  if (nested.length) {
+    return { code: 'tach-ignored-sources-unknown', message: 'A repository nested in the project has ignore files that the outer git does not show, so no one can say which Python files tach skips.',
+      detail: `${list(nested)}\nRemove the nested repository or set allowIgnoredSources.` };
+  }
   // tach reads `.ignore` like a `.gitignore` (unless respect_gitignore is false), and git does not, so the listing cannot say what it hides.
   if (facts.respectGitignore !== 'false' && tree.ignoreFiles.length) {
     return { code: 'tach-ignored-sources', message: 'A .ignore file is read by tach but not by git, so no one can say which Python files it hides from tach.',
@@ -88,9 +95,7 @@ export function ignoredRefusal(ignored: IgnoredFiles, tree: SourceTree, facts: C
   }
   if (ignored === undefined) {
     return { code: 'tach-ignored-sources-unknown', message: 'tach skips files that ignore files name, and git could not say which Python files those are.',
-      detail: facts.respectGitignore === 'false'
-        ? 'tach still reads .git/info/exclude with `respect_gitignore = false`. Install git or set allowIgnoredSources.'
-        : 'Install git, set `respect_gitignore = false` in tach.toml (and empty .git/info/exclude), or set allowIgnoredSources.' };
+      detail: 'git is missing, cannot open a repository here (for example dubious ownership), or an ignore file sits above the repository where git does not look. Fix that, or set allowIgnoredSources.' };
   }
   const hidden = hiddenSources(ignored, tree, facts);
   return hidden.length

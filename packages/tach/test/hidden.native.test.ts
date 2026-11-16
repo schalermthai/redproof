@@ -153,12 +153,12 @@ t('B6: a symlink outside the source roots, or a dot-directory, is not tach input
   assert.deepEqual(await verdict(root, RULE), FAIL);
 }));
 
-t('an environment inside a source root (a directory holding pyvenv.cfg) is not first-party code: ignored and symlinked files in it do not refuse', () => withFiles({
+t('a directory holding pyvenv.cfg is not special to tach: ignored .py files and symlinks inside it refuse like any others', () => withFiles({
   ...BASE, 'src/env/pyvenv.cfg': 'home = /x\n', 'src/env/bin/activate_this.py': 'x = 1\n', '.gitignore': 'env/\n', 'real/z.py': 'z = 1\n',
 }, async root => {
   git(root, 'init', '-q');
-  await symlink(join(root, 'real/z.py'), join(root, 'src/env/bin/z.py'));
-  assert.deepEqual(await verdict(root, RULE), FAIL);
+  assert.deepEqual(await verdict(root, RULE), SOURCES);
+  assert.deepEqual(await verdict(root, RULE, { allowIgnoredSources: true }), FAIL);
 }));
 
 t('I1: depends_on = ["**"] lets a module import anything, like a module with no depends_on: REFUSE', async () => {
@@ -168,15 +168,14 @@ t('I1: depends_on = ["**"] lets a module import anything, like a module with no 
   }
 });
 
-t('I2: an exclude that removes part of a declared module (a sub-directory or a file) hides code: REFUSE; one that removes only code outside every module does not', async () => {
-  await withFiles({ ...BASE, 'src/a/__init__.py': 'x = 1\n', 'src/a/legacy/__init__.py': 'from b import thing\n', 'tach.toml': `exclude = ["src/a/legacy"]\n${TOML}` },
-    async root => assert.deepEqual(await verdict(root, RULE), INACTIVE, 'subdirectory'));
-  await withFiles({ ...BASE, 'src/a/__init__.py': 'x = 1\n', 'src/a/impl.py': 'from b import thing\n', 'tach.toml': `exclude = ["**/impl.py"]\n${TOML}` },
-    async root => assert.deepEqual(await verdict(root, RULE), INACTIVE, 'file'));
-  await withFiles({ ...BASE, 'src/a/__init__.py': 'x = 1\n', 'src/a/impl.py': 'from b import thing\n', 'tach.toml': `exclude = ["**/impl.py"]\n${TOML}` },
-    async root => assert.deepEqual(await verdict(root, RULE, { allowInactiveRules: true }), ['pass'], 'accepted knowingly'));
-  await withFiles({ ...BASE, 'tests/test_a.py': 'from b import thing\n', 'tach.toml': `exclude = ["tests"]\n${TOML}` },
-    async root => assert.deepEqual(await verdict(root, RULE), FAIL, 'outside every module (root_module is ignore)'));
+t('I2 (superseded by round 3): any exclude refuses, because the adapter does not interpret tach\'s globs; allowIgnoredSources accepts it', async () => {
+  const files = { ...BASE, 'src/a/__init__.py': 'x = 1\n', 'src/a/impl.py': 'from b import thing\n' };
+  for (const pattern of ['src/a/legacy', '**/impl.py', 'tests']) {
+    await withFiles({ ...files, 'tach.toml': `exclude = [${JSON.stringify(pattern)}]\n${TOML}` }, async root => {
+      assert.deepEqual(await verdict(root, RULE), SOURCES, pattern);
+      assert.deepEqual(await verdict(root, RULE, { allowIgnoredSources: true }), pattern === '**/impl.py' ? ['pass'] : ['fail', 'UndeclaredDependency@src/a/impl.py'], `${pattern}: accepted knowingly`);
+    });
+  }
 });
 
 t('I3: layers that no module uses enforce nothing: REFUSE; interfaces whose `from` matches no module enforce nothing: REFUSE', async () => {

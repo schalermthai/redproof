@@ -22,10 +22,10 @@ function parseConfig(text: string, kind: 'project' | 'domain' = 'project'): Conf
 }
 
 /**
- * Directories tach's own walker never reads: hidden ones, and environments and caches that are not project sources.
- * An environment inside a source root is any directory holding `pyvenv.cfg`.
+ * Directories tach's own walker never reads: hidden ones, and only those. node_modules, __pycache__, site-packages
+ * and directories holding pyvenv.cfg are read by tach, so they are walked here too.
  */
-const NOT_WALKED = /^(?:\..*|node_modules|__pycache__|site-packages)$/u;
+const NOT_WALKED = /^\./u;
 
 /**
  * tach.toml plus every distributed `tach.domain.toml` below it, and the tree tach walks: its Python files, the
@@ -37,6 +37,7 @@ export async function readProject(cwd: string, configText: string): Promise<{ re
   let facts = parseConfig(configText);
   const python: string[] = [];
   const symlinks: string[] = [];
+  const nestedRepos: string[] = [];
   const ignoreFiles: string[] = [];
   const walk = async (dir: string, path: string): Promise<void> => {
     let entries;
@@ -45,10 +46,10 @@ export async function readProject(cwd: string, configText: string): Promise<{ re
     } catch (error) {
       throw new DomainConfigError(`A directory under the project could not be read, so what tach reads there is unknown: ${path || '.'}`, error);
     }
-    if (path && entries.some(entry => entry.name === 'pyvenv.cfg' && entry.isFile())) return;
     for (const entry of entries) {
       const child = path ? `${path}/${entry.name}` : entry.name;
       const full = join(dir, entry.name);
+      if (path && entry.name === '.git') nestedRepos.push(path);
       if (entry.isSymbolicLink()) {
         const target = entry.name.startsWith('.') ? undefined : await stat(full).catch(() => undefined);
         if (target?.isDirectory() || (target?.isFile() && entry.name.endsWith('.py'))) symlinks.push(child);
@@ -73,10 +74,11 @@ export async function readProject(cwd: string, configText: string): Promise<{ re
     if (await stat(file).then(s => s.isFile(), () => false)) ignoreFiles.push(relative(cwd, file).replaceAll('\\', '/'));
     if (dirname(dir) === dir) break;
   }
-  return { facts, tree: { python, symlinks, ignoreFiles } };
+  return { facts, tree: { python, symlinks, nestedRepos, ignoreFiles } };
 }
 
-const EXCLUDED_ENVIRONMENTS = ['.venv', 'node_modules', 'site-packages', '.tox', '.git'].map(name => `:(exclude,glob)**/${name}/**`);
+/** tach never reads hidden directories, so a hidden path is not a hidden source. */
+const HIDDEN_DIRECTORIES = [':(exclude,glob)**/.*/**'];
 
 const git = (cwd: string, args: readonly string[], limit: number) =>
   executeCommand({ command: 'git', args, cwd, label: 'git', timeoutMs: 30_000, maxOutputBytes: limit, env: { GIT_OPTIONAL_LOCKS: '0' } });
@@ -85,18 +87,21 @@ const git = (cwd: string, args: readonly string[], limit: number) =>
  * With `respect_gitignore = false` tach switches off `.gitignore` and `.ignore` but still reads the repository's own
  * `.git/info/exclude`. The files that file hides; none when there is no repository; undefined when git cannot say.
  */
-async function hiddenByRepository(cwd: string, limit: number): Promise<IgnoredFiles> {
-  let inside = false;
-  for (let dir = cwd; ; dir = dirname(dir)) {
-    if (await stat(join(dir, '.git')).then(() => true, () => false)) { inside = true; break; }
-    if (dirname(dir) === dir) break;
+/** Whether a `.git` entry (directory or worktree file) sits in `dir` or above it. */
+async function insideRepository(dir: string): Promise<boolean> {
+  for (let here = dir; ; here = dirname(here)) {
+    if (await stat(join(here, '.git')).then(() => true, () => false)) return true;
+    if (dirname(here) === here) return false;
   }
-  if (!inside) return [];
+}
+
+async function hiddenByRepository(cwd: string, limit: number): Promise<IgnoredFiles> {
+  if (!(await insideRepository(cwd))) return [];
   const top = await git(cwd, ['rev-parse', '--show-toplevel'], limit);
   const exclude = await git(cwd, ['rev-parse', '--git-path', 'info/exclude'], limit);
   if (top.kind === 'refused' || top.exitCode !== 0 || exclude.kind === 'refused' || exclude.exitCode !== 0) return undefined;
   const root = top.stdout.trim();
-  const listed = await git(root, ['ls-files', '--cached', '--others', '--ignored', `--exclude-from=${resolve(cwd, exclude.stdout.trim())}`, '-z', '--', '*.py', ...EXCLUDED_ENVIRONMENTS], limit);
+  const listed = await git(root, ['ls-files', '--cached', '--others', '--ignored', `--exclude-from=${resolve(cwd, exclude.stdout.trim())}`, '-z', '--', '*.py', ...HIDDEN_DIRECTORIES], limit);
   if (listed.kind === 'refused' || listed.exitCode !== 0) return undefined;
   return listed.stdout.split('\0').filter(Boolean).map(file => relative(cwd, resolve(root, file))).filter(file => !file.startsWith('..'));
 }
@@ -104,19 +109,26 @@ async function hiddenByRepository(cwd: string, limit: number): Promise<IgnoredFi
 /**
  * The Python files that ignore files hide, relative to `cwd`. tach reads .gitignore even outside a git repository
  * and honours ignore files above the project, so in a repo the answer is `git ls-files --cached --others --ignored`;
- * outside one, a throwaway git directory is pointed at the highest ancestor that holds a .gitignore.
- * Undefined when git cannot answer.
+ * outside one, a throwaway git directory is pointed at the highest ancestor that holds a .gitignore. A .gitignore
+ * above the repository, or a repository git cannot open, is more than git shows: undefined, like any time git cannot answer.
  */
 export async function ignoredPython(cwd: string, limit: number, respect: ConfigFacts['respectGitignore']): Promise<IgnoredFiles> {
   if (respect === 'false') return hiddenByRepository(cwd, limit);
   // Tracked files count: a file committed before its .gitignore rule is still skipped by tach, which never reads the index.
-  const listing = ['ls-files', '--cached', '--others', '--ignored', '--exclude-standard', '-z', '--', '*.py', ...EXCLUDED_ENVIRONMENTS];
+  const listing = ['ls-files', '--cached', '--others', '--ignored', '--exclude-standard', '-z', '--', '*.py', ...HIDDEN_DIRECTORIES];
   const top = await git(cwd, ['rev-parse', '--show-toplevel'], limit);
   if (top.kind === 'refused') return undefined;
   if (top.exitCode === 0) {
+    // git reads the ignore files inside the repository; tach also reads the ones above it.
+    for (let dir = dirname(top.stdout.trim()); ; dir = dirname(dir)) {
+      if (await stat(join(dir, '.gitignore')).then(() => true, () => false)) return undefined;
+      if (dirname(dir) === dir) break;
+    }
     const listed = await git(cwd, listing, limit);
     return listed.kind === 'completed' && listed.exitCode === 0 ? listed.stdout.split('\0').filter(Boolean) : undefined;
   }
+  // git failed to open it (for example, dubious ownership), yet a repository is there: that is not "no repository".
+  if (await insideRepository(cwd)) return undefined;
   let base = cwd;
   for (let dir = cwd; ; dir = dirname(dir)) {
     if (await stat(join(dir, '.gitignore')).then(s => s.isFile(), () => false)) base = dir;
