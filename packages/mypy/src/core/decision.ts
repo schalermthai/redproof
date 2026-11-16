@@ -53,7 +53,7 @@ export type ConfigChoice =
  * bodies are checked (mypy skips them by default, so an unannotated project would pass), unused ignores
  * are reported (they tell used ignores apart), and every selected code is enabled and its flag raised.
  */
-export function mypyFlags(plan: MypyPlan, config: ConfigChoice): readonly string[] {
+function mypyFlags(plan: MypyPlan, config: ConfigChoice): readonly string[] {
   const flags = new Set<string>();
   const pairs: string[] = [];
   for (const code of plan.codes) for (const flag of verifiedCodes[code] ?? []) flags.add(flag);
@@ -115,7 +115,7 @@ export type Places = {
   readonly mypyPath: readonly string[];
 };
 
-export type RunPython = (args: readonly string[]) => Promise<CommandExecution>;
+type RunPython = (args: readonly string[]) => Promise<CommandExecution>;
 
 export type DecideInput<R extends RuleRef> = {
   readonly plan: MypyPlan;
@@ -268,7 +268,7 @@ function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, 
 }
 
 /** A finding's file as the Gate sees it: relative to the Gate root when inside it. */
-export function displayPath(root: string, filename: string): string {
+function displayPath(root: string, filename: string): string {
   const rel = relative(root, filename);
   return withinRoot(root, filename) && rel ? rel : filename;
 }

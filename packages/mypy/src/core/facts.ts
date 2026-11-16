@@ -3,7 +3,7 @@ import type { Allowance } from './options.ts';
 import { ignoreCodes, parseMypyVersion, relatedCodes, signalCodes } from './model.ts';
 
 /** What mypy itself says it will do, read by the probe before the check runs. */
-export type FileFacts = {
+type FileFacts = {
   readonly path: string;
   readonly unreadable: string | null;
   readonly ignores: readonly { readonly line: number; readonly codes: readonly string[] | null; readonly top: boolean }[];

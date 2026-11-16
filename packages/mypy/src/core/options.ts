@@ -8,7 +8,7 @@ export type Selection = Readonly<Record<string, string>>;
  * Settings the adapter refuses by default because they can hide a finding. Naming one in `allow` accepts it,
  * and says so in the Gate: the verdict is then weaker than "mypy reports nothing".
  */
-export const allowances = [
+const allowances = [
   'type-ignore',
   'inline-config',
   'ignore-errors',
