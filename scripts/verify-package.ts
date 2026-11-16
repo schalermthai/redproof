@@ -273,12 +273,13 @@ await writeFile(resolve(root, 'a.py'), 'x = BAD\\n');
 // probe (-c) with the facts mypy would give, and the check (-m mypy) with a finding while a.py still holds BAD.
 const facts = { kind: 'facts', mypyVersion: '2.4.1', hostVersion: [3, 13], hostPlatform: 'linux', configFile: null, stdout: '', stderr: '',
   sources: [{ path: 'a.py', module: 'a' }], changed: {}, sections: {}, files: [{ path: 'a.py', unreadable: null, ignores: [], inline: [] }] };
+const closure = { kind: 'closure', mypyVersion: '2.4.1', modules: [{ module: 'a', path: resolve(root, 'a.py'), stub: false, unreadable: null, ignores: [], inline: [], noTypeCheck: [] }], promised: [resolve(root, 'a.py')] };
 const standIn = resolve(root, 'python-stand-in.mjs');
 await writeFile(standIn, [
   '#!/usr/bin/env node',
   "import { readFileSync } from 'node:fs';",
   'const args = process.argv.slice(2);',
-  "if (args.includes('-c')) { process.stdout.write(" + JSON.stringify(JSON.stringify(facts)) + '); process.exit(0); }',
+  "if (args.includes('-c')) { process.stdout.write(args[args.indexOf('-c') + 1].includes('CompileError') ? " + JSON.stringify(JSON.stringify(closure)) + ' : ' + JSON.stringify(JSON.stringify(facts)) + '); process.exit(0); }',
   "const bad = readFileSync(process.cwd() + '/a.py', 'utf8').includes('BAD');",
   "if (bad) process.stdout.write(JSON.stringify({ file: 'a.py', line: 1, column: 9, message: 'Incompatible types in assignment', hint: null, code: 'assignment', severity: 'error' }) + '\\\\n');",
   'process.exit(bad ? 1 : 0);',
