@@ -49,3 +49,15 @@ process.exit(${exitCode});
   await chmod(file, 0o755);
   return file;
 }
+
+/** A stand-in `tach` whose `check` run is any script body, for runs that do not end the way tach documents. */
+export async function scriptedTach(root: string, checkBody: string): Promise<string> {
+  const file = join(root, 'scripted-tach.mjs');
+  await writeFile(file, `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args.includes('--version')) { process.stdout.write('tach 0.35.3\\n'); process.exit(0); }
+${checkBody}
+`);
+  await chmod(file, 0o755);
+  return file;
+}
