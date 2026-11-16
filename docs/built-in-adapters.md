@@ -636,6 +636,8 @@ export default defineGate({ id: 'python-dead-code', adapter });
 
 Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) decides which findings count. vulture only prints text, so the adapter parses `file:line: unused X 'name' (NN% confidence)` and REFUSES on any line it does not understand. A project's own `[tool.vulture]` is not read unless you pass `configFile`, because its `exclude` could hide findings. vulture exits 0 after skipping a file it cannot parse and prints that only on stderr, even when it also exits 3 for findings elsewhere, so the adapter reads stderr on every exit (the run goes out with `PYTHONWARNINGS=ignore`, so any stderr line means input was not read) and REFUSES when a file was not read, when no Python file would be read, and when the run did not finish.
 
+It also REFUSES when a directory cannot be read, when the Gate root sits under a directory named `test` or `tests` (vulture would then count `test_*` functions as used, so the verdict would depend on the checkout path; `allowTestPathAncestors` accepts it), and when a file name holds a line break. vulture never reports an unused `import sys` (and a few other standard-library modules it ships whitelists for); that is a blind spot of the rule.
+
 See the [vulture package](../packages/vulture/README.md) for every refusal and blind spot.
 
 ## Coverage

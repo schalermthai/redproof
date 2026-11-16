@@ -164,7 +164,7 @@ function fnmatchSource(pat: string): string {
         }
         stuff = chunks.map(part => part.replaceAll('\\', '\\\\').replaceAll('-', '\\-')).join('-');
       }
-      stuff = stuff.replace(/([&~|])/gu, '\\$1');
+      stuff = stuff.replace(/([&~|\]])/gu, '\\$1');
       i = j + 1;
       if (!stuff) res += '(?!)';
       else if (stuff === '!') res += '[\\s\\S]';
@@ -195,4 +195,14 @@ export function excludeMatcher(patterns: readonly string[], windows: boolean): (
  */
 export function isPythonSourceEntry(name: string, kind: { readonly file: boolean; readonly symlinkToFile: boolean }): boolean {
   return name.endsWith('.py') && (kind.file || kind.symlinkToFile);
+}
+
+/**
+ * vulture reads `test_*` functions and `*Test*` classes as used in a "test file", and it decides that from the
+ * absolute path: any ancestor directory named `test` or `tests` makes every file below it one (`fnmatch`:
+ * case-sensitive on POSIX, folded on Windows). So the same commit gets a different verdict in a checkout under
+ * `/ci/tests/work/`. Returns the offending segment of `root`, or undefined.
+ */
+export function testDirectoryAncestor(root: string, windows: boolean): string | undefined {
+  return root.split(/[\\/]/u).map(segment => (windows ? segment.toLowerCase() : segment)).find(segment => segment === 'test' || segment === 'tests');
 }

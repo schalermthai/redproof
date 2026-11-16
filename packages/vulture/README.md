@@ -43,7 +43,8 @@ An unknown kind, or the same kind twice, throws when the adapter is constructed.
 | `cwd` | working directory relative to the Gate root |
 | `minConfidence` | integer 0 to 100, default 60 (everything vulture reports). Always passed to vulture |
 | `exclude`, `ignoreNames`, `ignoreDecorators` | vulture's `--exclude`, `--ignore-names`, `--ignore-decorators` patterns (no commas, no leading dash) |
-| `configFile` | opt in to a `[tool.vulture]` file relative to the Gate root |
+| `configFile` | opt in to a `[tool.vulture]` file relative to the Gate root. Its `exclude` can remove files the adapter cannot see, so with it the result reports `inspected: null` instead of a count |
+| `allowTestPathAncestors` | accept a Gate root that has a `test` or `tests` directory among its ancestors (see the refusal below) |
 | `command`, `timeoutMs`, `maxOutputBytes` | the executable, a time limit (default 60 s), an output cap (default 10 MiB) |
 
 By default `--config` points at an empty file, so a project's own `exclude`, `ignore_names`, `ignore_decorators`, `paths` or `min_confidence` cannot hide a finding; the Gate's options are the whole configuration. With `configFile` the file's `exclude` can remove files the adapter cannot see, so a pass is only as strong as that file.
@@ -54,6 +55,9 @@ By default `--config` points at an empty file, so a project's own `exclude`, `ig
 |---|---|
 | `vulture-input-unread` | vulture wrote anything to stderr: a syntax error, bad encoding, a missing path, a crash. The run goes out with `PYTHONWARNINGS=ignore`, so no Python warning is expected there, and nothing is classified by its shape (a file name or source text can imitate any shape). Checked on every exit code, because exit 3 (findings) hides a syntax error elsewhere |
 | `vulture-input-invalid` | exit 1 with nothing explaining it |
+| `vulture-path-unreadable` | a directory below the paths cannot be listed. `Path.rglob` skips it without a word, so the code in it would never be analysed |
+| `vulture-unsafe-file-name` | a Python file name holds a line break, which can forge a line of the report |
+| `vulture-root-in-test-directory` | the Gate root has an ancestor directory named `test` or `tests`. vulture then treats every file as a test file and counts `test_*` functions and `*Test*` classes as used, so the same commit would get a different verdict in a checkout elsewhere (a CI workspace under `/tests/`). `allowTestPathAncestors` accepts it |
 | `vulture-nothing-inspected` | no Python file would be read (empty directory, only non-`.py` files, everything excluded) |
 | `vulture-report-unrecognised` | a stdout line is not exactly one of the shapes vulture prints (format drift, a traceback). The line is read from the right: the last `:<line>: <message> (N% confidence)` wins, and a name inside the quotes cannot hold a space or a quote, so a hostile file name cannot swallow or re-label a real finding. An unparseable line refuses every rule, because its kind is unknown: it may belong to the one you selected. A finding that parses but is of a kind you did not select is simply not yours |
 | `vulture-report-inconsistent` | exit 0 with findings, or exit 3 without |
@@ -64,8 +68,11 @@ By default `--config` points at an empty file, so a project's own `exclude`, `ig
 
 ## Blind spots
 
+- **Whitelisted standard-library imports are never reported.** vulture ships whitelists for `argparse`, `ast`, `collections`, `ctypes`, `enum`, `logging`, `pint`, `socketserver`, `ssl`, `string`, `sys`, `threading` and `unittest`, and scans them with your code, so an unused `import sys` is invisible. `vulture/unused-import` does not cover these; a test pins the behaviour so a change in vulture shows up.
 - `# noqa` and `# noqa: V10x` comments suppress findings (vulture offers no way to turn them off).
-- vulture treats test files specially and cannot see dynamic use: that is what whitelist modules and `ignoreNames` are for.
-- `unreachable-code` merges every reachability message into one rule (`unreachable code after`, `unsatisfiable ... condition`, `unreachable ... block`, `redundant if-condition`, `unreachable 'else' expression`); the text report does not name the category. A test reads the installed vulture's own message strings, so a message added in a new release breaks the suite instead of a user's Gate.
-- The file count behind `vulture-nothing-inspected` mirrors vulture's directory walk and its `--exclude` (`fnmatch`, a line-for-line port, compared with Python's own `fnmatch` in the tests); it is a guard against empty runs, not a list of what was read. A directory vulture cannot read is skipped, as `Path.rglob` skips it.
-- Windows is untested: `fnmatch` folds case and separators there and the matcher mirrors that, but no Windows run exists.
+- vulture treats test files specially (`test_*` functions, `*Test*` classes) and cannot see dynamic use: that is what whitelist modules and `ignoreNames` are for. A file whose own name looks like a test (`test*.py`, `*_test.py`) is judged the same way everywhere; the path of the checkout is not (see `vulture-root-in-test-directory`).
+- `unreachable-code` merges every reachability message (`unreachable code after`, `unsatisfiable ... condition`, `unreachable ... block`, `redundant if-condition`, `unreachable 'else' expression`); the text report does not name the category. A test reads the installed vulture's own message strings, so a message added in a new release breaks the suite instead of a user's Gate.
+- Default `paths` is `.`: a `.venv` or `node_modules` inside it is scanned too (vulture's walk includes hidden directories). Put them in `exclude`; an oversized report REFUSES at `maxOutputBytes`.
+- Symbolic links to directories are not entered (as in `Path.rglob`): code reached only through one is never read, and nothing says so.
+- The file count behind `vulture-nothing-inspected` mirrors vulture's directory walk and its `--exclude` (`fnmatch`, a line-for-line port, compared with Python's own `fnmatch` on seeded bracket-heavy fuzz and with real vulture runs). It is a guard against empty runs, not a list of what was read.
+- Windows is untested: `fnmatch` folds case and separators there and the matcher mirrors that by reading the code; CI is Linux only.

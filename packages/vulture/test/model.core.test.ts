@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  VULTURE_KINDS, excludeMatcher, parseVultureOutput, parseVultureVersion, unreadInput, vultureVersionSupported,
+  VULTURE_KINDS, excludeMatcher, testDirectoryAncestor, parseVultureOutput, parseVultureVersion, unreadInput, vultureVersionSupported,
 } from '../src/core/model.ts';
 import { reports } from './support/reports.ts';
 
@@ -78,4 +78,26 @@ test('--exclude follows fnmatch exactly: case-sensitive on POSIX, `^` is a liter
   assert.equal(excludeMatcher(['*/[^a]'], false)('/r/b'), false);
   assert.equal(excludeMatcher(['mod.py'], false)('/r/Mod.py'), false);
   assert.equal(excludeMatcher(['MOD.PY'], true)('C:/r/mod.py'), true, 'Windows folds case and separators (untested on a real Windows host)');
+});
+
+test('a `]` first in a bracket class is a literal, as in fnmatch (and an empty-looking class never throws)', () => {
+  const m = (pattern: string, path: string) => excludeMatcher([pattern], false)(path);
+  assert.equal(m('*[]a].py', '/p/a.py'), true);
+  assert.equal(m('*[]a].py', '/p/].py'), true);
+  assert.equal(m('*[]a].py', '/p/b.py'), false);
+  assert.equal(m('*[!]b].py', '/p/a.py'), true);
+  assert.equal(m('*[!]b].py', '/p/b.py'), false);
+  assert.equal(m('*[!]b].py', '/p/].py'), false);
+  assert.equal(m('*[]]', '/p/]'), true);
+  assert.doesNotThrow(() => excludeMatcher(['[]?*]-.-', '[]', '[!]', '[]-a]'], false));
+});
+
+test('vulture treats `test_*` functions and `*Test*` classes as used when ANY ancestor directory is named test or tests', () => {
+  assert.equal(testDirectoryAncestor('/home/ci/tests/work/proj', false), 'tests');
+  assert.equal(testDirectoryAncestor('/home/ci/test/proj', false), 'test');
+  assert.equal(testDirectoryAncestor('/home/me/proj/tests', false), 'tests', 'the root itself counts: every file below it has the segment');
+  assert.equal(testDirectoryAncestor('/home/me/proj', false), undefined);
+  assert.equal(testDirectoryAncestor('/home/me/contests/proj', false), undefined, 'a name that merely contains it does not count');
+  assert.equal(testDirectoryAncestor('/home/me/Tests/proj', false), undefined, 'fnmatch is case-sensitive on POSIX');
+  assert.equal(testDirectoryAncestor('C:\\Work\\Tests\\proj', true), 'tests', 'and folded on Windows');
 });

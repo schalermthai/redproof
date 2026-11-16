@@ -5,7 +5,7 @@ import type { Check, Rule, RuleRef } from 'redproof';
 import { counting } from 'redproof';
 import { executeCommand } from 'redproof/command';
 import {
-  checkResult, decideVulture, displayPath, finalOutcome, refusal, unexpectedFailure, withinRoot, type VultureDecision, type VultureRefusal,
+  checkResult, decideVulture, displayPath, finalOutcome, refusal, unexpectedFailure, withinRoot, type FileCensus, type VultureDecision, type VultureRefusal,
 } from '../core/decision.ts';
 import { excludeMatcher, isPythonSourceEntry, type VultureKind } from '../core/model.ts';
 import type { VultureOptions } from '../core/options.ts';
@@ -28,12 +28,14 @@ async function confine(root: string, base: string, path: string, what: string): 
 const isRefusal = (value: string | VultureRefusal): value is VultureRefusal => typeof value !== 'string';
 
 /** The `.py` files below a directory, as `Path.rglob('*.py')` finds them: symlinked directories are not entered. */
-async function pythonFiles(directory: string): Promise<string[]> {
+async function pythonFiles(directory: string, unreadable: string[]): Promise<string[]> {
   const found: string[] = [];
-  // `Path.rglob` skips a directory it cannot read, and so does this.
-  for (const entry of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
+  let entries;
+  try { entries = await readdir(directory, { withFileTypes: true }); }
+  catch { unreadable.push(directory); return found; } // `Path.rglob` skips it without a word: the check must not.
+  for (const entry of entries) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) found.push(...await pythonFiles(path));
+    if (entry.isDirectory()) found.push(...await pythonFiles(path, unreadable));
     else if (isPythonSourceEntry(entry.name, {
       file: entry.isFile(),
       symlinkToFile: entry.isSymbolicLink() && ((await stat(path).catch(() => undefined))?.isFile() ?? false),
@@ -43,14 +45,19 @@ async function pythonFiles(directory: string): Promise<string[]> {
 }
 
 /** What vulture will read: every named file, and every `.py` file below a named directory, less `exclude`. */
-async function countFiles(paths: readonly string[], exclude: readonly string[]): Promise<number> {
+async function censusOf(paths: readonly string[], exclude: readonly string[]): Promise<FileCensus> {
   const excluded = excludeMatcher(exclude, process.platform === 'win32');
+  const unreadable: string[] = [];
+  const unsafeNames: string[] = [];
   let count = 0;
   for (const path of paths) {
-    const files = (await lstat(path).then(() => stat(path))).isDirectory() ? await pythonFiles(path) : [path];
-    count += files.filter(file => !excluded(file)).length;
+    const files = (await lstat(path).then(() => stat(path))).isDirectory() ? await pythonFiles(path, unreadable) : [path];
+    for (const file of files.filter(candidate => !excluded(candidate))) {
+      count += 1;
+      if (/[\r\n]/u.test(file)) unsafeNames.push(file);
+    }
   }
-  return count;
+  return { count, unreadable, unsafeNames };
 }
 
 export function vultureCheck<R extends RuleRef>(
@@ -92,17 +99,21 @@ export function vultureCheck<R extends RuleRef>(
           const env = { PYTHONWARNINGS: 'ignore' };
           return await decideVulture({
             plan: {
-              paths, minConfidence: settings.minConfidence ?? 60,
+              paths, minConfidence: settings.minConfidence ?? 60, allowTestPathAncestors: settings.allowTestPathAncestors,
               exclude: settings.exclude, ignoreNames: settings.ignoreNames, ignoreDecorators: settings.ignoreDecorators,
             },
             runner: {
               version: () => executeCommand({ command, args: ['--version'], cwd, env, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
-              countFiles: () => countFiles(paths, settings.exclude ?? []),
+              countFiles: () => censusOf(paths, settings.exclude ?? []),
               run: args => executeCommand({ command, args, cwd, env, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
             },
             selected,
             displayPath: file => displayPath(root, cwd, file),
             configFile,
+            root,
+            windows: process.platform === 'win32',
+            // A project configuration can exclude files the census cannot see, so the count is not claimed.
+            countIsVerified: settings.configFile === undefined,
           });
         } catch (error) {
           return unexpectedFailure(error);

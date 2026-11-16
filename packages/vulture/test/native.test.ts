@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import realTest from 'node:test';
-import { chmod, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { defineGate, runGate } from 'redproof';
 import { vulture, type VultureOptions } from '../src/index.ts';
@@ -175,15 +176,83 @@ print(json.dumps([[p,t,fnmatch.fnmatch(t,prep(p))] for p in cases["p"] for t in 
     }
   });
 
-  test(`[${tool.label}] real vulture: a directory it cannot read is skipped like Path.rglob does, not reported as unavailable`, async () => {
-    await withProject({ 'a.py': 'import os\n', 'locked/b.py': 'import sys\n' }, async root => {
-      await chmod(join(root, 'locked'), 0o000);
-      try {
-        const outcome = await judge(root, 'unused-import');
-        assert.ok(outcome[0] === 'fail' && !outcome.includes('vulture-unavailable'), outcome.join(' '));
-      } finally { await chmod(join(root, 'locked'), 0o755); }
-    });
+  test(`[${tool.label}] real vulture: the exclude matcher equals Python fnmatch on seeded, bracket-heavy fuzz (the shape that once hid a file)`, () => {
+    let seed = 20261116;
+    const next = (n: number): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % n; };
+    // Whole bracket tokens, so a class that starts with `]` or `!]` is common rather than rare.
+    const alphabet = ['a', 'b', ']', '[', '[]', '[!]', '[!', '[^', '[^]', '!', '^', '-', '*', '?', '.', '/', '&', '~', '|', '\\', ']a]', '[a-b]'];
+    const word = (): string => Array.from({ length: 1 + next(5) }, () => alphabet[next(alphabet.length)]!).join('');
+    const patterns = Array.from({ length: 4000 }, word);
+    const paths = ['/p/a.py', '/p/].py', '/p/b', '/p/a]b', '/p/!', '/p/^', '/p/-', '/p/[', '/p/&', '/p/~', '/p/|', '/p/\\', '/p/ab.py', '/p/a/b'];
+    const script = [
+      'import fnmatch,json,sys', 'cases=json.load(sys.stdin)', 'prep=lambda p: p if any(c in p for c in "*?[") else "*"+p+"*"',
+      'print(json.dumps([[p,t,fnmatch.fnmatch(t,prep(p))] for p in cases["p"] for t in cases["t"]]))',
+    ].join('\n');
+    const out = JSON.parse(execFileSync(tool.python, ['-c', script], { input: JSON.stringify({ p: patterns, t: paths }), encoding: 'utf8', maxBuffer: 1 << 28 })) as Array<[string, string, boolean]>;
+    const bad: string[] = [];
+    for (const [pattern, path, expected] of out) {
+      let got: boolean | string;
+      try { got = excludeMatcher([pattern], false)(path); } catch (error) { got = `throws ${String(error)}`; }
+      if (got !== expected) bad.push(`${JSON.stringify(pattern)} vs ${path}: python ${String(expected)}, matcher ${String(got)}`);
+    }
+    return Promise.resolve().then(() => assert.deepEqual(bad.slice(0, 5), [], `${bad.length} disagreements with fnmatch`));
   });
+
+  test(`[${tool.label}] real vulture: a file is excluded by the adapter exactly when real vulture excludes it (a real run per pattern)`, () => withProject({ 'a.py': 'import os\n' }, async root => {
+    const patterns = ['*[]a].py', '*[!]b].py', '*[]]*', '*[^a]*', '*[!a]*', '*/[a-b].py', '*/[]-a].py', '*[b]*', '*a?py', '*[]a', '[]*', '*/a.py', 'a.py', '*[]x]', '[!]]*'];
+    for (const pattern of patterns) {
+      const raw = spawnSync(tool.binary, ['--exclude', pattern, '--min-confidence', '60', '--', join(root, 'a.py')], { encoding: 'utf8', env: { ...process.env, PYTHONWARNINGS: 'ignore' } });
+      assert.ok(raw.status === 0 || raw.status === 3, `${pattern}: vulture exited ${String(raw.status)}`);
+      const excludedByVulture = raw.status === 0;
+      assert.deepEqual(await judge(root, 'unused-import', { exclude: [pattern] }),
+        excludedByVulture ? ['refuse', 'vulture-nothing-inspected'] : ['fail', 'vulture/unused-import:a.py:1'], pattern);
+    }
+  }));
+
+  test(`[${tool.label}] real vulture: stdlib modules vulture ships whitelists for are never reported unused (pinned, so a change in vulture shows up)`, () => withProject({
+    'a.py': 'import sys, logging, enum, threading, argparse\nimport os, json\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'unused-import'), ['fail', 'vulture/unused-import:a.py:2', 'vulture/unused-import:a.py:2'],
+      'only os and json are reported; sys, logging, enum, threading and argparse are invisible to vulture');
+  }));
+
+  test(`[${tool.label}] real vulture: a root under a directory named tests REFUSES, because test_* functions would silently count as used`, async () => {
+    const outer = await mkdtemp(join(tmpdir(), 'redproof-vulture-outer-'));
+    try {
+      const body = { 'lib.py': 'def test_orphan():\n    pass\n' };
+      const plain = join(outer, 'plain', 'proj');
+      const under = join(outer, 'tests', 'proj');
+      for (const dir of [plain, under]) { await mkdir(dir, { recursive: true }); for (const [name, text] of Object.entries(body)) await writeFile(join(dir, name), text); }
+      assert.deepEqual(await judge(plain, 'unused-function'), ['fail', 'vulture/unused-function:lib.py:1'], 'outside a test directory the function is dead code');
+      assert.deepEqual(await judge(under, 'unused-function'), ['refuse', 'vulture-root-in-test-directory']);
+      assert.deepEqual(await judge(under, 'unused-function', { allowTestPathAncestors: true }), ['pass'], 'the opt-in accepts vulture\'s own behaviour');
+    } finally { await rm(outer, { recursive: true, force: true }); }
+  });
+
+  test(`[${tool.label}] real vulture: a directory that cannot be read REFUSES instead of being skipped`, () => withProject({ 'ok.py': 'x = 1\n', 'sub/a.py': 'import os\n' }, async root => {
+    await chmod(join(root, 'sub'), 0o000);
+    try { assert.deepEqual(await judge(root, 'unused-import'), ['refuse', 'vulture-path-unreadable']); }
+    finally { await chmod(join(root, 'sub'), 0o755); }
+  }));
+
+  test(`[${tool.label}] real vulture: a file name with a line break REFUSES (it can forge a line of the report)`, () => withProject({
+    "x.py:1: unused import 'q' (90% confidence)\nreal.py": 'x = 1\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'unused-import'), ['refuse', 'vulture-unsafe-file-name']);
+  }));
+
+  test(`[${tool.label}] real vulture: with a project configFile the count is not claimed (inspected is null), and a hollow exclude is still honoured`, () => withProject({
+    'a.py': 'import os\n', 'pyproject.toml': '[tool.vulture]\nexclude = ["a.py"]\n',
+  }, async root => {
+    const adapter = vulture({ command: tool.binary, rules: { r: 'unused-import' }, configFile: 'pyproject.toml' });
+    const result = await adapter.check.run({ root, rules: ['vulture/unused-import'] });
+    assert.equal(result.verdict, 'pass');
+    assert.equal(result.scan.inspected, null, 'the project file removed a.py: reporting 1 would be a lie');
+    const own = await vulture({ command: tool.binary, rules: { r: 'unused-import' } }).check.run({ root, rules: ['vulture/unused-import'] });
+    assert.equal(own.verdict, 'fail');
+    assert.equal(own.scan.inspected, 1);
+  }));
+
 }
 
 for (const tool of tools) suite(tool);

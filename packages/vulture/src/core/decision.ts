@@ -3,7 +3,7 @@ import { result, type Breach, type CheckResult, type Rule, type RuleRef, type Sc
 import type { CommandExecution } from 'redproof/command';
 import {
   MINIMUM_VULTURE_VERSION, attribute, parseVultureOutput, parseVultureVersion, unreadInput, vultureVersionSupported,
-  type VultureKind,
+  testDirectoryAncestor, type VultureKind,
 } from './model.ts';
 
 export type VultureRefusal = {
@@ -15,7 +15,7 @@ export type VultureRefusal = {
 
 export type VultureDecision<R extends RuleRef> =
   | VultureRefusal
-  | { readonly kind: 'evidence'; readonly inspected: number; readonly breaches: readonly Breach<R>[] };
+  | { readonly kind: 'evidence'; readonly inspected: number | null; readonly breaches: readonly Breach<R>[] };
 
 type Timestamps = { readonly startedAt: string; readonly finishedAt: string };
 
@@ -33,6 +33,7 @@ export type VulturePlan = {
   /** Relative to the directory vulture runs in. */
   readonly paths: readonly string[];
   readonly minConfidence: number;
+  readonly allowTestPathAncestors?: boolean | undefined;
   readonly exclude?: readonly string[] | undefined;
   readonly ignoreNames?: readonly string[] | undefined;
   readonly ignoreDecorators?: readonly string[] | undefined;
@@ -75,7 +76,7 @@ const tail = (text: string, lines = 12): string => text.trim().split('\n').slice
 export function evaluateRun<R extends RuleRef>(
   execution: CommandExecution,
   plan: VulturePlan,
-  inspected: number,
+  inspected: number | null,
   selected: ReadonlyMap<VultureKind, Rule<R>>,
   displayPath: (file: string) => string,
 ): VultureDecision<R> {
@@ -104,15 +105,24 @@ export function displayPath(root: string, base: string, file: string): string {
   return withinRoot(root, absolute) && rel ? rel : file;
 }
 
+/** What the shell found when it walked the paths the way vulture will. */
+export type FileCensus = {
+  /** Python files vulture will read, less `--exclude`. */
+  readonly count: number;
+  /** Directories that could not be listed: `Path.rglob` skips them silently, so code in them is never read. */
+  readonly unreadable: readonly string[];
+  /** Files whose name holds a line break: it can forge a line of vulture's report. */
+  readonly unsafeNames: readonly string[];
+};
+
 /** How the shell runs vulture: the only effects the core calls. */
 export type VultureRunner = {
   readonly version: () => Promise<CommandExecution>;
-  /** How many Python files the run will read, by vulture's own rules for directories and `--exclude`. */
-  readonly countFiles: () => Promise<number>;
+  readonly countFiles: () => Promise<FileCensus>;
   readonly run: (args: readonly string[]) => Promise<CommandExecution>;
 };
 
-/** The order of a check, in the core so it is testable without vulture: version, file count, then the run. */
+/** The order of a check, in the core so it is testable without vulture: version, the census of files, then the run. */
 export async function decideVulture<R extends RuleRef>(input: {
   readonly plan: VulturePlan;
   readonly runner: VultureRunner;
@@ -120,13 +130,29 @@ export async function decideVulture<R extends RuleRef>(input: {
   readonly displayPath: (file: string) => string;
   /** The configuration file to hand to `--config`. */
   readonly configFile: string;
+  /** The canonical Gate root. */
+  readonly root: string;
+  readonly windows: boolean;
+  /** False when a project configuration file is in force: its `exclude` may remove files the census cannot see. */
+  readonly countIsVerified?: boolean;
 }): Promise<VultureDecision<R>> {
   const unsupported = checkVersion(await input.runner.version());
   if (unsupported) return unsupported;
-  const inspected = await input.runner.countFiles();
-  if (inspected === 0) {
+  const ancestor = input.plan.allowTestPathAncestors ? undefined : testDirectoryAncestor(input.root, input.windows);
+  if (ancestor) {
+    return refusal('vulture-root-in-test-directory', `The Gate root is under a directory named "${ancestor}", so vulture treats every file as a test file and the verdict would differ from a checkout elsewhere. Set allowTestPathAncestors to accept it.`, input.root);
+  }
+  const files = await input.runner.countFiles();
+  if (files.unreadable.length) {
+    return refusal('vulture-path-unreadable', 'vulture will skip directories that cannot be read, so the code in them would never be analysed.', files.unreadable.join('\n'));
+  }
+  if (files.unsafeNames.length) {
+    return refusal('vulture-unsafe-file-name', 'A file name holds a line break, which can forge a line of the report.', JSON.stringify(files.unsafeNames));
+  }
+  if (files.count === 0) {
     return refusal('vulture-nothing-inspected', 'vulture would read no Python files, so a pass would mean nothing.', input.plan.paths.join('\n'));
   }
+  const inspected = input.countIsVerified === false ? null : files.count;
   return evaluateRun(await input.runner.run(vultureArguments(input.plan, input.configFile)), input.plan, inspected, input.selected, input.displayPath);
 }
 

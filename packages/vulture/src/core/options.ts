@@ -21,12 +21,18 @@ export type VultureOptions<M extends Selection = Selection> = {
    * 60; unused arguments and unreachable code at 100.
    */
   readonly minConfidence?: number;
-  /** vulture `--exclude` patterns (`fnmatch` on the absolute path, case-insensitive). */
+  /** vulture `--exclude` patterns (`fnmatch` on the absolute path: case-sensitive on POSIX, folded on Windows). */
   readonly exclude?: readonly string[];
   /** vulture `--ignore-names` patterns. */
   readonly ignoreNames?: readonly string[];
   /** vulture `--ignore-decorators` patterns, e.g. `@app.route`. */
   readonly ignoreDecorators?: readonly string[];
+  /**
+   * Accept a Gate root with a `test` or `tests` directory among its ancestors. vulture then treats every file as a
+   * test file (`test_*` functions and `*Test*` classes count as used), so the verdict would differ from a checkout
+   * elsewhere; by default the check REFUSES instead.
+   */
+  readonly allowTestPathAncestors?: boolean;
   /**
    * A pyproject file relative to the Gate root whose `[tool.vulture]` applies. By default no project
    * configuration is read, because its `exclude` or `ignore_names` could hide findings unseen.
@@ -58,7 +64,7 @@ function validatePatterns(name: string, value: readonly string[] | undefined): v
 
 export function validateVultureOptions(options: VultureOptions): void {
   rejectUnknownKeys(options, ['rules', 'paths', 'cwd', 'minConfidence', 'exclude', 'ignoreNames', 'ignoreDecorators',
-    'configFile', 'command', 'timeoutMs', 'maxOutputBytes'], 'vulture adapter');
+    'configFile', 'allowTestPathAncestors', 'command', 'timeoutMs', 'maxOutputBytes'], 'vulture adapter');
   const entries = Object.entries(options.rules ?? {});
   if (!entries.length) throw new Error('vulture requires at least one Redproof rule.');
   const seen = new Set<string>();
@@ -79,6 +85,7 @@ export function validateVultureOptions(options: VultureOptions): void {
     && (!Number.isInteger(options.minConfidence) || options.minConfidence < 0 || options.minConfidence > 100)) {
     throw new Error('vulture minConfidence must be an integer between 0 and 100.');
   }
+  if (options.allowTestPathAncestors !== undefined && typeof options.allowTestPathAncestors !== 'boolean') throw new Error('vulture allowTestPathAncestors must be boolean.');
   validatePatterns('exclude', options.exclude);
   validatePatterns('ignoreNames', options.ignoreNames);
   validatePatterns('ignoreDecorators', options.ignoreDecorators);
