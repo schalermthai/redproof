@@ -41,10 +41,15 @@ Known blind spots (all found in battle testing, see `20-coveragepy/REDPROOF_COVE
   - loads `plugins` (a configurer can rewrite any option after the adapter has read it);
   - sets `[report] ignore_errors`, which silently drops an unparseable source file.
   Name the file as `rcfile` to accept it. The default `# pragma: no cover` is fine.
+  `partial_branches`/`partial_also` and `cover_pylib` without `source` are not in that list: they refuse anyway, through the report
+  cross-checks (`coverage-py-evidence-unavailable`), because they make the report disagree with itself.
+- Config is read once, before the run. A measured program that rewrites `.coveragerc` (or `pyproject.toml`) while it runs is not
+  re-checked, and `coverage json` then reads the rewritten file. Measured code is trusted; keep tests from writing config into the
+  run directory.
 - A report that measures zero statements REFUSES: nothing to cover would otherwise count as 100 % and pass every rule.
 - Modules imported before tracing starts show as never executed, which trips `noUncoveredFiles`.
 - Subprocesses are measured only with `patch = subprocess` in your rcfile.
-- Ambient `COVERAGE_RCFILE`, `COVERAGE_FILE`, `COVERAGE_PROCESS_START` and `COVERAGE_DEBUG*` are scrubbed; pass `rcfile`.
+- Ambient `COVERAGE_RCFILE`, `COVERAGE_FILE`, `COVERAGE_PROCESS_START`, `COVERAGE_PROCESS_CONFIG` and `COVERAGE_DEBUG*` are scrubbed; pass `rcfile`.
   `PYTHONPATH`, `COVERAGE_CORE` and the interpreter you name are trusted, not hostile. Coverage starts without the current
   directory on `sys.path`, so a project's own `json.py` or `coverage.py` cannot shadow it.
 - A project `fail_under` is ignored; Redproof's thresholds decide.
