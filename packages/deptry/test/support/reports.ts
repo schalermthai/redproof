@@ -9,6 +9,22 @@ export const reports = {
   clean: "[]",
 } as const;
 
-/** What deptry prints before its findings, as deptry 0.25 prints it: the configuration echo and the scan line. */
-export const header = (scanned: number, ignore = "('',)", perRule = '{}'): string =>
-  `Running with the following configuration:\nroot: (PosixPath('.'),)\nper_rule_ignores: ${perRule}\nignore: ${ignore}\n\nScanning ${scanned} file${scanned === 1 ? '' : 's'}...\n`;
+/** The settings the adapter asks for, as deptry 0.25 echoes them with `--verbose` (keys in deptry's own order). */
+const ECHO: ReadonlyArray<readonly [string, string]> = [
+  ['root', "(PosixPath('.'),)"], ['config', 'pyproject.toml'], ['no_ansi', 'True'],
+  ['per_rule_ignores', "{'DEP001': ('-redproof-none-',)}"], ['ignore', "('',)"],
+  ['exclude', "('venv', '\\\\.venv', '\\\\.direnv', 'tests', '\\\\.git', 'setup\\\\.py')"],
+  ['extend_exclude', "('-redproof-none-',)"], ['using_default_exclude', 'False'],
+  ['known_first_party', "('',)"], ['package_module_name_map', "{'redproof-none': ('-redproof-none-',)}"],
+  ['optional_dependencies_dev_groups', '()'], ['non_dev_dependency_groups', '()'], ['experimental_namespace_package', 'False'],
+];
+
+/**
+ * What deptry prints before its findings: the configuration echo, a blank line, the scan line. `changes` replaces the
+ * value of a key (or removes the key when `undefined`), so a test can show deptry applying a project setting.
+ */
+export function header(scanned: number, changes: Readonly<Record<string, string | undefined>> = {}): string {
+  const lines = ECHO.filter(([key]) => !(key in changes && changes[key] === undefined))
+    .map(([key, value]) => `${key}: ${key in changes ? changes[key] : value}`);
+  return `Running with the following configuration:\n${lines.join('\n')}\n\nScanning ${scanned} file${scanned === 1 ? '' : 's'}...\n`;
+}

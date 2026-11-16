@@ -632,7 +632,7 @@ const adapter = deptry({
 export default defineGate({ id: 'python-dependencies', adapter });
 ```
 
-Each code (`DEP001` to `DEP005`) is its own Rule `deptry/<code>`. Run deptry from the project's virtualenv: it reads installed package metadata. deptry exits 0 after skipping a file it cannot parse, after scanning no files, and exits 1 on a crash as well as on findings, so the adapter REFUSES in those cases, and when the project configures `per_rule_ignores` (set `allowPerRuleIgnores` to accept them). A project `ignore` list never silences a selected rule.
+Each code (`DEP001` to `DEP005`) is its own Rule `deptry/<code>`. Run deptry from the project's virtualenv: it reads installed package metadata, and a declared package that is not installed makes the check REFUSE, because deptry then guesses its module name. The project's own `[tool.deptry]` settings that could hide a finding (`ignore`, `per_rule_ignores`, `known_first_party`, `package_module_name_map`, `exclude`, `extend_exclude`) are overridden on the command line and the settings deptry echoes are checked, so a project setting never silences a selected rule; `allowPerRuleIgnores`, `allowKnownFirstParty` and `allowPackageModuleNameMap` accept the project's own value. deptry also exits 0 after skipping a file it cannot parse or scanning no files, and exits 1 on a crash as well as on findings, so the adapter REFUSES in those cases.
 
 See the [deptry package](../packages/deptry/README.md) for every refusal and blind spot.
 

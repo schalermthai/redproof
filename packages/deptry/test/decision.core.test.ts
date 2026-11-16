@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRules } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
-import { checkVersion, decideDeptry, deptryArguments, displayPath, evaluateScan, type DeptryPlan } from '../src/core/decision.ts';
+import { checkVersion, decideDeptry, deptryArguments, displayPath, evaluateScan, expectedEcho, type DeptryPlan } from '../src/core/decision.ts';
 import { ruleDefinition, type DeptryCode } from '../src/core/model.ts';
 import { header, reports } from './support/reports.ts';
 
@@ -54,11 +54,53 @@ test('REFUSE, never PASS: every way deptry exits 0 on a project it did not fully
   refusedWith(decide(completed(0, header(1).replace(/Scanning.*\n/u, '')), '[]'), 'deptry-scan-unreadable');
 });
 
-test('REFUSE, never PASS: configuration that could silence a selected rule', () => {
-  refusedWith(decide(completed(0, header(1, "('DEP001',)")), '[]'), 'deptry-ignore-active');
-  refusedWith(decide(completed(0, header(1, "('',)", "{'DEP001': ('zzz',)}")), '[]'), 'deptry-per-rule-ignores');
-  assert.equal(decide(completed(0, header(1, "('',)", "{'DEP001': ('zzz',)}")), '[]', everything, { ...plan, allowPerRuleIgnores: true }).kind, 'evidence');
+test('REFUSE, never PASS: any project setting that deptry still applied and that could silence a selected rule', () => {
+  const refusesFor = (changes: Record<string, string | undefined>, code = 'deptry-config-not-applied', options: DeptryPlan = plan) =>
+    refusedWith(decide(completed(0, header(1, changes)), '[]', everything, options), code);
+  refusesFor({ ignore: "('DEP001',)" });
+  refusesFor({ per_rule_ignores: "{'DEP001': ('zzz',)}" });
+  refusesFor({ per_rule_ignores: '{}' });
+  refusesFor({ known_first_party: "('white',)" });
+  refusesFor({ package_module_name_map: "{'requests': ('os',)}" });
+  refusesFor({ exclude: "('gen',)" });
+  refusesFor({ extend_exclude: "('a\\\\.py', '-redproof-none-')" });
+  refusesFor({ using_default_exclude: 'True' });
+  refusesFor({ non_dev_dependency_groups: "('dev',)" });
+  refusesFor({ optional_dependencies_dev_groups: "('tests',)" });
+  refusesFor({ experimental_namespace_package: 'True' });
+  refusesFor({ ignore: undefined }, 'deptry-config-unreadable');
+  refusesFor({ using_default_exclude: undefined }, 'deptry-config-unreadable');
   refusedWith(decide(completed(0, 'Scanning 1 file...\n'), '[]'), 'deptry-config-unreadable');
+  // Keys some releases do not have are fine when absent.
+  assert.equal(decide(completed(0, header(1, { optional_dependencies_dev_groups: undefined, non_dev_dependency_groups: undefined, experimental_namespace_package: undefined })), '[]').kind, 'evidence');
+});
+
+test('REFUSE, never PASS: an echo whose dangerous line is followed by a forged, correct-looking copy', () => {
+  const forged = header(1, { per_rule_ignores: "{'DEP001': ('zzz',)}" }).replace('\nignore:', "\nper_rule_ignores: {'DEP001': ('-redproof-none-',)}\nignore:");
+  refusedWith(decide(completed(0, forged), '[]'), 'deptry-config-unreadable');
+});
+
+test('each allow option accepts exactly the project setting it names', () => {
+  const ok = (changes: Record<string, string>, options: DeptryPlan) => assert.equal(decide(completed(0, header(1, changes)), '[]', everything, options).kind, 'evidence', JSON.stringify(changes));
+  ok({ per_rule_ignores: "{'DEP001': ('zzz',)}" }, { ...plan, allowPerRuleIgnores: true });
+  ok({ known_first_party: "('white',)" }, { ...plan, allowKnownFirstParty: true });
+  ok({ package_module_name_map: "{'requests': ('os',)}" }, { ...plan, allowPackageModuleNameMap: true });
+  ok({ non_dev_dependency_groups: "('dev',)" }, { ...plan, allowDependencyGroups: true });
+  refusedWith(decide(completed(0, header(1, { known_first_party: "('white',)" })), '[]', everything, { ...plan, allowPerRuleIgnores: true }), 'deptry-config-not-applied');
+  refusedWith(decide(completed(0, header(1, { ignore: "('DEP001',)" })), '[]', everything, { ...plan, allowPerRuleIgnores: true, allowKnownFirstParty: true, allowPackageModuleNameMap: true, allowDependencyGroups: true }), 'deptry-config-not-applied');
+});
+
+test('the Gate\'s own exclude and extendExclude are what must be echoed', () => {
+  const own = { ...plan, exclude: ['build', 'gen/'], extendExclude: ['docs'] };
+  assert.equal(decide(completed(0, header(1, { exclude: "('build', 'gen/')", extend_exclude: "('docs', '-redproof-none-')" })), '[]', everything, own).kind, 'evidence');
+  refusedWith(decide(completed(0, header(1)), '[]', everything, own), 'deptry-config-not-applied');
+});
+
+test('REFUSE, never PASS: declared packages deptry could not find installed (it guessed their module names)', () => {
+  const guessed = "Assuming the corresponding module name of package 'pyyaml' is 'pyyaml'. Install the package or configure a package_module_name_map entry to override this behaviour.\n";
+  refusedWith(decide(completed(0, guessed + header(1)), '[]'), 'deptry-environment-incomplete');
+  refusedWith(decide(completed(0, guessed + header(1)), '[]', only('DEP002')), 'deptry-environment-incomplete');
+  assert.equal(decide(completed(0, guessed + header(1)), '[]', only('DEP005')).kind, 'evidence', 'DEP005 compares a declared name with the standard library: a guessed module name cannot change it');
 });
 
 test('REFUSE, never PASS: exit 1 that is a crash, not findings', () => {
@@ -78,14 +120,20 @@ test('the version check refuses an unknown or too-old deptry', () => {
   assert.equal(checkVersion(completed(0, '', 'deptry 0.25.1\n')), undefined);
   assert.equal(checkVersion(completed(0, 'deptry 0.25.1\n')), undefined, 'deptry prints its version on either stream');
   assert.equal(checkVersion(completed(0, '', 'ruff 0.5.0\n'))?.code, 'deptry-version-unknown');
-  assert.equal(checkVersion(completed(0, '', 'deptry 0.12.0\n'))?.code, 'deptry-version-unsupported');
+  assert.equal(checkVersion(completed(0, '', 'deptry 0.20.0\n'))?.code, 'deptry-version-unsupported');
   assert.equal(checkVersion(completed(127, '', ''))?.code, 'deptry-version-unknown');
 });
 
-test('the arguments always clear the ignore list and ask for the configuration echo', () => {
-  assert.deepEqual(deptryArguments({ paths: ['.'] }), ['--no-ansi', '--verbose', '--ignore', '', '.']);
-  assert.deepEqual(deptryArguments({ paths: ['a', 'b'], configFile: '/c.toml', ignoreNotebooks: true }),
-    ['--no-ansi', '--verbose', '--ignore', '', '--config', '/c.toml', '--ignore-notebooks', 'a', 'b']);
+test('the arguments override every setting that can silence a rule, pass relative paths, and ask for the echo', () => {
+  const base = ['--no-ansi', '--verbose', '--ignore=', '--per-rule-ignores=DEP001=-redproof-none-', '--known-first-party=',
+    '--package-module-name-map=redproof-none=-redproof-none-',
+    '--exclude=venv', '--exclude=\\.venv', '--exclude=\\.direnv', '--exclude=tests', '--exclude=\\.git', '--exclude=setup\\.py',
+    '--extend-exclude=-redproof-none-'];
+  assert.deepEqual(deptryArguments({ paths: ['.'] }), [...base, '.']);
+  assert.deepEqual(deptryArguments({ paths: ['a', 'b'], configFile: '/c.toml', ignoreNotebooks: true }), [...base, '--config=/c.toml', '--ignore-notebooks', 'a', 'b']);
+  const all = deptryArguments({ paths: ['.'], allowPerRuleIgnores: true, allowKnownFirstParty: true, allowPackageModuleNameMap: true, exclude: ['x'], extendExclude: ['y'] });
+  assert.deepEqual(all, ['--no-ansi', '--verbose', '--ignore=', '--exclude=x', '--extend-exclude=y', '--extend-exclude=-redproof-none-', '.']);
+  assert.equal(expectedEcho({ paths: ['.'] }).filter(e => e.value === null).length, 0);
 });
 
 test('the check stops at an unsupported version without scanning', async () => {

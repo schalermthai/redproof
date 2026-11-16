@@ -16,10 +16,26 @@ export type DeptryOptions<M extends Selection = Selection> = {
   /** Do not scan notebooks (`--ignore-notebooks`). */
   readonly ignoreNotebooks?: boolean;
   /**
-   * Accept `per_rule_ignores` from the project configuration. deptry cannot be told to disregard
-   * them, so by default a project that sets any makes the check REFUSE rather than pass quietly.
+   * Directories and files to leave out, as deptry `--exclude` regular expressions matched from the start of a
+   * path relative to `cwd`. Defaults to deptry's own: `venv`, `.venv`, `.direnv`, `tests`, `.git`, `setup.py`.
+   * Always passed, so the project's `exclude` never applies, and so deptry does not read `.gitignore`, `.ignore`
+   * or a global ignore file (it only does that while `--exclude` is left at its default).
+   */
+  readonly exclude?: readonly string[];
+  /** More `--extend-exclude` regular expressions, on top of `exclude`. */
+  readonly extendExclude?: readonly string[];
+  /**
+   * The check overrides these project settings, because each can erase a finding of a selected rule: `ignore`,
+   * `per_rule_ignores`, `known_first_party`, `package_module_name_map`, `exclude` and `extend_exclude`. Each
+   * `allow...` option below accepts the project's own value of that setting instead, and says so in the Gate.
    */
   readonly allowPerRuleIgnores?: boolean;
+  /** Accept `known_first_party` (and `experimental_namespace_package`): modules deptry then treats as the project's own. */
+  readonly allowKnownFirstParty?: boolean;
+  /** Accept `package_module_name_map`: which module names deptry credits to a package. */
+  readonly allowPackageModuleNameMap?: boolean;
+  /** Accept `optional_dependencies_dev_groups` and `non_dev_dependency_groups`: which declared packages count as development. */
+  readonly allowDependencyGroups?: boolean;
   /** The deptry executable. Defaults to `deptry` on PATH; point it at the project's virtualenv. */
   readonly command?: string;
   readonly timeoutMs?: number;
@@ -27,14 +43,26 @@ export type DeptryOptions<M extends Selection = Selection> = {
 };
 
 function validatePath(name: string, value: string): void {
-  if (typeof value !== 'string' || !value.trim() || value.startsWith('-')
+  if (typeof value !== 'string' || !value.trim() || value.startsWith('-') || /[\r\n\0]/u.test(value)
     || isAbsolute(value) || /^[A-Za-z]:/u.test(value) || value.split(/[\\/]/u).includes('..')) {
     throw new Error(`deptry ${name} must be a non-empty relative path inside the Gate root.`);
   }
 }
 
+/** Patterns are echoed back and compared, so they must be plain: no quotes, no control characters, no leading dash. */
+function validatePatterns(name: string, value: readonly string[] | undefined): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || (name === 'exclude' && !value.length)) throw new Error(`deptry ${name} must be a ${name === 'exclude' ? 'non-empty ' : ''}list.`);
+  for (const pattern of value) {
+    if (typeof pattern !== 'string' || !pattern.trim() || pattern.startsWith('-') || /['"\u0000-\u001f]/u.test(pattern)) {
+      throw new Error(`deptry ${name} entries must be non-empty, contain no quote or control character and not start with a dash.`);
+    }
+  }
+}
+
 export function validateDeptryOptions(options: DeptryOptions): void {
-  rejectUnknownKeys(options, ['rules', 'paths', 'cwd', 'configFile', 'ignoreNotebooks', 'allowPerRuleIgnores',
+  rejectUnknownKeys(options, ['rules', 'paths', 'cwd', 'configFile', 'ignoreNotebooks', 'exclude', 'extendExclude',
+    'allowPerRuleIgnores', 'allowKnownFirstParty', 'allowPackageModuleNameMap', 'allowDependencyGroups',
     'command', 'timeoutMs', 'maxOutputBytes'], 'deptry adapter');
   const entries = Object.entries(options.rules ?? {});
   if (!entries.length) throw new Error('deptry requires at least one Redproof rule.');
@@ -52,7 +80,8 @@ export function validateDeptryOptions(options: DeptryOptions): void {
   }
   if (options.cwd !== undefined) validatePath('cwd', options.cwd);
   if (options.configFile !== undefined) validatePath('configFile', options.configFile);
-  for (const name of ['ignoreNotebooks', 'allowPerRuleIgnores'] as const) {
+  for (const name of ['exclude', 'extendExclude'] as const) validatePatterns(name, options[name]);
+  for (const name of ['ignoreNotebooks', 'allowPerRuleIgnores', 'allowKnownFirstParty', 'allowPackageModuleNameMap', 'allowDependencyGroups'] as const) {
     if (options[name] !== undefined && typeof options[name] !== 'boolean') throw new Error(`deptry ${name} must be boolean.`);
   }
   if (options.command !== undefined && (typeof options.command !== 'string' || !options.command.trim())) {

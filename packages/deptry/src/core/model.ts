@@ -93,8 +93,8 @@ export function attribute<R extends RuleRef>(
   return { breaches };
 }
 
-/** The oldest deptry the evidence covers: 0.16.2 is the oldest release the fixture sweep ran on. */
-export const MINIMUM_DEPTRY_VERSION = '0.16.2';
+/** The oldest deptry the native suite passes on: 0.21.2. Older releases failed it (0.20 reads `.gitignore` despite `--exclude`; 0.16 lacks dependency groups). */
+export const MINIMUM_DEPTRY_VERSION = '0.21.2';
 
 export function parseDeptryVersion(output: string): readonly [number, number, number] | null {
   const match = /^deptry,? (\d+)\.(\d+)\.(\d+)/mu.exec(output.trim());
@@ -128,21 +128,40 @@ export function skippedInput(output: string): readonly string[] {
   return [...clean(output).matchAll(SKIPPED_INPUT)].map(match => match[0]);
 }
 
-/** What the verbose header says deptry resolved from the command line and the project configuration. */
-export type ResolvedConfig = {
-  /** The raw `ignore:` value, e.g. `('',)`. */
-  readonly ignore: string;
-  /** The raw `per_rule_ignores:` value, e.g. `{}` or `{'DEP001': ('zzz',)}`. */
-  readonly perRuleIgnores: string;
-};
+/** What deptry reports as its default `exclude` (0.25). Passed explicitly: giving `--exclude` also switches off every ignore file. */
+export const DEPTRY_DEFAULT_EXCLUDE: readonly string[] = ['venv', '\\.venv', '\\.direnv', 'tests', '\\.git', 'setup\\.py'];
 
-export function parseResolvedConfig(output: string): ResolvedConfig | null {
-  const text = clean(output);
-  const ignore = /^ignore: (.*)$/mu.exec(text);
-  const perRule = /^per_rule_ignores: (.*)$/mu.exec(text);
-  return ignore && perRule ? { ignore: ignore[1]!.trim(), perRuleIgnores: perRule[1]!.trim() } : null;
+/** A value no module, package or path can have, passed where a project setting would otherwise apply: it silences nothing. */
+export const NOTHING = '-redproof-none-';
+
+/** Python's `repr` of a tuple of strings, for the strings this adapter can pass (no quotes, no control characters). */
+export function pythonTuple(items: readonly string[]): string {
+  const quoted = items.map(item => `'${item.replaceAll('\\', '\\\\')}'`);
+  return quoted.length === 0 ? '()' : quoted.length === 1 ? `(${quoted[0]},)` : `(${quoted.join(', ')})`;
 }
 
-/** `ignore: ('',)` is what `--ignore ''` leaves behind: no code is ignored. */
-export const ignoreIsCleared = (config: ResolvedConfig): boolean => config.ignore === "('',)";
-export const hasPerRuleIgnores = (config: ResolvedConfig): boolean => config.perRuleIgnores !== '{}';
+/**
+ * The configuration block deptry prints with `--verbose`, as key to raw value. Only the block that starts at
+ * the header and ends at the first blank line is read, every line in it must be `key: value`, and a key may
+ * not repeat: text from the project (a path with a newline in it) cannot add or replace a line unnoticed.
+ * Null when the block is absent or malformed.
+ */
+export function parseEchoBlock(output: string): ReadonlyMap<string, string> | null {
+  const text = clean(output);
+  const header = 'Running with the following configuration:\n';
+  const start = text.indexOf(header);
+  if (start < 0) return null;
+  const entries = new Map<string, string>();
+  for (const line of text.slice(start + header.length).split('\n')) {
+    if (line === '') break;
+    const match = /^([a-z][a-z0-9_]*): (.*)$/u.exec(line);
+    if (!match || entries.has(match[1]!)) return null;
+    entries.set(match[1]!, match[2]!.trim());
+  }
+  return entries;
+}
+
+/** Packages deptry could not find installed, so it assumed their module name equals the package name. */
+export function assumedModuleNames(output: string): readonly string[] {
+  return [...clean(output).matchAll(/^Assuming the corresponding module name of package '([^']*)' is '[^']*'\./gmu)].map(match => match[1]!);
+}

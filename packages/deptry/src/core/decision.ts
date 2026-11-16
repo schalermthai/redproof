@@ -2,8 +2,8 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution, CompletedCommand } from 'redproof/command';
 import {
-  MINIMUM_DEPTRY_VERSION, attribute, deptryVersionSupported, hasPerRuleIgnores, ignoreIsCleared,
-  parseDeptryReport, parseDeptryVersion, parseResolvedConfig, parseScannedFiles, skippedInput,
+  DEPTRY_DEFAULT_EXCLUDE, MINIMUM_DEPTRY_VERSION, NOTHING, assumedModuleNames, attribute, deptryVersionSupported,
+  parseDeptryReport, parseDeptryVersion, parseEchoBlock, parseScannedFiles, pythonTuple, skippedInput,
   type DeptryCode, type DeptryFinding,
 } from './model.ts';
 
@@ -31,24 +31,67 @@ export function withinRoot(root: string, actual: string): boolean {
 }
 
 export type DeptryPlan = {
-  /** Directories to scan, relative to the directory deptry runs in. */
+  /** Directories to scan, relative to the directory deptry runs in (so deptry's exclude patterns can match them). */
   readonly paths: readonly string[];
   readonly configFile?: string | undefined;
   readonly ignoreNotebooks?: boolean | undefined;
+  readonly exclude?: readonly string[] | undefined;
+  readonly extendExclude?: readonly string[] | undefined;
   readonly allowPerRuleIgnores?: boolean | undefined;
+  readonly allowKnownFirstParty?: boolean | undefined;
+  readonly allowPackageModuleNameMap?: boolean | undefined;
+  readonly allowDependencyGroups?: boolean | undefined;
 };
 
+const exclusions = (plan: DeptryPlan): { readonly exclude: readonly string[]; readonly extend: readonly string[] } => ({
+  exclude: plan.exclude ?? DEPTRY_DEFAULT_EXCLUDE,
+  extend: [...(plan.extendExclude ?? []), NOTHING],
+});
+
 /**
- * `--ignore ''` turns off the project's `ignore` list: a rule the Gate selected must not be silenced
- * by configuration. `--verbose` prints the resolved configuration, which the verdict checks.
- * `--no-ansi` keeps the notices plain. The report path is appended by the shell.
+ * Every project setting that can erase a finding of a selected rule is overridden on the command line, and the
+ * verbose echo is then compared with what was asked for (`expectedEcho`):
+ * `ignore`, `per_rule_ignores` (a package name cannot start with a dash, so `DEP001=-redproof-none-` ignores
+ * nothing), `known_first_party`, `package_module_name_map`, `exclude` and `extend_exclude`.
+ * Giving `--exclude` also makes deptry stop reading `.gitignore`, `.ignore`, `.git/info/exclude` and the global
+ * ignore file, so the files scanned do not depend on the machine. `--no-ansi` keeps the notices plain.
+ * Every value uses `--name=value`, so a value can never be taken for an option. The report path is added by the shell.
  */
 export function deptryArguments(plan: DeptryPlan): readonly string[] {
+  const { exclude, extend } = exclusions(plan);
   return [
-    '--no-ansi', '--verbose', '--ignore', '',
-    ...(plan.configFile ? ['--config', plan.configFile] : []),
+    '--no-ansi', '--verbose', '--ignore=',
+    ...(plan.allowPerRuleIgnores ? [] : [`--per-rule-ignores=DEP001=${NOTHING}`]),
+    ...(plan.allowKnownFirstParty ? [] : ['--known-first-party=']),
+    ...(plan.allowPackageModuleNameMap ? [] : [`--package-module-name-map=redproof-none=${NOTHING}`]),
+    ...exclude.map(pattern => `--exclude=${pattern}`),
+    ...extend.map(pattern => `--extend-exclude=${pattern}`),
+    ...(plan.configFile ? [`--config=${plan.configFile}`] : []),
     ...(plan.ignoreNotebooks ? ['--ignore-notebooks'] : []),
     ...plan.paths,
+  ];
+}
+
+type Expectation = { readonly key: string; readonly value: string | null; readonly optional: boolean };
+
+/** The echo lines a run that applied the arguments above must show; `value: null` means the Gate accepted the project's own. */
+export function expectedEcho(plan: DeptryPlan): readonly Expectation[] {
+  const { exclude, extend } = exclusions(plan);
+  const need = (key: string, value: string | null): Expectation => ({ key, value, optional: false });
+  const maybe = (key: string, value: string | null): Expectation => ({ key, value, optional: true });
+  return [
+    need('ignore', "('',)"),
+    need('per_rule_ignores', plan.allowPerRuleIgnores ? null : `{'DEP001': ('${NOTHING}',)}`),
+    need('known_first_party', plan.allowKnownFirstParty ? null : "('',)"),
+    need('package_module_name_map', plan.allowPackageModuleNameMap ? null : `{'redproof-none': ('${NOTHING}',)}`),
+    need('exclude', pythonTuple(exclude)),
+    need('extend_exclude', pythonTuple(extend)),
+    need('using_default_exclude', 'False'),
+    // Named differently or absent in some releases: when present they must be untouched.
+    maybe('optional_dependencies_dev_groups', plan.allowDependencyGroups ? null : '()'),
+    maybe('pep621_dev_dependency_groups', plan.allowDependencyGroups ? null : '()'),
+    maybe('non_dev_dependency_groups', plan.allowDependencyGroups ? null : '()'),
+    maybe('experimental_namespace_package', plan.allowKnownFirstParty ? null : 'False'),
   ];
 }
 
@@ -97,16 +140,27 @@ export function evaluateScan<R extends RuleRef>(
     return refusal('deptry-report-unavailable', 'deptry wrote no report; it stopped before finishing (a missing or unreadable dependency specification is the usual cause).', detail);
   }
 
-  const resolved = parseResolvedConfig(output);
-  if (!resolved) return refusal('deptry-config-unreadable', 'deptry did not echo its resolved configuration, so the verdict cannot be tied to the rules asked for.', detail);
-  if (!ignoreIsCleared(resolved)) return refusal('deptry-ignore-active', 'deptry still applies an ignore list, which could silence a selected rule.', `ignore: ${resolved.ignore}`);
-  if (hasPerRuleIgnores(resolved) && !plan.allowPerRuleIgnores) {
-    return refusal('deptry-per-rule-ignores', 'The project configures per_rule_ignores, which deptry cannot be told to disregard; a selected rule could be silenced.',
-      `per_rule_ignores: ${resolved.perRuleIgnores}\nSet allowPerRuleIgnores to accept them.`);
+  const echo = parseEchoBlock(output);
+  if (!echo) return refusal('deptry-config-unreadable', 'deptry did not echo its resolved configuration in the expected block, so the verdict cannot be tied to the rules asked for.', detail);
+  for (const { key, value, optional } of expectedEcho(plan)) {
+    const got = echo.get(key);
+    if (got === undefined) {
+      if (optional) continue;
+      return refusal('deptry-config-unreadable', `deptry did not echo ${key}, so the verdict cannot be tied to the rules asked for.`, detail);
+    }
+    if (value !== null && got !== value) {
+      return refusal('deptry-config-not-applied', `The project configuration still sets ${key}, which could silence a selected rule.`,
+        `${key}: ${got}\nexpected: ${value}\nSet the matching allow option to accept the project's own value.`);
+    }
   }
 
   const skipped = skippedInput(output);
   if (skipped.length) return refusal('deptry-input-skipped', 'deptry set part of the project aside, so some imports or dependencies were never read.', skipped.join('\n'));
+  // DEP005 only compares a declared name with the standard library, so a guessed module name cannot change its answer.
+  const guessed = [...selected.keys()].some(code => code !== 'DEP005') ? assumedModuleNames(output) : [];
+  if (guessed.length) {
+    return refusal('deptry-environment-incomplete', 'deptry could not find these declared packages installed and guessed their module names, so DEP001 to DEP004 may be wrong. Run the project\'s own deptry, or give the packages in package_module_name_map and set allowPackageModuleNameMap.', guessed.join('\n'));
+  }
   const inspected = parseScannedFiles(output);
   if (inspected === null) return refusal('deptry-scan-unreadable', 'deptry did not say how many files it scanned.', detail);
   if (inspected === 0) return refusal('deptry-nothing-inspected', 'deptry scanned no Python files, so a pass would mean nothing.', detail);

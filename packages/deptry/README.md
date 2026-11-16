@@ -34,14 +34,29 @@ An unknown code, or the same code twice, throws when the adapter is constructed.
 | Option | Meaning |
 |---|---|
 | `rules` | alias to code, at least one |
-| `paths` | directories to scan, relative to `cwd` (default `.`) |
+| `paths` | directories to scan, relative to `cwd` (default `.`). Passed to deptry relative to `cwd`, because its exclude patterns match from the start of a relative path |
 | `cwd` | working directory relative to the Gate root: where deptry reads `pyproject.toml` / requirements files |
 | `configFile` | a pyproject file relative to the Gate root (`--config`) |
 | `ignoreNotebooks` | `--ignore-notebooks` |
-| `allowPerRuleIgnores` | accept `per_rule_ignores` from the project configuration (see below) |
+| `exclude` | `--exclude` regular expressions; default is deptry's own: `venv`, `\.venv`, `\.direnv`, `tests`, `\.git`, `setup\.py` |
+| `extendExclude` | more `--extend-exclude` regular expressions |
+| `allowPerRuleIgnores`, `allowKnownFirstParty`, `allowPackageModuleNameMap`, `allowDependencyGroups` | accept the project's own value of the settings named below |
 | `command`, `timeoutMs`, `maxOutputBytes` | the executable, a time limit (default 60 s), an output cap (default 10 MiB) |
 
-The check always passes `--ignore ''`, so a project `ignore = [...]` list cannot silence a rule you selected, and `--verbose`, because deptry echoes its resolved configuration there and the adapter checks it.
+## Project settings that could hide a finding
+
+deptry reads `[tool.deptry]` from the project. Several of its keys can erase a finding of a rule you selected, so the adapter overrides each on the command line and then checks deptry's own `--verbose` echo of the settings it used. Anything that differs is `REFUSE`, never a pass.
+
+| Setting | What the adapter does |
+|---|---|
+| `ignore` | `--ignore=` always; echo must be `('',)` |
+| `per_rule_ignores` | `--per-rule-ignores=DEP001=-redproof-none-` (a package name cannot start with a dash, so it ignores nothing); `allowPerRuleIgnores` accepts the project's |
+| `known_first_party`, `experimental_namespace_package` | `--known-first-party=`; `allowKnownFirstParty` accepts the project's (a src-layout project deptry misdetects needs it) |
+| `package_module_name_map` | overridden the same way; `allowPackageModuleNameMap` accepts the project's |
+| `exclude`, `extend_exclude` | always passed from the Gate's `exclude` / `extendExclude`; the project's never apply |
+| `optional_dependencies_dev_groups`, `non_dev_dependency_groups` | not overridable; present and non-empty is `REFUSE` unless `allowDependencyGroups` |
+
+Passing `--exclude` has a second effect that the adapter relies on: deptry then stops reading `.gitignore`, `.ignore`, `.git/info/exclude` and the global git ignore file, so the files scanned do not depend on the machine or on being inside a git work tree. (`.gitignore` is only read while `--exclude` is left at its default.) The echo block is read only between its header and the first blank line, every line must be `key: value`, and a repeated key is rejected, so text in a project path cannot forge a line.
 
 ## When the check REFUSES instead of passing
 
@@ -52,17 +67,19 @@ deptry exits 0 in several situations where nothing was really checked, and exits
 | `deptry-input-skipped` | a file could not be parsed (`Skipping processing of ...`) or a requirement could not be read |
 | `deptry-nothing-inspected` / `deptry-scan-unreadable` | zero files scanned, or no scan line |
 | `deptry-report-unavailable` | no report written: a crash, a missing or malformed `pyproject.toml`, no dependency specification |
-| `deptry-per-rule-ignores` | the project sets `per_rule_ignores`, which deptry cannot be told to disregard (set `allowPerRuleIgnores` to accept) |
-| `deptry-ignore-active`, `deptry-config-unreadable` | the resolved configuration is missing or still has an ignore list |
+| `deptry-config-not-applied` | the echo shows a project setting from the table above still in force |
+| `deptry-config-unreadable` | the echo block is missing, malformed, or lacks a key the adapter needs |
+| `deptry-environment-incomplete` | a declared package is not installed in deptry's environment, so deptry guessed its module name (`Assuming the corresponding module name of package ...`). Affects DEP001 to DEP004; DEP005 only compares a name with the standard library. Run the project's own deptry, or list the packages in `package_module_name_map` and set `allowPackageModuleNameMap` |
 | `deptry-report-inconsistent`, `deptry-report-invalid` | exit code and report disagree, or the report is not the expected JSON |
-| `deptry-usage-error`, `deptry-unsuccessful` | exit 2, or any other unexpected exit |
-| `deptry-version-unknown` / `deptry-version-unsupported` | not deptry, or older than 0.16.2 (the oldest release verified) |
+| `deptry-usage-error`, `deptry-unsuccessful` | exit 2, or any other unexpected exit (137, 139, ...) |
+| `deptry-version-unknown` / `deptry-version-unsupported` | not deptry, or older than 0.21.2. The native tests pass on 0.21.2, 0.23.1, 0.24.0 and 0.25.1 (run 2026-11-16); 0.20 and older failed them. CI runs 0.21.2 and 0.25.1 |
 | `deptry-path-*` | a named path or config file is missing or outside the Gate root |
-| `command-*` | the executable is missing, timed out, or its output passed the cap |
+| `command-*` | the executable is missing, timed out, was killed, or its output passed the cap |
 
 ## Blind spots
 
 - `# deptry: ignore[...]` comments in source are honoured (deptry offers no way to turn them off).
-- deptry's own `exclude` / `extend_exclude` and `.gitignore` decide which files are scanned; `tests` is excluded by default.
-- DEP001, DEP003 and DEP004 depend on the package metadata installed in the interpreter deptry runs under; use the project's virtualenv executable for `command`. Without installed metadata deptry guesses that a package's module name equals its name.
-- A transitive-dependency or module-name mapping decision is deptry's, not the adapter's.
+- DEP001, DEP003 and DEP004 depend on the package metadata installed in the interpreter deptry runs under; use the project's virtualenv executable for `command`.
+- `-v` output is larger than normal; raise `maxOutputBytes` on very large projects (hitting the cap REFUSES).
+- A `.venv` outside the scanned paths needs no exclusion; one inside is left out by the default `exclude`, and replacing `exclude` replaces that default too.
+- Windows is untested.

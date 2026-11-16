@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import type { Check, Rule, RuleRef } from 'redproof';
 import { counting } from 'redproof';
 import { executeCommand } from 'redproof/command';
@@ -57,7 +57,11 @@ export function deptryCheck<R extends RuleRef>(
           const timeoutMs = settings.timeoutMs ?? 60_000;
           return await decideDeptry({
             plan: {
-              paths, configFile, ignoreNotebooks: settings.ignoreNotebooks, allowPerRuleIgnores: settings.allowPerRuleIgnores,
+              // Relative to the directory deptry runs in: its `exclude` patterns are matched from the start of the path, so an absolute one never matches.
+              paths: paths.map(path => relative(cwd, path) || '.'), configFile, ignoreNotebooks: settings.ignoreNotebooks,
+              exclude: settings.exclude, extendExclude: settings.extendExclude,
+              allowPerRuleIgnores: settings.allowPerRuleIgnores, allowKnownFirstParty: settings.allowKnownFirstParty,
+              allowPackageModuleNameMap: settings.allowPackageModuleNameMap, allowDependencyGroups: settings.allowDependencyGroups,
             },
             runner: {
               version: () => executeCommand({ command, args: ['--version'], cwd, label: 'deptry', timeoutMs, maxOutputBytes: limit }),
