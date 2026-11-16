@@ -23,6 +23,7 @@ const PACKAGES = [
   { name: '@redproof/testing', tarballPrefix: 'redproof-testing-', probe: 'testing' },
   { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
   { name: '@redproof/ruff', tarballPrefix: 'redproof-ruff-', probe: 'ruff' },
+  { name: '@redproof/mypy', tarballPrefix: 'redproof-mypy-', probe: 'mypy' },
   { name: '@redproof/coverage-py', tarballPrefix: 'redproof-coverage-py-', probe: 'coveragePy' },
 ] as const;
 
@@ -260,6 +261,44 @@ assert.equal(missing.verdict, 'refuse', JSON.stringify(missing));
   report(ruffRuntime.ok, '@redproof/ruff: packed adapter runs FAIL, PASS and REFUSE through a stand-in executable',
     ruffRuntime.ok ? '' : ruffRuntime.output.slice(0, 500));
 
+  await writeFile(join(consumer, 'probe-mypy.mjs'), `
+import assert from 'node:assert/strict';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { mypy } from '@redproof/mypy';
+const root = resolve('mypy-smoke');
+await mkdir(root);
+await writeFile(resolve(root, 'a.py'), 'x: int = "a"\\n');
+// A stand-in interpreter, so packaging is verified without installing Python tools in the consumer. It answers the
+// probe (-c) with the facts mypy would give, and the check (-m mypy) with a finding while a.py still holds a string.
+const facts = { kind: 'facts', mypyVersion: '2.4.1', hostVersion: [3, 13], hostPlatform: 'linux', configFile: null, stdout: '', stderr: '',
+  sources: [{ path: 'a.py', module: 'a' }], changed: {}, sections: {}, files: [{ path: 'a.py', unreadable: null, ignores: [], inline: [] }] };
+const standIn = resolve(root, 'python-stand-in.mjs');
+await writeFile(standIn, [
+  '#!/usr/bin/env node',
+  "import { readFileSync } from 'node:fs';",
+  'const args = process.argv.slice(2);',
+  "if (args.includes('-c')) { process.stdout.write(" + JSON.stringify(JSON.stringify(facts)) + '); process.exit(0); }',
+  "const bad = readFileSync(process.cwd() + '/a.py', 'utf8').includes('\\\\"a\\\\"');",
+  "if (bad) process.stdout.write(JSON.stringify({ file: 'a.py', line: 1, column: 9, message: 'Incompatible types in assignment', hint: null, code: 'assignment', severity: 'error' }) + '\\\\n');",
+  'process.exit(bad ? 1 : 0);',
+].join('\\n'));
+await chmod(standIn, 0o755);
+const adapter = mypy({ python: standIn, pythonVersion: '3.13', platform: 'linux', rules: { assignments: 'assignment' } });
+const run = () => adapter.check.run({ root, rules: ['mypy/assignment'] });
+const red = await run();
+assert.equal(red.verdict, 'fail', JSON.stringify(red));
+assert.equal(red.breaches[0].rule, 'mypy/assignment');
+await writeFile(resolve(root, 'a.py'), 'x: int = 1\\n');
+const green = await run();
+assert.equal(green.verdict, 'pass', JSON.stringify(green));
+const missing = await mypy({ python: resolve(root, 'absent'), rules: { assignments: 'assignment' } }).check.run({ root, rules: ['mypy/assignment'] });
+assert.equal(missing.verdict, 'refuse', JSON.stringify(missing));
+`);
+  const mypyRuntime = tryRun('node', ['probe-mypy.mjs'], consumer);
+  report(mypyRuntime.ok, '@redproof/mypy: packed adapter runs FAIL, PASS and REFUSE through a stand-in interpreter',
+    mypyRuntime.ok ? '' : mypyRuntime.output.slice(0, 500));
+
   console.log('\n5. Run the redproof command line tool on a real project');
   await mkdir(join(consumer, 'gates'), { recursive: true });
   await mkdir(join(consumer, 'src'), { recursive: true });
@@ -343,6 +382,9 @@ assert.equal(missing.verdict, 'refuse', JSON.stringify(missing));
     + "import { nyc } from '@redproof/istanbul';\n"
     + "export const coverage = nyc({ command: 'node', rules: { lines: { minimum: 90, perFile: true } } });\n"
     + "export const coverageId: 'istanbul/lines-coverage' = coverage.rules.lines.id;\n"
+    + "import { mypy } from '@redproof/mypy';\n"
+    + "export const pyTypes = mypy({ rules: { args: 'arg-type', untyped: 'no-untyped-def' }, pythonVersion: '3.13', platform: 'linux', allow: ['type-ignore'] });\n"
+    + "export const pyTypeId: 'mypy/arg-type' = pyTypes.rules.args.id;\n"
     + "import { coveragePy } from '@redproof/coverage-py';\n"
     + "export const pyCoverage = coveragePy({ args: ['-m', 'pytest'], rules: { lineCoverage: { minimum: 90 }, perFileMinimum: { minimum: 60, metric: 'branches' } } });\n"
     + "export const pyCoverageId: 'coverage-py/line-coverage' = pyCoverage.rules.lineCoverage.id;\n"

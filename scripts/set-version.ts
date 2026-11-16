@@ -15,6 +15,7 @@ const PACKAGE_DIRS = [
   'packages/testing',
   'packages/istanbul',
   'packages/ruff',
+  'packages/mypy',
   'packages/coverage-py',
 ] as const;
 

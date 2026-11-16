@@ -14,6 +14,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Mutation-testing requirements hold | [`@redproof/stryker`](#stryker) |
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
+| Python code has no type errors of the codes you select | [`@redproof/mypy`](#mypy) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
 | A command succeeds based on its exit code | [Command Checks](./commands.md) |
 | Something not covered here | [Custom Adapter](./custom-adapter.md) |
@@ -615,6 +616,34 @@ Your Ruff configuration decides the scope, so `exclude`, `per-file-ignores` and 
 A missing Ruff, an unknown rule code, a broken configuration, an unreadable or unparseable file, a missing path, an empty file list, or a Ruff older than 0.4.10 is REFUSE, not PASS.
 
 See the [Ruff package](../packages/ruff/README.md) for every REFUSE code and what the configuration can hide.
+
+## mypy
+
+Select mypy error codes. Each code becomes a Rule named `mypy/<code>`:
+
+```ts
+import { mypy } from '@redproof/mypy';
+import { defineGate } from 'redproof';
+
+const adapter = mypy({
+  paths: ['src'],
+  pythonVersion: '3.12',
+  platform: 'linux',
+  rules: {
+    args: 'arg-type',
+    returns: 'return-value',
+    untyped: 'no-untyped-def',
+  },
+});
+
+export default defineGate({ id: 'python-types', adapter });
+```
+
+Any error of a selected code breaches that Rule; errors of other codes are ignored. Codes that mypy keeps silent unless a flag asks for them (such as `no-untyped-def`) get that flag from the adapter. mypy 1.11.0 or newer is required, and it must be installed in the Python named by `python`.
+
+Anything that can hide a finding is REFUSE, not PASS: `ignore_errors`, `follow_imports = skip`, `exclude`, a `[mypy-x]` section that disables a selected code, a `# mypy:` comment, a `# type: ignore` that suppressed an error, an import mypy could not resolve, a configuration outside the Gate root, and a Python version or platform the Gate did not pin. A run that crashed, was killed, timed out, or printed a truncated report is REFUSE too. `allow` accepts one named setting knowingly.
+
+See the [mypy package](../packages/mypy/README.md) for every rule, every REFUSE code and the blind spots.
 
 ## Coverage
 
