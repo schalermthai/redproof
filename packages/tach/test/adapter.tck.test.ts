@@ -25,6 +25,7 @@ runAdapterTck([{
     unknownOption: { name: 'rejects unknown option', run: () => tach({ rules, mystery: true } as never), message: /Unknown/u },
     invalidValues: [
       { name: 'rejects an unknown rule', run: () => tach({ rules: { a: 'nope' } } as never), message: /Unknown tach rule/u },
+      { name: 'a rule named like a prototype member is unknown, not described by a function', run: () => tach({ rules: { a: 'constructor' } } as never), message: /Unknown tach rule: constructor\.$/u },
       { name: 'refuses to promise unused dependencies, which the JSON does not carry', run: () => tach({ rules: { a: 'unused-dependency' } } as never), message: /text mode/u },
       { name: 'rejects a rule selected twice', run: () => tach({ rules: { a: 'layer-violation', b: 'layer-violation' } }), message: /more than once/u },
       { name: 'rejects an absolute cwd', run: () => tach({ rules, cwd: '/etc' }), message: /relative path/u },

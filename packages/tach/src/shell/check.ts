@@ -3,9 +3,10 @@ import { join, relative, resolve } from 'node:path';
 import type { Check, Rule, RuleRef } from 'redproof';
 import { counting } from 'redproof';
 import { executeCommand } from 'redproof/command';
+import { ConfigError } from '../core/config.ts';
 import { checkResult, decideTach, refusal, withinRoot, type TachDecision } from '../core/decision.ts';
 import { escapingRoots, needsIgnoredListing } from '../core/guards.ts';
-import { DomainConfigError, ignoredPython, readFacts } from './ignored.ts';
+import { DomainConfigError, ignoredPython, readProject } from './ignored.ts';
 import type { TachRuleKind } from '../core/model.ts';
 import type { TachOptions } from '../core/options.ts';
 
@@ -35,7 +36,7 @@ export function tachCheck<R extends RuleRef>(
           if (!withinRoot(root, config)) {
             return refusal('tach-path-outside-root', 'tach.toml resolves outside the Gate root.', config);
           }
-          const facts = await readFacts(cwd, await readFile(config, 'utf8'));
+          const { facts, tree } = await readProject(cwd, await readFile(config, 'utf8'));
           // A source root that is a symlink out of the Gate root escapes just as a `..` does.
           for (const sourceRoot of facts.sourceRoots) {
             if (escapingRoots([sourceRoot]).length) continue;
@@ -44,7 +45,8 @@ export function tachCheck<R extends RuleRef>(
           }
           return await decideTach({
             facts,
-            ignored: needsIgnoredListing(facts, settings) ? await ignoredPython(cwd, limit) : [],
+            tree,
+            ignored: needsIgnoredListing(settings) ? await ignoredPython(cwd, limit, facts.respectGitignore) : [],
             options: settings,
             run: args => executeCommand({
               command: settings.command ?? 'tach', args, cwd, label: 'tach',
@@ -55,6 +57,7 @@ export function tachCheck<R extends RuleRef>(
             displayPath: file => relative(root, join(cwd, file)),
           });
         } catch (error) {
+          if (error instanceof ConfigError) return refusal('tach-config-unreadable', 'tach.toml could not be read as TOML, so what it switches on is unknown.', error.message);
           if (error instanceof DomainConfigError) return refusal('tach-domain-config-unreadable', error.message, String(error.cause));
           return refusal('tach-unavailable', 'tach could not complete the check.', String(error));
         }

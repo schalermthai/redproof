@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRule } from 'redproof';
-import { readConfig } from '../src/core/config.ts';
+import { facts as readConfig } from './support/toml.ts';
 import { checkVersion, decideTach, evaluateCheck, type TachDecision } from '../src/core/decision.ts';
 import type { TachRuleKind } from '../src/core/model.ts';
 
@@ -19,7 +19,7 @@ const undeclared = located('UndeclaredDependency', { dependency: 'b.x', usage_mo
 const check = (exec: Parameters<typeof evaluateCheck>[0], selected = only('undeclared-dependency')): TachDecision<string> =>
   evaluateCheck(exec, selected, f => f);
 const READY = readConfig('forbid_circular_dependencies = true\n');
-const inputs = { facts: READY, ignored: [] as readonly string[], options: { allowInactiveRules: true } };
+const inputs = { facts: READY, tree: { python: [], symlinks: [], ignoreFiles: [] }, ignored: [] as readonly string[], options: { allowInactiveRules: true } };
 const codeOf = (d: { kind: string; code?: string }) => d.kind === 'refuse' ? d.code : d.kind;
 
 // The verdict table needs values, not processes.
@@ -110,3 +110,10 @@ test('the check runs every check: no narrowing flag is passed', async () => {
   await decideTach({ ...inputs, run: async args => { seen.push(args); return done(0, args[0] === '--version' ? 'tach 0.35.3' : '[]'); }, selected: some, displayPath: f => f });
   assert.deepEqual(seen[1], ['check', '--output', 'json']);
 });
+
+// A variant is known only if the table says so: every object also "has" constructor, toString and valueOf.
+for (const variant of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']) {
+  test(`a diagnostic variant named ${variant} is unrecognised, not silently known`, () => {
+    assert.equal(codeOf(check(done(1, JSON.stringify([located(variant, { dependency: 'b.x' })])))), 'tach-unrecognised-diagnostic');
+  });
+}

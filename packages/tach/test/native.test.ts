@@ -77,7 +77,7 @@ t('real tach: a cycle stops tach before any other rule runs, so a wider Gate REF
 const REFUSALS: ReadonlyArray<readonly [ProjectName, string]> = [
   ['syntax-error', 'tach-configuration-diagnostic'],
   ['no-python', 'tach-configuration-diagnostic'],
-  ['bad-toml', 'tach-report-unavailable'],
+  ['bad-toml', 'tach-config-unreadable'],
 ];
 for (const [project, code] of REFUSALS) {
   t(`real tach: ${project} REFUSES with ${code}, for every rule`, () => withProject(project, async root => {

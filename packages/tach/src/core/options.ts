@@ -13,7 +13,7 @@ export type TachOptions<M extends Selection = Selection> = {
   readonly command?: string;
   /** Accept a selected rule that has nothing configured to enforce (see the README). */
   readonly allowInactiveRules?: boolean;
-  /** Accept gitignored Python files under a source root that tach will not read. */
+  /** Accept Python files under a source root that tach will not read: hidden by an ignore file, or reached only through a symbolic link. */
   readonly allowIgnoredSources?: boolean;
   /** Run a tach newer than the newest verified minor. */
   readonly allowUnverifiedVersion?: boolean;
@@ -34,7 +34,7 @@ export function validateTachOptions(options: TachOptions): void {
   if (!entries.length) throw new Error('tach requires at least one Redproof rule.');
   for (const [alias, kind] of entries) {
     if (!alias.trim() || !(ruleKinds as readonly string[]).includes(kind)) {
-      const why = unreadableRules[kind as string];
+      const why = typeof kind === 'string' && Object.hasOwn(unreadableRules, kind) ? unreadableRules[kind] : undefined;
       throw new Error(`Unknown tach rule: ${String(kind)}.${why ? ` It cannot be checked: ${why}` : ''}`);
     }
   }

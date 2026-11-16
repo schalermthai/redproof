@@ -121,7 +121,8 @@ const owners: Readonly<Record<string, TachRuleKind | null>> = {
   ModuleForbiddenExternalDependency: null,
 };
 
-const ownerOf = (variant: string): TachRuleKind | null | undefined => owners[variant];
+/** Own properties only: a variant named `constructor` or `toString` is not known just because every object has one. */
+const ownerOf = (variant: string): TachRuleKind | null | undefined => (Object.hasOwn(owners, variant) ? owners[variant] : undefined);
 
 const f = (d: Diagnostic, key: string): string => d.fields[key] ?? '?';
 

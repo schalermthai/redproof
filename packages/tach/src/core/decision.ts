@@ -1,8 +1,8 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import { breach, result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
-import type { ConfigFacts } from './config.ts';
-import { configRefusal, escapingRoots, ignoredRefusal, type GuardOptions, type IgnoredFiles } from './guards.ts';
+import type { ConfigFacts, SourceTree } from './config.ts';
+import { configRefusal, escapingRoots, ignoredRefusal, symlinkRefusal, type GuardOptions, type IgnoredFiles } from './guards.ts';
 import {
   MINIMUM_TACH_VERSION, NEWEST_VERIFIED_MINOR, attribute, parseTachReport, parseTachVersion, tachVersionSupported, tachVersionVerified,
   type TachReport, type TachRuleKind,
@@ -119,11 +119,11 @@ export function evaluateCheck<R extends RuleRef>(
 /** How the shell runs tach: arguments in, a finished or refused run out. The only effect the core calls. */
 export type RunTach = (args: readonly string[]) => Promise<CommandExecution>;
 
-function guards(selected: ReadonlyMap<TachRuleKind, Rule<RuleRef>>, facts: ConfigFacts, ignored: IgnoredFiles, options: GuardOptions): TachRefusal | undefined {
+function guards(selected: ReadonlyMap<TachRuleKind, Rule<RuleRef>>, facts: ConfigFacts, tree: SourceTree, ignored: IgnoredFiles, options: GuardOptions): TachRefusal | undefined {
   const escaping = escapingRoots(facts.sourceRoots);
   const found = escaping.length
     ? { code: 'tach-path-outside-root', message: 'A source root leaves the Gate root, so tach would read files the Gate never named.', detail: escaping.join('\n') }
-    : configRefusal([...selected.keys()], facts, options) ?? ignoredRefusal(ignored, facts, options);
+    : configRefusal([...selected.keys()], facts, tree, options) ?? ignoredRefusal(ignored, tree, facts, options) ?? symlinkRefusal(tree, facts, options);
   return found ? refusal(found.code, found.message, found.detail) : undefined;
 }
 
@@ -132,7 +132,7 @@ function guards(selected: ReadonlyMap<TachRuleKind, Rule<RuleRef>>, facts: Confi
  * last, so an ambiguous run never passes. Full precedence, first match wins:
  *  1. shell: path outside the Gate root, no `tach.toml` in the working directory, unreadable `tach.domain.toml`, thrown error
  *  2. `tach --version`: command refused, not tach, too old, newer than the verified minor
- *  3. guards: source root outside the Gate root, cycle check off, inactive rule, ignored sources
+ *  3. guards: source root outside the Gate root, cycle check off, inactive rule, ignored sources, symlinked sources
  *  4. `tach check`: command refused, exit code not 0 or 1, report not JSON, error object, exit/report disagree,
  *     structural stop, configuration diagnostic, unknown variant, exit/severity mismatch
  *  5. only then breaches (FAIL) or none (PASS)
@@ -141,6 +141,8 @@ export async function decideTach<R extends RuleRef>(input: {
   readonly run: RunTach;
   /** The text of tach.toml, as the shell read it, plus any distributed `tach.domain.toml` facts already merged by the shell. */
   readonly facts: ConfigFacts;
+  /** What the shell found on disk under the working directory. */
+  readonly tree: SourceTree;
   readonly ignored: IgnoredFiles;
   readonly options?: GuardOptions & { readonly allowUnverifiedVersion?: boolean | undefined };
   readonly selected: ReadonlyMap<TachRuleKind, Rule<R>>;
@@ -148,7 +150,7 @@ export async function decideTach<R extends RuleRef>(input: {
 }): Promise<TachDecision<R>> {
   const unsupported = checkVersion(await input.run(['--version']), input.options?.allowUnverifiedVersion);
   if (unsupported) return unsupported;
-  const guard = guards(input.selected, input.facts, input.ignored, input.options ?? {});
+  const guard = guards(input.selected, input.facts, input.tree, input.ignored, input.options ?? {});
   if (guard) return guard;
   return evaluateCheck(await input.run(tachCheckArguments), input.selected, input.displayPath);
 }
