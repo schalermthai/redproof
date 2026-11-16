@@ -42,7 +42,7 @@ export default defineGate({ id: 'python-lint', adapter });
 
 Selectors are Ruff rule codes (`F401`) or families (`S`, `PLR`). Overlapping
 selectors (`S` with `S101`) are rejected at construction, as are `ALL`, rule
-names and category selectors. A family matches whole linter prefixes: `S` is
+names and category selectors. A family covers stable rules only unless `preview: true`. A family matches whole linter prefixes: `S` is
 Bandit and never matches `SIM101`; `PL` covers `PLC`, `PLE`, `PLR` and `PLW`.
 
 Options: `paths` (default the working directory), `cwd`, `configFile`,
@@ -69,7 +69,9 @@ Options: `paths` (default the working directory), `cwd`, `configFile`,
 | `ruff-report-unavailable`, `ruff-report-inconsistent`, `ruff-unsuccessful` | the JSON is unusable, the exit code and findings disagree, or Ruff crashed |
 
 Ruff notices known to say nothing about what was checked (deprecated top-level
-settings, incompatible-rule notes, malformed `# noqa` comments) do not refuse.
+settings, malformed `# noqa` comments, an incompatible-rule note for a code you
+only selected through a family) do not refuse. Naming a code Ruff drops as
+incompatible (`D203` with `D211`) refuses, because that rule never ran.
 Any other notice does.
 
 ## Scope: what Ruff's own configuration can hide
@@ -94,6 +96,7 @@ findings that `# noqa` comments suppress.
 ## Limits
 
 - The command is resolved from `PATH` unless `command` is a path. Use an absolute path in CI.
+- `pyproject.toml` and `ruff.toml` are not counted as inspected code, so a Gate whose only target is `pyproject.toml` (for `RUF200`) refuses with `ruff-nothing-inspected`.
 - Files Ruff cannot read as Python (a NUL byte, an unsupported encoding declaration) REFUSE.
 - `check.run` evaluates every selected Rule, whatever subset it is asked for.
 - Ruff releases newer than 0.17.5 are accepted but not yet verified.

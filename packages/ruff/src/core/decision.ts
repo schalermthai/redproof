@@ -77,21 +77,39 @@ const ANSI_ESCAPE = /\u001b\[[0-9;]*m/gu; // CLICOLOR_FORCE / FORCE_COLOR make R
 const STDERR_NOTICE = /^\s*(?:warning|error): (.*)$/gmu;
 const HARMLESS_NOTICE = [
   /top-level linter settings are deprecated/u,
-  /are incompatible\. Ignoring/u,
   // A malformed `# noqa` suppresses nothing, so the findings are still reported.
   /Invalid `# noqa` directive/u,
   /Missing or joined rule code\(s\)/u,
   /Invalid rule code provided to `# noqa`/u,
 ];
 
-function skippedInput(stderr: string, alsoHarmless: readonly RegExp[] = []): readonly string[] {
+// "`incorrect-blank-line-before-class` (D203) and `blank-line-before-class` (D211) are incompatible.
+// Ignoring `incorrect-blank-line-before-class`." (Ruff before 0.5 names codes only). A family (`D`) drops
+// one by design; a Gate that selected the dropped code exactly never had it run, yet Ruff exits 0.
+const INCOMPATIBLE_NOTICE = /^(.*?) are incompatible\. Ignoring `([^`]+)`/u;
+const CODE_IN_NOTICE = /`?([^`\s(]+)`?(?: \(([A-Z]+[0-9]+)\))?/gu;
+
+function droppedByIncompatibility(notice: string): readonly string[] | undefined {
+  const parsed = INCOMPATIBLE_NOTICE.exec(notice);
+  if (!parsed) return undefined;
+  const pair = [...parsed[1]!.matchAll(CODE_IN_NOTICE)].filter(m => m[1] !== 'and')
+    .map(m => ({ name: m[1]!, code: m[2] ?? m[1]! }));
+  const dropped = pair.filter(item => item.name === parsed[2] || item.code === parsed[2]).map(item => item.code);
+  return dropped.length ? dropped : pair.map(item => item.code); // unparseable: assume either could be the one
+}
+
+function skippedInput(stderr: string, alsoHarmless: readonly RegExp[] = [], exactCodes: ReadonlySet<string> = new Set()): readonly string[] {
   return [...stderr.replace(ANSI_ESCAPE, '').matchAll(STDERR_NOTICE)]
     .map(match => match[1]!)
-    .filter(notice => ![...HARMLESS_NOTICE, ...alsoHarmless].some(harmless => harmless.test(notice)));
+    .filter(notice => {
+      const dropped = droppedByIncompatibility(notice);
+      if (dropped !== undefined) return dropped.some(code => exactCodes.has(code));
+      return ![...HARMLESS_NOTICE, ...alsoHarmless].some(harmless => harmless.test(notice));
+    });
 }
 
 /** The finished run when Ruff ran and spoke honestly; otherwise the reason to REFUSE. */
-function completedOrRefusal(execution: CommandExecution, what: string, alsoHarmless: readonly RegExp[] = []): CompletedCommand | RuffRefusal {
+function completedOrRefusal(execution: CommandExecution, what: string, alsoHarmless: readonly RegExp[] = [], exactCodes: ReadonlySet<string> = new Set()): CompletedCommand | RuffRefusal {
   if (execution.kind === 'refused') return refusal(execution.code, execution.message, execution.detail);
   const detail = [execution.stderr.trim(), execution.stdout.trim()].filter(Boolean).join('\n');
   if (execution.exitCode === 2) {
@@ -102,7 +120,7 @@ function completedOrRefusal(execution: CommandExecution, what: string, alsoHarml
   if (execution.exitCode !== 0 && execution.exitCode !== 1) {
     return refusal('ruff-unsuccessful', `Ruff exited with code ${execution.exitCode}.`, detail);
   }
-  const skipped = skippedInput(execution.stderr, alsoHarmless);
+  const skipped = skippedInput(execution.stderr, alsoHarmless, exactCodes);
   if (skipped.length) {
     return refusal('ruff-input-skipped', 'Ruff skipped or ignored part of the requested input.', skipped.join('\n'));
   }
@@ -149,7 +167,8 @@ export function evaluateLint<R extends RuleRef>(
   selected: ReadonlyMap<string, Rule<R>>,
   displayPath: (filename: string) => string,
 ): RuffDecision<R> {
-  const lint = completedOrRefusal(execution, 'lint');
+  const exactCodes = new Set([...selected.keys()].filter(selector => /[0-9]$/u.test(selector)));
+  const lint = completedOrRefusal(execution, 'lint', [], exactCodes);
   if (lint.kind === 'refuse') return lint;
 
   const detail = [lint.stderr.trim(), lint.stdout.trim()].filter(Boolean).join('\n');
