@@ -5,7 +5,7 @@ Turn Ruff rule codes and families into independently provable Redproof Rules.
 ## Install
 
 Requires Node.js 24 or later and Ruff 0.4.10 or later on `PATH` (or named with
-`command`). Verified on Ruff 0.4.10, 0.8.6, 0.11.13, 0.14.14 and 0.17.5.
+`command`). CI runs Ruff 0.17.5; the suite and a rule-by-rule corpus sweep were also run by hand on 0.4.10, 0.8.6, 0.11.13 and 0.14.14.
 
 ```bash
 npm install --save-dev redproof @redproof/ruff

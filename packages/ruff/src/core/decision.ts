@@ -73,6 +73,7 @@ export function checkVersion(execution: CommandExecution): RuffRefusal | undefin
  * the exit code alone would hide them (an unreadable directory with a violation inside passed).
  * Any such line REFUSES, unless it is one of the few known to say nothing about what was checked.
  */
+const ANSI_ESCAPE = /\u001b\[[0-9;]*m/gu; // CLICOLOR_FORCE / FORCE_COLOR make Ruff colour its `warning` prefix
 const STDERR_NOTICE = /^\s*(?:warning|error): (.*)$/gmu;
 const HARMLESS_NOTICE = [
   /top-level linter settings are deprecated/u,
@@ -84,7 +85,7 @@ const HARMLESS_NOTICE = [
 ];
 
 function skippedInput(stderr: string, alsoHarmless: readonly RegExp[] = []): readonly string[] {
-  return [...stderr.matchAll(STDERR_NOTICE)]
+  return [...stderr.replace(ANSI_ESCAPE, '').matchAll(STDERR_NOTICE)]
     .map(match => match[1]!)
     .filter(notice => ![...HARMLESS_NOTICE, ...alsoHarmless].some(harmless => harmless.test(notice)));
 }

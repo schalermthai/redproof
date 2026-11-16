@@ -34,6 +34,11 @@ const VERDICTS: ReadonlyArray<readonly [string, Parameters<typeof evaluateLint>[
   ['stderr: code remapped', done(1, one('F401'), 'warning: `SIM111` has been remapped to `SIM110`.'), 'ruff-input-skipped'],
   ['stderr: preview rule has no effect', done(0, '[]', 'warning: Selection `RUF029` has no effect because preview is not enabled.'), 'ruff-input-skipped'],
   ['stderr: unreadable directory (indented, "Encountered error")', done(0, '[]', ' warning: Encountered error: Permission denied (os error 13)'), 'ruff-input-skipped'],
+  // CLICOLOR_FORCE / FORCE_COLOR make Ruff colour the prefix; the notice must still be seen.
+  ['stderr: coloured unreadable-directory warning', done(0, '[]', '\u001b[1;33mwarning\u001b[0m\u001b[1m:\u001b[0m \u001b[1mEncountered error:\u001b[0m Permission denied (os error 13)'), 'ruff-input-skipped'],
+  ['stderr: coloured panic error', done(1, one('F401'), '\u001b[1;31merror\u001b[0m\u001b[1m:\u001b[0m Panicked while linting /p/b.py'), 'ruff-input-skipped'],
+  ['stderr: coloured harmless notice still passes', done(1, one('F401'), '\u001b[1;33mwarning\u001b[0m\u001b[1m:\u001b[0m The top-level linter settings are deprecated'), 'evidence'],
+  ['exit 2, coloured unknown selector', done(2, '', "\u001b[1;31merror\u001b[0m: invalid value 'ZZ999' for '--select <RULE_CODE>'"), 'ruff-unknown-rule'],
   ['stderr: any unknown warning', done(1, one('F401'), 'warning: something Ruff added in a future release'), 'ruff-input-skipped'],
   ['stderr: two known-harmless notices', done(1, one('F401'), "warning: `D203` and `D211` are incompatible. Ignoring `D203`.\nwarning: The top-level linter settings are deprecated in favour of lint"), 'evidence'],
   ['stderr: malformed noqa comment (findings still reported)', done(1, one('F401'), 'warning: Invalid `# noqa` directive on /p/a.py:5: expected a comma-separated list of codes'), 'evidence'],
