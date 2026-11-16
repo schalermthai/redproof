@@ -150,7 +150,8 @@ export function parseEchoBlock(output: string): ReadonlyMap<string, string> | nu
   const text = clean(output);
   const header = 'Running with the following configuration:\n';
   const start = text.indexOf(header);
-  if (start < 0) return null;
+  // deptry prints one header; a second one means the first may have been forged, so neither is trusted.
+  if (start < 0 || text.indexOf(header, start + header.length) >= 0) return null;
   const entries = new Map<string, string>();
   for (const line of text.slice(start + header.length).split('\n')) {
     if (line === '') break;

@@ -69,6 +69,9 @@ test('the configuration echo is read only from its own block, and a block that d
   // A forged second copy of a key that looks right must not overwrite the real, dangerous one.
   const forged = header(1, { per_rule_ignores: "{'DEP001': ('zzz',)}" }).replace('\nignore:', "\nper_rule_ignores: {'DEP001': ('-redproof-none-',)}\nignore:");
   assert.equal(parseEchoBlock(forged), null);
+  // Two headers: the first may be forged, so only a single header is trusted.
+  assert.equal(parseEchoBlock(header(1, { per_rule_ignores: "{'DEP001': ('zzz',)}" }) + header(1)), null);
+  assert.equal(parseEchoBlock(header(1) + header(1)), null);
   // Lines after the block (from the project, or from deptry) are not part of it.
   assert.equal(parseEchoBlock(`${header(1)}ignore: ()\n`)!.get('ignore'), "('',)");
 });

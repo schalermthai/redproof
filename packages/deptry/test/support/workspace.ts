@@ -52,13 +52,20 @@ export async function fakeDeptry(root: string, options: {
   report: string | null; stderr: string; exitCode: number; version?: string;
   /** `hang` never exits (timeout); `kill` SIGKILLs itself after writing, like an out-of-memory kill. */
   behaviour?: 'hang' | 'kill';
+  /** Put a directory where the report file belongs, so reading it fails with something other than "not found". */
+  reportIsDirectory?: boolean;
+  /** Leave an unreadable directory in the report's temp directory, so removing that directory fails; its path is written to `temp-path.txt` in `root`. */
+  lockTemp?: boolean;
 }): Promise<string> {
   const file = join(root, 'fake-deptry.mjs');
   await writeFile(file, `#!/usr/bin/env node
-import { writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--version')) { process.stdout.write(${JSON.stringify((options.version ?? 'deptry 0.25.1') + '\n')}); process.exit(0); }
 const out = args[args.indexOf('--json-output') + 1];
+${options.reportIsDirectory ? 'mkdirSync(out);' : ''}
+${options.lockTemp ? `writeFileSync(${JSON.stringify(join(root, 'temp-path.txt'))}, dirname(out)); mkdirSync(dirname(out) + '/locked'); writeFileSync(dirname(out) + '/locked/x', 'x'); chmodSync(dirname(out) + '/locked', 0);` : ''}
 ${options.report === null ? '' : `writeFileSync(out, ${JSON.stringify(options.report)});`}
 process.stderr.write(${JSON.stringify(options.stderr)});
 ${options.behaviour === 'hang' ? 'setInterval(() => {}, 1000);' : options.behaviour === 'kill' ? "process.kill(process.pid, 'SIGKILL');" : `process.exit(${options.exitCode});`}

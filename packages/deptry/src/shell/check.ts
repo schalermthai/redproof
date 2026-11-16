@@ -5,7 +5,7 @@ import type { Check, Rule, RuleRef } from 'redproof';
 import { counting } from 'redproof';
 import { executeCommand } from 'redproof/command';
 import {
-  checkResult, decideDeptry, displayPath, refusal, withinRoot, type DeptryDecision, type DeptryRefusal, type DeptryScan,
+  checkResult, decideDeptry, displayPath, finalOutcome, refusal, unexpectedFailure, withinRoot, type DeptryDecision, type DeptryRefusal, type DeptryScan,
 } from '../core/decision.ts';
 import type { DeptryCode } from '../core/model.ts';
 import type { DeptryOptions } from '../core/options.ts';
@@ -69,6 +69,8 @@ export function deptryCheck<R extends RuleRef>(
                 const execution = await executeCommand({
                   command, args: [...args, '--json-output', reportFile], cwd, label: 'deptry', timeoutMs, maxOutputBytes: limit,
                 });
+                // A run that did not finish has no report worth reading, and a read error must not replace its own refusal.
+                if (execution.kind !== 'completed') return { execution, report: null };
                 const report = await readFile(reportFile, 'utf8').catch((error: NodeJS.ErrnoException) => {
                   if (error.code === 'ENOENT') return null;
                   throw error;
@@ -80,11 +82,15 @@ export function deptryCheck<R extends RuleRef>(
             displayPath: file => displayPath(root, cwd, file),
           });
         } catch (error) {
-          return refusal('deptry-unavailable', 'deptry could not complete the check.', String(error));
+          return unexpectedFailure(error);
         }
       })();
-      if (temp) await rm(temp, { recursive: true, force: true }).catch(() => undefined);
-      return checkResult(decision, { startedAt, finishedAt: new Date().toISOString() });
+      let cleanupError: string | undefined;
+      if (temp) {
+        try { await rm(temp, { recursive: true, force: true }); }
+        catch (error) { cleanupError = String(error); }
+      }
+      return checkResult(finalOutcome(decision, cleanupError), { startedAt, finishedAt: new Date().toISOString() });
     },
   };
 }

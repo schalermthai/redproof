@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRules } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
-import { checkVersion, decideDeptry, deptryArguments, displayPath, evaluateScan, expectedEcho, type DeptryPlan } from '../src/core/decision.ts';
+import { checkVersion, decideDeptry, finalOutcome, unexpectedFailure, deptryArguments, displayPath, evaluateScan, expectedEcho, type DeptryPlan } from '../src/core/decision.ts';
 import { ruleDefinition, type DeptryCode } from '../src/core/model.ts';
 import { header, reports } from './support/reports.ts';
 
@@ -150,4 +150,22 @@ test('finding files are shown relative to the Gate root', () => {
   assert.equal(displayPath('/r', '/r/app', 'src/a.py'), 'app/src/a.py');
   assert.equal(displayPath('/r', '/r', 'pyproject.toml'), 'pyproject.toml');
   assert.equal(displayPath('/r', '/r/app', '/elsewhere/a.py'), '/elsewhere/a.py');
+});
+
+test('a failed cleanup overrides only a clean pass', () => {
+  const clean = { kind: 'evidence', inspected: 1, breaches: [] } as const;
+  const failing = decide(completed(1, header(1)), reports.example);
+  assert.equal(finalOutcome(clean, undefined), clean);
+  const refused = finalOutcome(clean, 'EACCES');
+  assert.equal(refused.kind === 'refuse' ? refused.code : '', 'deptry-cleanup-failed');
+  assert.equal(finalOutcome(failing, 'EACCES'), failing, 'a real breach stays a breach');
+  const refusal = decide(completed(0, header(0)), '[]');
+  assert.equal(finalOutcome(refusal, 'EACCES'), refusal, 'a refusal keeps its own reason');
+});
+
+test('a bug in the adapter is reported as one, a failing environment as unavailable', () => {
+  assert.equal(unexpectedFailure(new TypeError('x')).code, 'deptry-internal-error');
+  assert.equal(unexpectedFailure(new ReferenceError('x')).code, 'deptry-internal-error');
+  assert.equal(unexpectedFailure(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' })).code, 'deptry-unavailable');
+  assert.equal(unexpectedFailure('string').code, 'deptry-unavailable');
 });

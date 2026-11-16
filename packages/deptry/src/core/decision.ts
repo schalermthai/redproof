@@ -201,6 +201,23 @@ export async function decideDeptry<R extends RuleRef>(input: {
   return evaluateScan(await input.runner.scan(deptryArguments(input.plan)), input.plan, input.selected, input.displayPath);
 }
 
+/**
+ * A temp directory that could not be removed cannot make a real breach or refusal untrustworthy, but it can
+ * make a clean pass unreliable (the environment is failing), so only a clean pass becomes a REFUSE.
+ */
+export function finalOutcome<R extends RuleRef>(decision: DeptryDecision<R>, cleanupError: string | undefined): DeptryDecision<R> {
+  if (cleanupError === undefined || decision.kind !== 'evidence' || decision.breaches.length) return decision;
+  return refusal('deptry-cleanup-failed', 'Could not remove the temporary directory that held the deptry report.', cleanupError);
+}
+
+/** An error the shell caught. A failing environment is "unavailable"; a bug in this adapter is reported as one, not as the environment. */
+export function unexpectedFailure(error: unknown): DeptryRefusal {
+  const bug = error instanceof TypeError || error instanceof RangeError || error instanceof ReferenceError || error instanceof SyntaxError;
+  return bug
+    ? refusal('deptry-internal-error', 'The deptry Adapter failed on its own error; this is a bug in the Adapter, not in the project.', String((error as Error).stack ?? error))
+    : refusal('deptry-unavailable', 'deptry could not complete the check.', String(error));
+}
+
 export function checkResult<R extends RuleRef>(decision: DeptryDecision<R>, timestamps: Timestamps): CheckResult<R> {
   const scan = (inspected: number | null): Scan => ({ source: 'deptry', ...timestamps, inspected });
   if (decision.kind === 'refuse') {
