@@ -107,11 +107,7 @@ test('vulture treats `test_*` functions and `*Test*` classes as used when ANY an
   assert.equal(testDirectoryAncestor('C:\\Work\\Tests\\proj', true), 'tests', 'and folded on Windows');
 });
 
-test('stars do not cost exponential time: consecutive stars collapse and an inner `*fixed` is a lookahead, as in CPython', () => {
-  const path = `/tmp/work/${'a'.repeat(40)}/pkg/mod.py`;
-  const started = performance.now();
-  assert.equal(excludeMatcher([`${'*a'.repeat(7)}*Z`], false)(path), false);
-  assert.ok(performance.now() - started < 500, `took ${Math.round(performance.now() - started)} ms`);
+test('stars follow CPython: consecutive stars are one star, an inner `*fixed` is consumed once in order, and a digit after a reference stays a digit', () => {
   const m = (pattern: string, text: string) => excludeMatcher([pattern], false)(text);
   assert.equal(m('**a', '/p/a'), true, 'consecutive stars are one star');
   assert.equal(m('*a*1*b', '/p/xa-1-b'), true, 'a backreference is never read as part of the next digit');
@@ -119,6 +115,7 @@ test('stars do not cost exponential time: consecutive stars collapse and an inne
   assert.equal(m('*a*1*2*b', '/p/a2x1b'), false);
   assert.equal(m('*a*a*a*b', '/p/aab'), false, 'each fixed piece is consumed once, in order');
   assert.equal(m('*a*a*a*b', '/p/a-a-a-b'), true);
+  assert.equal(m(`${'*a'.repeat(30)}*Z`, `/p/${'a'.repeat(40)}`), false, 'a pattern with many stars still answers (the timing proof is the shell test)');
 });
 
 test('? and [...] match one code point, as in Python, so a non-BMP file name is excluded exactly when fnmatch says so', () => {
