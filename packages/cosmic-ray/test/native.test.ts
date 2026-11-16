@@ -270,6 +270,42 @@ for (const [name, kill] of [
   }));
 }
 
+// A mutant that leaves a CHILD behind (a worker or server that is no longer terminated). The child inherits the test pipe and holds
+// it open after the runner exited, so "the pipe did not close in time" is not "the runner timed out": the runner's own exit code decides.
+const LEAKING = 'import subprocess\nfrom mod import add\n\ndef test_add():\n    if add(1, 1) != 2:\n        subprocess.Popen(["sleep", "30"])\n';
+const MANY = 'def add(a, b):\n    return a + b\n\ndef mul(a, b):\n    return a * b\n\ndef sub(a, b):\n    return a - b\n\ndef neg(a):\n    return -a\n';
+const MANY_STRONG = 'from mod import mul, sub, neg\n\ndef test_others():\n    assert mul(3, 4) == 12\n    assert sub(9, 2) == 7\n    assert neg(4) == -4\n    assert neg(-2) == 2\n';
+
+nativeTest('real cosmic-ray: a weak suite whose mutant leaves a pipe-holding child behind FAILS, for each rule alone', () => withWorkspace(async root => {
+  await project(root, LEAKING + '    assert add(0, 0) == 0\n\n' + MANY_STRONG, 3, MANY);
+  const toml = join(root, 'cosmic-ray.toml');
+  await writeFile(toml, (await readFile(toml, 'utf8')).replace('-x -q', '-x -q -s'));
+  const score = await outcome(root, { mutationScore: { minimum: 100 } });
+  assert.equal(score[0], 'fail', score.join(' '));
+  const detected = await outcome(root, DETECTED);
+  assert.equal(detected[0], 'fail', detected.join(' '));
+  assert.ok(detected.length > 2 && detected.slice(1).every(item => item.endsWith('mod.py:2')), 'the survivors are the weakly tested add: ' + detected.join(' | '));
+}));
+
+nativeTest('real cosmic-ray: a strong suite whose mutant leaves a child behind is killed by its exit code, not counted as a timeout', () => withWorkspace(async root => {
+  await project(root, LEAKING + '    assert add(2, 3) == 5\n', 3);
+  const toml = join(root, 'cosmic-ray.toml');
+  await writeFile(toml, (await readFile(toml, 'utf8')).replace('-x -q', '-x -q -s'));
+  // With timeouts: refuse a pipe held open would refuse the run; the runner failed with its own code, so it is a plain kill.
+  assert.deepEqual(await outcome(root, DETECTED, { timeouts: 'refuse' }), ['pass']);
+  assert.deepEqual(await outcome(root, { mutationScore: { minimum: 100 } }, { timeouts: 'refuse' }), ['pass']);
+}));
+
+nativeTest('real cosmic-ray: a test command that forks a background child and exits 0 has no killed mutant', () => withWorkspace(async root => {
+  await project(root, STRONG, 2);
+  const toml = join(root, 'cosmic-ray.toml');
+  await writeFile(toml, (await readFile(toml, 'utf8')).replace(/test-command = .*\n/u, 'test-command = "sh -c \'sleep 30 & exit 0\'"\n'));
+  const score = await outcome(root, SCORE);
+  assert.equal(score[0], 'fail', score.join(' '));
+  const detected = await outcome(root, DETECTED);
+  assert.equal(detected[0], 'fail', detected.join(' '));
+}));
+
 const UNITTEST_STRONG = 'import unittest\nfrom mod import add\n\nclass T(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n';
 const UNITTEST_WEAK = 'import unittest\nfrom mod import add\n\nclass T(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(0, 0), 0)\n';
 

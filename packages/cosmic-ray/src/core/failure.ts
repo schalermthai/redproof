@@ -18,6 +18,9 @@ export function classifyStepFailure(step: CosmicRayStep, exitCode: number, stdou
   if (step === 'baseline' && /REDPROOF-(SIGNALLED|UNSTARTED)/u.test(output)) {
     return { code: 'cosmic-ray-baseline-unrunnable', message: 'The test command was signalled or could not start on unmutated code, so no mutant can be judged.', detail: output };
   }
+  if (step === 'baseline' && exitCode === 1 && /Baseline failed/u.test(output) && /(^|>>>\s*)timeout\s*$/mu.test(output)) {
+    return { code: 'cosmic-ray-baseline-timeout', message: 'The test suite did not finish within the cosmic-ray timeout on unmutated code, so no mutant can be judged.', detail: output };
+  }
   if (step === 'baseline' && exitCode === 1 && /Baseline failed/u.test(output)) {
     return { code: 'cosmic-ray-baseline-failed', message: 'The test suite fails on unmutated code, so every mutant would look killed.', detail: output };
   }

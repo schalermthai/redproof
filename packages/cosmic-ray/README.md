@@ -7,7 +7,7 @@ just run your guardrails. It proves they can fail.
 
 ## Install
 
-Requires Node.js 24 or later and a Python with cosmic-ray installed. The adapter's end-to-end tests run against cosmic-ray 8.9.0 in CI; the dump format and the init/exec/dump flow were also checked by hand on 8.3.15, 8.4.6 and 8.8.0. The flat 8.1.0 dump is refused.
+Requires Node.js 24 or later and a Python with cosmic-ray installed. The adapter's end-to-end tests run against cosmic-ray 8.9.0 in CI; the same end-to-end tests also pass locally on 8.3.15. The adapter runs cosmic-ray through a small Python driver that uses `cosmic_ray.mutating.run_tests`, `TestOutcome` and `cosmic_ray.cli.main`; a version without them fails to start and the run REFUSES, it never passes. The flat 8.1.0 dump is refused.
 
 ```bash
 npm install --save-dev @redproof/cosmic-ray redproof
@@ -78,6 +78,7 @@ cosmic-ray's own exit codes and `cr-rate` look healthy in all of these. The adap
 | --- | --- |
 | tests fail on unmutated code (every mutant would look killed) | `cosmic-ray-baseline-failed` |
 | the test command is signalled or cannot start on unmutated code | `cosmic-ray-baseline-unrunnable` |
+| the test command runs past the cosmic-ray `timeout` on unmutated code | `cosmic-ray-baseline-timeout` |
 | two project files share one name in the sandbox (case-insensitive temp disk) | `cosmic-ray-copy-collision` |
 | the Python has no cosmic-ray, or the config cannot be loaded (exit 78) | `cosmic-ray-not-installed`, `cosmic-ray-config-invalid` |
 | `init`, `exec` or `dump` exit non-zero (killed process, bad config, no module) | `cosmic-ray-producer-unsuccessful` |
@@ -90,10 +91,10 @@ cosmic-ray's own exit codes and `cr-rate` look healthy in all of these. The adap
 
 ## Timeouts
 
-cosmic-ray records a mutant whose tests ran past its `timeout` as `killed` with the output `timeout`; the adapter tells them apart by that output.
+A mutant whose tests ran past the `timeout` is recorded as `killed` with the exact output `timeout`, which the driver writes. The driver only calls it a timeout while the test command itself is still running: a command that exited keeps its own exit code even if a child it left behind still holds the output pipe open, and the whole process group is killed after every run.
 `timeouts: 'detected'` (the default) counts such a mutant as detected, like the Stryker adapter: an infinite-loop mutant (`i += 1` becoming `i += 0`) is the textbook way a mutation is caught, and refusing it would make a perfect suite unpassable.
 `timeouts: 'refuse'` refuses any run with a timed-out mutant, for projects that want every mutant to fail on an assertion.
-A real kill leaves output (an assertion, a traceback). `killed` with empty output is what a SIGKILL (the OOM killer, a stray `pkill`) looks like, so it is not counted as a kill and the run REFUSES; a custom test command that exits non-zero while printing nothing refuses too.
+What counts as a kill is the test command's own exit code, read by the driver, not its output. A non-zero exit of 1 to 128, or 193 and up, is a kill, silent or not. That includes a suite that crashes (a mutant that breaks an import makes pytest exit 2, which is detected like any other failure). A signal death (SIGKILL from the OOM killer, a stray `pkill`) and an exit of 129-192 (the codes a shell reports for a signal, so 137 and 143) are not kills and REFUSE the run. A wrapper that legitimately reports failure with a code in 129-192 therefore cannot be rated; wrap it so it exits 1.
 
 Either way, if more than half of the mutants time out the run REFUSES (`cosmic-ray-timeouts-excessive`): a `timeout` that is too short makes every mutant look killed. The guard looks at the share rather than comparing `timeout` with the baseline's duration, because the adapter does not parse your TOML. When a score is breached, the timed-out mutants are listed in the breach detail; a passing result carries no detail.
 
