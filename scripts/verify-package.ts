@@ -268,9 +268,9 @@ import { resolve } from 'node:path';
 import { mypy } from '@redproof/mypy';
 const root = resolve('mypy-smoke');
 await mkdir(root);
-await writeFile(resolve(root, 'a.py'), 'x: int = "a"\\n');
+await writeFile(resolve(root, 'a.py'), 'x = BAD\\n');
 // A stand-in interpreter, so packaging is verified without installing Python tools in the consumer. It answers the
-// probe (-c) with the facts mypy would give, and the check (-m mypy) with a finding while a.py still holds a string.
+// probe (-c) with the facts mypy would give, and the check (-m mypy) with a finding while a.py still holds BAD.
 const facts = { kind: 'facts', mypyVersion: '2.4.1', hostVersion: [3, 13], hostPlatform: 'linux', configFile: null, stdout: '', stderr: '',
   sources: [{ path: 'a.py', module: 'a' }], changed: {}, sections: {}, files: [{ path: 'a.py', unreadable: null, ignores: [], inline: [] }] };
 const standIn = resolve(root, 'python-stand-in.mjs');
@@ -279,7 +279,7 @@ await writeFile(standIn, [
   "import { readFileSync } from 'node:fs';",
   'const args = process.argv.slice(2);',
   "if (args.includes('-c')) { process.stdout.write(" + JSON.stringify(JSON.stringify(facts)) + '); process.exit(0); }',
-  "const bad = readFileSync(process.cwd() + '/a.py', 'utf8').includes('\\\\"a\\\\"');",
+  "const bad = readFileSync(process.cwd() + '/a.py', 'utf8').includes('BAD');",
   "if (bad) process.stdout.write(JSON.stringify({ file: 'a.py', line: 1, column: 9, message: 'Incompatible types in assignment', hint: null, code: 'assignment', severity: 'error' }) + '\\\\n');",
   'process.exit(bad ? 1 : 0);',
 ].join('\\n'));
@@ -289,7 +289,7 @@ const run = () => adapter.check.run({ root, rules: ['mypy/assignment'] });
 const red = await run();
 assert.equal(red.verdict, 'fail', JSON.stringify(red));
 assert.equal(red.breaches[0].rule, 'mypy/assignment');
-await writeFile(resolve(root, 'a.py'), 'x: int = 1\\n');
+await writeFile(resolve(root, 'a.py'), 'x = GOOD\\n');
 const green = await run();
 assert.equal(green.verdict, 'pass', JSON.stringify(green));
 const missing = await mypy({ python: resolve(root, 'absent'), rules: { assignments: 'assignment' } }).check.run({ root, rules: ['mypy/assignment'] });
