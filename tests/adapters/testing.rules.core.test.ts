@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRule } from 'redproof';
 import { testCounts, testRunBreaches, type TestCase, type TestRun } from '../../packages/testing/src/core/model.ts';
+import { parsePytestJunitXml } from '../../packages/testing/src/core/reports/junit-xml.ts';
 
 const testsPass = defineRule({ id: 'testing/tests-pass', description: 'tests pass' });
 const noFlakyTests = defineRule({ id: 'testing/no-flaky-tests', description: 'no flaky' });
 const noSkippedTests = defineRule({ id: 'testing/no-skipped-tests', description: 'no skip' });
 const noTodoTests = defineRule({ id: 'testing/no-todo-tests', description: 'no todo' });
-const allRules = { testsPass, noFlakyTests, noSkippedTests, noTodoTests };
+const noXfailTests = defineRule({ id: 'testing/no-xfail-tests', description: 'no xfail' });
+const allRules = { testsPass, noFlakyTests, noSkippedTests, noTodoTests, noXfailTests };
 
 function testCase(overrides: Partial<TestCase> & { readonly name: string; readonly status: TestCase['status'] }): TestCase {
   return { suite: ['Parser'], file: 'test/parser.test.ts', location: null, ...overrides };
@@ -116,6 +118,35 @@ test('a run without breaches yields an empty list', () => {
 });
 
 test('test counts tally every status, and a retried pass still counts as passed', () => {
-  assert.deepEqual(testCounts(run), { passed: 2, failed: 1, skipped: 1, todo: 1 });
-  assert.deepEqual(testCounts({ tests: [] }), { passed: 0, failed: 0, skipped: 0, todo: 0 });
+  assert.deepEqual(testCounts(run), { passed: 2, failed: 1, skipped: 1, todo: 1, xfail: 0 });
+  assert.deepEqual(testCounts({ tests: [] }), { passed: 0, failed: 0, skipped: 0, todo: 0, xfail: 0 });
+});
+
+test('an expected failure breaches only noXfailTests: noSkippedTests does not count it', () => {
+  const xfailRun: TestRun = {
+    tests: [
+      testCase({ name: 'known bug', status: 'xfail', location }),
+      testCase({ name: 'later', status: 'skipped' }),
+    ],
+  };
+
+  assert.deepEqual(
+    testRunBreaches(xfailRun, { noXfailTests }).map(item => [item.rule, item.code, item.message]),
+    [['testing/no-xfail-tests', 'test-xfail', 'Parser > known bug']],
+  );
+  assert.deepEqual(
+    testRunBreaches(xfailRun, { noSkippedTests }).map(item => item.message),
+    ['Parser > later'],
+  );
+  assert.deepEqual(testRunBreaches(xfailRun, { testsPass }), []);
+  assert.equal(testCounts(xfailRun).xfail, 1);
+  assert.equal(testCounts(xfailRun).skipped, 1);
+});
+
+test('a pytest test that skipped and then errored in teardown breaches noSkippedTests and testsPass, but not noXfailTests', () => {
+  const run = parsePytestJunitXml('<testsuites><testsuite name="pytest"><testcase classname="t" name="test_a"><skipped type="pytest.skip" message="s"/><error message="failed on teardown">boom</error></testcase></testsuite></testsuites>');
+
+  assert.deepEqual(testRunBreaches(run, { noSkippedTests }).map(item => item.code), ['test-skipped']);
+  assert.deepEqual(testRunBreaches(run, { testsPass }).map(item => item.code), ['test-failed']);
+  assert.deepEqual(testRunBreaches(run, { noXfailTests }), []);
 });
