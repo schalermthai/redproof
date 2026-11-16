@@ -15,6 +15,7 @@ const dependencies = dependencyCruiser({
     'packages/istanbul/src',
     'packages/ruff/src',
     'packages/coverage-py/src',
+    'packages/cosmic-ray/src',
     'tests',
     'packages/*/test',
   ],

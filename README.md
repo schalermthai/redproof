@@ -353,6 +353,7 @@ npm install --save-dev @redproof/eslint eslint
 - **[`@redproof/testing`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#testing)** — test suites, flaky tests, skipped tests, TODO tests; supports Jest-compatible JSON and JUnit XML
 - **[`@redproof/eslint`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#eslint)** — selected ESLint rules as Redproof Rules
 - **[`@redproof/dependency-cruiser`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#dependency-cruiser)** — architecture and dependency boundaries
+- **[`@redproof/cosmic-ray`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#cosmic-ray)** — Python mutation testing: surviving mutants and mutation score
 - **[`@redproof/stryker`](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md#stryker)** — mutation detection and mutation-score policies
 
 See **[Built-in Adapters](https://github.com/schalermthai/redproof/blob/main/docs/built-in-adapters.md)** for examples.

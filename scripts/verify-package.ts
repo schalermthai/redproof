@@ -24,6 +24,7 @@ const PACKAGES = [
   { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
   { name: '@redproof/ruff', tarballPrefix: 'redproof-ruff-', probe: 'ruff' },
   { name: '@redproof/coverage-py', tarballPrefix: 'redproof-coverage-py-', probe: 'coveragePy' },
+  { name: '@redproof/cosmic-ray', tarballPrefix: 'redproof-cosmic-ray-', probe: 'cosmicRay' },
 ] as const;
 
 // Node refuses to strip types under node_modules, so shipped source is unusable.
@@ -346,6 +347,8 @@ assert.equal(missing.verdict, 'refuse', JSON.stringify(missing));
     + "import { coveragePy } from '@redproof/coverage-py';\n"
     + "export const pyCoverage = coveragePy({ args: ['-m', 'pytest'], rules: { lineCoverage: { minimum: 90 }, perFileMinimum: { minimum: 60, metric: 'branches' } } });\n"
     + "export const pyCoverageId: 'coverage-py/line-coverage' = pyCoverage.rules.lineCoverage.id;\n"
+    + "import { cosmicRay } from '@redproof/cosmic-ray';\n"
+    + "export const pythonMutation = cosmicRay({ cwd: 'service', rules: { mutationScore: { minimum: 80 } } });\n"
     + "import { knip } from '@redproof/knip';\n"
     + "export const unused = knip({ rules: { files: 'files', unusedExports: 'exports' }, timeoutMs: 1000 });\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"

@@ -41,6 +41,7 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/redproof/src/run/shell/worker-process.ts',
   'packages/redproof/src/workspace/shell/copy.ts',
   'packages/stryker/src/shell/run.ts',
+  'packages/cosmic-ray/src/shell/run.ts',
   'packages/testing/src/shell/check.ts',
   'packages/istanbul/src/shell/collect.ts',
   'packages/istanbul/src/shell/nyc.ts',

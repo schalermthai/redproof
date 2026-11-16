@@ -12,6 +12,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | ESLint rules have no violations | [`@redproof/eslint`](#eslint) |
 | Architecture rules from dependency-cruiser hold | [`@redproof/dependency-cruiser`](#dependency-cruiser) |
 | Mutation-testing requirements hold | [`@redproof/stryker`](#stryker) |
+| Python mutation-testing requirements hold | [`@redproof/cosmic-ray`](#cosmic-ray) |
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
@@ -563,6 +564,39 @@ For a useful RED proof, weaken the test suite and confirm that Stryker detects t
 
 See the [Stryker package](../packages/stryker/README.md) for the baseline schema
 and mutant identity fields.
+
+---
+
+## cosmic-ray
+
+Use `@redproof/cosmic-ray` to prove Python mutation-testing policies.
+
+```bash
+npm install --save-dev @redproof/cosmic-ray
+python -m pip install cosmic-ray
+```
+
+```ts
+import { cosmicRay } from '@redproof/cosmic-ray';
+
+const adapter = cosmicRay({
+  python: '.venv/bin/python',
+  config: 'cosmic-ray.toml',
+  rules: {
+    mutantsDetected: true,
+    mutationScore: { minimum: 90 },
+  },
+});
+```
+
+| Rule | Breach |
+| --- | --- |
+| `cosmic-ray/mutants-detected` | one breach per surviving mutant, at `file:line:column` |
+| `cosmic-ray/mutation-score` | killed / (killed + survived) is below `minimum` |
+
+Each Check runs cosmic-ray's `baseline`, `init`, `exec` and `dump`. It REFUSES, never passes, when the baseline fails, a command exits non-zero or is killed, a job has no result, a mutant timed out, a test could not start, a job was skipped, there are zero mutants, or the dump is not the 8.3+ format. Timed-out mutants are not counted as killed.
+
+For a useful RED proof, weaken a test (for example assert on `add(0, 0)`) and confirm the surviving mutants are reported. See the [cosmic-ray package](../packages/cosmic-ray/README.md) for blind spots.
 
 ---
 
