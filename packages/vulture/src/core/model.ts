@@ -126,24 +126,30 @@ export function unreadInput(stderr: string): readonly string[] {
   return stderr.split('\n').map(line => line.replace(/\r$/u, '')).filter(line => line.trim());
 }
 
-/** CPython's `fnmatch.translate` (3.12), line for line, so a pattern means here what it means to vulture. */
+/**
+ * CPython's `fnmatch.translate` (3.12), so a pattern means here what it means to vulture. It keeps CPython's shape
+ * for stars too: consecutive stars are one, and every inner `*fixed` is a lookahead plus a backreference, which cannot
+ * backtrack into itself (a plain `[\s\S]*` per star takes exponential time on `*a*a*a*a*a*a*a*Z`, and the census runs
+ * in this process where no timeout reaches it). Group names, not numbers, so a digit after a reference stays a digit.
+ */
 function fnmatchSource(pattern: string): string {
   // Python indexes by code point, JavaScript by UTF-16 unit: walk code points, or an emoji is two characters.
   const pat = Array.from(pattern);
   const text = (from: number, to: number): string => pat.slice(from, to).join('');
-  let res = '';
+  const STAR = Symbol('star');
+  const parts: Array<string | symbol> = [];
   let i = 0;
   const n = pat.length;
   while (i < n) {
     const c = pat[i++]!;
-    if (c === '*') res += '[\\s\\S]*';
-    else if (c === '?') res += '[\\s\\S]';
+    if (c === '*') { if (parts.at(-1) !== STAR) parts.push(STAR); }
+    else if (c === '?') parts.push('[\\s\\S]');
     else if (c === '[') {
       let j = i;
       if (j < n && pat[j] === '!') j += 1;
       if (j < n && pat[j] === ']') j += 1;
       while (j < n && pat[j] !== ']') j += 1;
-      if (j >= n) { res += '\\['; continue; }
+      if (j >= n) { parts.push('\\['); continue; }
       let stuff: string;
       if (!pat.slice(i, j).includes('-')) stuff = text(i, j).replaceAll('\\', '\\\\');
       else {
@@ -172,14 +178,26 @@ function fnmatchSource(pattern: string): string {
       }
       stuff = stuff.replace(/([\]])/gu, '\\$1');
       i = j + 1;
-      if (!stuff) res += '(?!)';
-      else if (stuff === '!') res += '[\\s\\S]';
+      if (!stuff) parts.push('(?!)');
+      else if (stuff === '!') parts.push('[\\s\\S]');
       else {
         if (stuff[0] === '!') stuff = `^${stuff.slice(1)}`;
         else if (stuff[0] === '^' || stuff[0] === '[') stuff = `\\${stuff}`;
-        res += `[${stuff}]`;
+        parts.push(`[${stuff}]`);
       }
-    } else res += c.replace(/[.*+?^${}()|[\]\\/]/gu, '\\$&');
+    } else parts.push(c.replace(/[.*+?^${}()|[\]\\/]/gu, '\\$&'));
+  }
+  let res = '';
+  let k = 0;
+  while (k < parts.length && parts[k] !== STAR) res += parts[k++] as string;
+  let groups = 0;
+  while (k < parts.length) {
+    k += 1; // the star
+    if (k === parts.length) { res += '[\\s\\S]*'; break; }
+    let fixed = '';
+    while (k < parts.length && parts[k] !== STAR) fixed += parts[k++] as string;
+    if (k === parts.length) res += `[\\s\\S]*${fixed}`;
+    else { groups += 1; res += `(?=(?<g${groups}>[\\s\\S]*?${fixed}))\\k<g${groups}>`; }
   }
   return `^(?:${res})$`;
 }

@@ -242,12 +242,69 @@ print(json.dumps([[p,t,fnmatch.fnmatch(t,prep(p))] for p in cases["p"] for t in 
     return Promise.resolve().then(() => assert.deepEqual(bad.slice(0, 5), [], `${bad.length} disagreements with fnmatch`));
   });
 
+  test(`[${tool.label}] real vulture: the exclude matcher equals Python fnmatch on star-heavy seeded fuzz (the shape that used to hang)`, () => {
+    let seed = 20261118;
+    const next = (n: number): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % n; };
+    const alphabet = ['a', 'b', '*', '*', '**', '1', '2', '?', '.', '[ab]', '[!a]', '/'];
+    const word = (): string => Array.from({ length: 1 + next(9) }, () => alphabet[next(alphabet.length)]!).join('');
+    const patterns = Array.from({ length: 3000 }, word);
+    const paths = ['/p/a', '/p/ab', '/p/a1b2', '/p/aab', '/p/b.a', '/p/a/b/1', '/p/2a1', '/p/a-a-a-b', '/p/', '/p/a1x2b', '/p/baab12'];
+    const script = ['import fnmatch,json,sys', 'cases=json.load(sys.stdin)', 'prep=lambda p: p if any(c in p for c in "*?[") else "*"+p+"*"',
+      'print(json.dumps([[p,t,fnmatch.fnmatch(t,prep(p))] for p in cases["p"] for t in cases["t"]]))'].join('\n');
+    const out = JSON.parse(execFileSync(tool.python, ['-c', script], { input: JSON.stringify({ p: patterns, t: paths }), encoding: 'utf8', maxBuffer: 1 << 28 })) as Array<[string, string, boolean]>;
+    const bad: string[] = [];
+    for (const [pattern, path, expected] of out) {
+      let got: boolean | string;
+      try { got = excludeMatcher([pattern], false)(path); } catch (error) { got = `throws ${String(error)}`; }
+      if (got !== expected) bad.push(`${JSON.stringify(pattern)} vs ${path}: python ${String(expected)}, matcher ${String(got)}`);
+    }
+    return Promise.resolve().then(() => assert.deepEqual(bad.slice(0, 5), [], `${bad.length} disagreements with fnmatch`));
+  });
+
+  test(`[${tool.label}] real vulture: a .py symlink that leads outside the Gate root REFUSES (its target path decides what vulture treats as a test file)`, async () => {
+    const outer = await mkdtemp(join(tmpdir(), 'redproof-vulture-link-'));
+    try {
+      const target = join(outer, 'tests', 'real.py');
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, 'def test_orphan():\n    pass\n\n\nclass UnitTestHelper:\n    pass\n');
+      const project = join(outer, 'proj');
+      await mkdir(project);
+      await writeFile(join(project, 'ok.py'), 'x = 1\n');
+      await symlink(target, join(project, 'link.py'));
+      // The same content as a regular file is dead code: the link is what hides it.
+      const control = join(outer, 'control');
+      await mkdir(control);
+      await writeFile(join(control, 'link.py'), 'def test_orphan():\n    pass\n');
+      assert.deepEqual(await judge(control, 'unused-function'), ['fail', 'vulture/unused-function:link.py:1']);
+      assert.deepEqual(await judge(project, 'unused-function'), ['refuse', 'vulture-path-outside-root']);
+      assert.deepEqual(await judge(project, 'unused-class'), ['refuse', 'vulture-path-outside-root']);
+      // A link that stays inside the root is read as before.
+      await rm(join(project, 'link.py'));
+      await writeFile(join(project, 'inner.py'), 'import os\n');
+      await symlink(join(project, 'inner.py'), join(project, 'alias.py'));
+      assert.deepEqual(await judge(project, 'unused-import'), ['fail', 'vulture/unused-import:alias.py:1', 'vulture/unused-import:inner.py:1']);
+    } finally { await rm(outer, { recursive: true, force: true }); }
+  });
+
   test(`[${tool.label}] real vulture: stdlib modules vulture ships whitelists for are never reported unused (pinned, so a change in vulture shows up)`, () => withProject({
     'a.py': 'import sys, logging, enum, threading, argparse\nimport os, json\n',
   }, async root => {
     assert.deepEqual(await judge(root, 'unused-import'), ['fail', 'vulture/unused-import:a.py:2', 'vulture/unused-import:a.py:2'],
       'only os and json are reported; sys, logging, enum, threading and argparse are invisible to vulture');
   }));
+
+  test(`[${tool.label}] real vulture: the bundled whitelists hide dead functions once any file imports their module, and excluding them reveals those (pinned)`, async () => {
+    const dead = 'def run():\n    pass\n\n\ndef emit():\n    pass\n\n\ndef setUp():\n    pass\n';
+    const lines = (names: readonly string[]): readonly string[] => ['fail', ...names.map(() => 'vulture/unused-function:a.py:')];
+    const kinds = (outcome: readonly string[]): readonly string[] => outcome.map(item => item.replace(/\d+$/u, ''));
+    await withProject({ 'a.py': dead }, async root => {
+      assert.deepEqual(kinds(await judge(root, 'unused-function')), lines(['run', 'emit', 'setUp']), 'control: no import, all three are dead');
+    });
+    await withProject({ 'a.py': dead, 'b.py': 'import threading, logging, unittest\nprint(threading, logging, unittest)\n' }, async root => {
+      assert.deepEqual(await judge(root, 'unused-function'), ['pass'], 'the same dead code passes because of an unrelated import');
+      assert.deepEqual(kinds(await judge(root, 'unused-function', { exclude: ['whitelists/*_whitelist.py'] })), lines(['run', 'emit', 'setUp']), 'the documented workaround reveals them');
+    });
+  });
 
   test(`[${tool.label}] real vulture: imports in __init__.py and star imports are never reported (pinned, so a change in vulture shows up)`, () => withProject({
     'pkg/__init__.py': 'import os\n', 'star.py': 'from json import *\n', 'plain.py': 'import re\n',

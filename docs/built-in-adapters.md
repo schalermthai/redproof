@@ -616,6 +616,7 @@ Your Ruff configuration decides the scope, so `exclude`, `per-file-ignores` and 
 A missing Ruff, an unknown rule code, a broken configuration, an unreadable or unparseable file, a missing path, an empty file list, or a Ruff older than 0.4.10 is REFUSE, not PASS.
 
 See the [Ruff package](../packages/ruff/README.md) for every REFUSE code and what the configuration can hide.
+
 ## vulture
 
 Select the kinds of dead Python code you want absent:
@@ -636,7 +637,7 @@ export default defineGate({ id: 'python-dead-code', adapter });
 
 Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) decides which findings count. vulture only prints text, so the adapter parses `file:line: unused X 'name' (NN% confidence)` and REFUSES on any line it does not understand. A project's own `[tool.vulture]` is not read unless you pass `configFile`, because its `exclude` could hide findings. vulture exits 0 after skipping a file it cannot parse and prints that only on stderr, even when it also exits 3 for findings elsewhere, so the adapter reads stderr on every exit (the run goes out with `PYTHONWARNINGS=ignore`, so any stderr line means input was not read) and REFUSES when a file was not read, when no Python file would be read, and when the run did not finish.
 
-It also REFUSES when a directory cannot be read, when the Gate root sits under a directory named `test` or `tests` (vulture would then count `test_*` functions as used, so the verdict would depend on the checkout path; `allowTestPathAncestors` accepts it), and when a file name holds a line break. vulture never reports an unused `import sys` (and a few other standard-library modules it ships whitelists for); that is a blind spot of the rule.
+It also REFUSES when a directory cannot be read, when the Gate root sits under a directory whose name starts with `test` (vulture would then count `test_*` functions as used, so the verdict would depend on the checkout path; `allowTestPathAncestors` accepts it), when a Python file is a symbolic link that leads outside the Gate root, and when a file name holds a line break. vulture also ships whitelists for a few standard-library modules (`sys`, `logging`, `threading`, `unittest`, ...): once any file imports one, the names in it count as used everywhere, so an unused `import sys` and dead functions called `run`, `emit` or `setUp` are invisible. `exclude: ['whitelists/*_whitelist.py']` reveals them (see the package README).
 
 See the [vulture package](../packages/vulture/README.md) for every refusal and blind spot.
 

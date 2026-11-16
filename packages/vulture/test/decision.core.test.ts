@@ -71,7 +71,7 @@ test('the arguments always carry the confidence and the isolated configuration, 
 test('the check stops before running when the version is wrong or no Python file would be read', async () => {
   let runs = 0;
   const runner = (version: string, count: number) => ({
-    version: async () => done(0, version), countFiles: async () => ({ count, unreadable: [], unsafeNames: [] }), run: async () => { runs += 1; return done(0); },
+    version: async () => done(0, version), countFiles: async () => ({ count, unreadable: [], unsafeNames: [], leaving: [] }), run: async () => { runs += 1; return done(0); },
   });
   const decide = (v: string, n: number) => decideVulture({ plan, runner: runner(v, n), selected: everything as never, displayPath: show, configFile: '/c', root: '/r', windows: false });
   refusedWith(await decide('vulture 1.0', 3), 'vulture-version-unsupported');
@@ -128,7 +128,7 @@ test('a bug in the adapter is reported as one, a failing environment as unavaila
   assert.equal(unexpectedFailure('string').code, 'vulture-unavailable');
 });
 
-const census = (count: number, extra: Partial<{ unreadable: string[]; unsafeNames: string[] }> = {}) => ({ count, unreadable: [], unsafeNames: [], ...extra });
+const census = (count: number, extra: Partial<{ unreadable: string[]; unsafeNames: string[]; leaving: string[] }> = {}) => ({ count, unreadable: [], unsafeNames: [], leaving: [], ...extra });
 const decideWith = (c: ReturnType<typeof census>, options: Partial<Parameters<typeof decideVulture>[0]> = {}) => decideVulture({
   plan, selected: everything as never, displayPath: show, configFile: '/c', root: '/r', windows: false,
   runner: { version: async () => done(0, 'vulture 2.16'), countFiles: async () => c, run: async () => done(0) }, ...options,
@@ -137,6 +137,7 @@ const decideWith = (c: ReturnType<typeof census>, options: Partial<Parameters<ty
 test('REFUSE, never PASS: a directory vulture will skip because it cannot be read, a file name that can forge a line, a root under a test directory', async () => {
   refusedWith(await decideWith(census(3, { unreadable: ['/r/sub'] })), 'vulture-path-unreadable');
   refusedWith(await decideWith(census(3, { unsafeNames: ['/r/a\nb.py'] })), 'vulture-unsafe-file-name');
+  refusedWith(await decideWith(census(3, { leaving: ['/r/link.py'] })), 'vulture-path-outside-root');
   refusedWith(await decideWith(census(3), { root: '/ci/tests/proj' }), 'vulture-root-in-test-directory');
   assert.equal((await decideWith(census(3), { root: '/ci/tests/proj', plan: { ...plan, allowTestPathAncestors: true } })).kind, 'evidence');
   assert.equal((await decideWith(census(3), { root: '/ci/contests/proj' })).kind, 'evidence');

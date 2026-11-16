@@ -21,7 +21,7 @@ export type VultureOptions<M extends Selection = Selection> = {
    * 60; unused arguments and unreachable code at 100.
    */
   readonly minConfidence?: number;
-  /** vulture `--exclude` patterns (`fnmatch` on the absolute path: case-sensitive on POSIX, folded on Windows). */
+  /** vulture `--exclude` patterns (`fnmatch` on the ABSOLUTE path, a word without wildcards means `*word*`: case-sensitive on POSIX, folded on Windows). */
   readonly exclude?: readonly string[];
   /** vulture `--ignore-names` patterns. */
   readonly ignoreNames?: readonly string[];
@@ -51,6 +51,8 @@ function validatePath(name: string, value: string): void {
   }
 }
 
+const MAX_PATTERN_LENGTH = 4096;
+
 /** Patterns travel as one comma-separated argument, so a comma or a leading dash would change their meaning. */
 function validatePatterns(name: string, value: readonly string[] | undefined): void {
   if (value === undefined) return;
@@ -59,6 +61,9 @@ function validatePatterns(name: string, value: readonly string[] | undefined): v
     if (typeof pattern !== 'string' || !pattern.trim() || pattern.includes(',') || pattern.startsWith('-')) {
       throw new Error(`vulture ${name} entries must be non-empty, contain no comma and not start with a dash.`);
     }
+    // Node would hand vulture U+FFFD for a lone surrogate while the file count kept the surrogate: the two would disagree.
+    if (/\p{Surrogate}/u.test(pattern)) throw new Error(`vulture ${name} entries must be well-formed text (no lone surrogate).`);
+    if (pattern.length > MAX_PATTERN_LENGTH) throw new Error(`vulture ${name} entries must be at most ${MAX_PATTERN_LENGTH} characters.`);
   }
 }
 

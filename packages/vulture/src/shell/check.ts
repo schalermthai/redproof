@@ -45,19 +45,23 @@ async function pythonFiles(directory: string, unreadable: string[]): Promise<str
 }
 
 /** What vulture will read: every named file, and every `.py` file below a named directory, less `exclude`. */
-async function censusOf(paths: readonly string[], exclude: readonly string[]): Promise<FileCensus> {
+async function censusOf(root: string, paths: readonly string[], exclude: readonly string[]): Promise<FileCensus> {
   const excluded = excludeMatcher(exclude, process.platform === 'win32');
   const unreadable: string[] = [];
   const unsafeNames: string[] = [];
+  const leaving: string[] = [];
   let count = 0;
   for (const path of paths) {
     const files = (await lstat(path).then(() => stat(path))).isDirectory() ? await pythonFiles(path, unreadable) : [path];
     for (const file of files.filter(candidate => !excluded(candidate))) {
       count += 1;
       if (/[\r\n\u2028\u2029]/u.test(file)) unsafeNames.push(file);
+      // vulture reads the target, and decides "test file" from the target's own path, so a link out of the root
+      // can hide `test_*` names that the same code inside the root would report.
+      if ((await lstat(file)).isSymbolicLink() && !withinRoot(root, await realpath(file))) leaving.push(file);
     }
   }
-  return { count, unreadable, unsafeNames };
+  return { count, unreadable, unsafeNames, leaving };
 }
 
 export function vultureCheck<R extends RuleRef>(
@@ -104,7 +108,7 @@ export function vultureCheck<R extends RuleRef>(
             },
             runner: {
               version: () => executeCommand({ command, args: ['--version'], cwd, env, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
-              countFiles: () => censusOf(paths, settings.exclude ?? []),
+              countFiles: () => censusOf(root, paths, settings.exclude ?? []),
               run: args => executeCommand({ command, args, cwd, env, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
             },
             selected,

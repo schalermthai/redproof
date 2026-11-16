@@ -113,6 +113,8 @@ export type FileCensus = {
   readonly unreadable: readonly string[];
   /** Files whose name holds a line break: it can forge a line of vulture's report. */
   readonly unsafeNames: readonly string[];
+  /** Symbolic links to a file outside the Gate root: vulture reads the target. */
+  readonly leaving: readonly string[];
 };
 
 /** How the shell runs vulture: the only effects the core calls. */
@@ -148,6 +150,9 @@ export async function decideVulture<R extends RuleRef>(input: {
   }
   if (files.unsafeNames.length) {
     return refusal('vulture-unsafe-file-name', 'A file name holds a line break (CR, LF, U+2028 or U+2029), which can forge or split a line of the report.', JSON.stringify(files.unsafeNames));
+  }
+  if (files.leaving.length) {
+    return refusal('vulture-path-outside-root', 'A Python file is a symbolic link that leads outside the Gate root; vulture reads the target and judges it by the target\'s own path.', files.leaving.join('\n'));
   }
   if (files.count === 0) {
     return refusal('vulture-nothing-inspected', 'vulture would read no Python files, so a pass would mean nothing.', input.plan.paths.join('\n'));
