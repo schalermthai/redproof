@@ -40,10 +40,17 @@ function element(body: string, name: string): { attrs: Readonly<Record<string, s
 
 /**
  * pytest's banner when the run ends early: -x or --maxfail, a stepwise stop, or `pytest.exit()` (which can
- * exit 0, so the exit code alone is not enough). Whole line only, so captured test output can't forge it.
- * xdist adds a dotted module prefix (`xdist.dsession.Interrupted:`), `pytest.exit` is `_pytest.outcomes.Exit:`.
+ * exit 0, so the exit code alone is not enough). xdist adds a dotted module prefix
+ * (`xdist.dsession.Interrupted:`), `pytest.exit` is `_pytest.outcomes.Exit`, with an optional, possibly
+ * multi-line, message. A stray banner in captured output can only cause a REFUSE, never a PASS.
  */
-const PYTEST_STOPPED_EARLY = /^!{3,} (?:stopping after \d+ failures?|(?:[\w.]*\.)?(?:Interrupted|Exit): .+) !{3,}$/mu;
+const PYTEST_STOPPED_EARLY = /^!{3,} (?:stopping after \d+ failures?|(?:[\w.]*\.)?Interrupted: .+) !{3,}$/mu;
+const PYTEST_EXIT_BANNER = /^!{3,} (?:[\w.]*\.)?Exit(?:: [\s\S]*?)? !{3,}$/mu;
+
+/** `--color=yes`, `PY_COLORS=1`, `FORCE_COLOR` and `PYTEST_ADDOPTS` all colour the banner. */
+function withoutAnsi(text: string): string {
+  return text.replace(/\u001b\[[0-9;]*[A-Za-z]/gu, '');
+}
 
 /** pytest writes an expected failure as <skipped type="pytest.xfail">; no other tool does. */
 const PYTEST_XFAIL_TYPE = 'pytest.xfail';
@@ -185,7 +192,10 @@ export function pytestJunitXml(): TestReportFormat {
         return 'A collection error stopped some test modules from being collected, so their tests never ran.';
       }
       if (exitCode === 2) return 'pytest was interrupted (exit code 2).';
-      if (PYTEST_STOPPED_EARLY.test(stdout)) return 'pytest stopped early (-x or --maxfail), so later tests never ran.';
+      const plain = withoutAnsi(stdout);
+      if (PYTEST_STOPPED_EARLY.test(plain) || PYTEST_EXIT_BANNER.test(plain)) {
+        return 'pytest stopped early (-x, --maxfail or pytest.exit), so later tests never ran.';
+      }
       return null;
     },
   };

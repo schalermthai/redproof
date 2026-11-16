@@ -207,7 +207,7 @@ It runs `pytest -q --junitxml=<report>`, then your `args`, then `files`, and rea
 
 pytest writes an expected failure (xfail) as `<skipped type="pytest.xfail">`, the same element it uses for a real skip. The pytest reader tells them apart, so `noSkippedTests` counts only real skips and `noXfailTests` counts expected failures. The generic `report.junitXml()` counts both as skipped.
 
-A Rule about absent tests (`noSkippedTests`, `noXfailTests`) can only pass if every test ran. If pytest stopped early (`-x` or `--maxfail`, `pytest.exit()`, a collection error, or exit code 2) and nothing breached, the Check REFUSES with `test-run-incomplete` instead of passing. A breach still fails. pytest prints its stop banner even when `-x` stops on the very last test, so that case also refuses although every test ran. A subset you choose yourself (`-k`, `-m`, `--lf`, `--deselect`) is not detected.
+A Rule about absent tests (`noSkippedTests`, `noXfailTests`) can only pass if every test ran. If pytest stopped early (`-x` or `--maxfail`, `pytest.exit()`, a collection error, or exit code 2) and nothing breached, the Check REFUSES with `test-run-incomplete` instead of passing. A breach still fails. pytest prints its stop banner even when `-x` stops on the very last test, so that case also refuses although every test ran. The stop is read from pytest's banner on stdout (colour codes removed), so a plugin that ends the session silently at exit 0 is not detected. A subset you choose yourself (`-k`, `-m`, `--lf`, `--deselect`) is not detected.
 
 pytest's JUnit XML cannot show retries, TODO tests or an unexpected pass, so `noFlakyTests` and `noTodoTests` are not available here. Set `xfail_strict = true` in your pytest config to make an unexpected pass a failure.
 

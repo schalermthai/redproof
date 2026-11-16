@@ -347,6 +347,14 @@ test('pytest incompleteness signals, each on its own: collection error (even at 
   assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit: bye !!!!!!!!!!!!!!!!!!!!!!!!!!', exitCode: 0 }) ?? '', /stopped early/, 'pytest.exit()');
   assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!!!!!! xdist.dsession.Interrupted: stopping after 1 failures !!!!!!!!!!!!!', exitCode: 1 }) ?? '', /stopped early/, 'xdist banner');
   assert.equal(incomplete({ run: ordinary, stdout: '!!!!!!!! Exit code 0 is fine !!!!!!!!', exitCode: 0 }), null, 'only the Exit:/Interrupted: banners count');
+
+  // Found by review: colour, a missing message and a multi-line message each hid the banner.
+  const colour = `\u001b[31m${banner}\u001b[0m`;
+  assert.match(incomplete({ run: ordinary, stdout: `F\n${colour}\n1 failed`, exitCode: 1 }) ?? '', /stopped early/, '--color=yes / PY_COLORS=1');
+  assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!!!!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit !!!!!!!!!!!!!!!!!!!!!!!!!!!!!', exitCode: 0 }) ?? '', /stopped early/, "pytest.exit('')");
+  assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit: line one\nline two !!!!!!!!!!!!!!!!!!!', exitCode: 0 }) ?? '', /stopped early/, 'multi-line pytest.exit message');
+  assert.match(incomplete({ run: ordinary, stdout: `${colour.replace(banner, '!!!!!!!!!! _pytest.outcomes.Exit: bye !!!!!!!!!!')}`, exitCode: 0 }) ?? '', /stopped early/, 'coloured pytest.exit');
+  assert.equal(incomplete({ run: ordinary, stdout: `\u001b[32m1 passed\u001b[0m in 0.1s`, exitCode: 0 }), null, 'colour on an ordinary run is not an early stop');
   assert.equal(junitXml().incomplete, undefined, 'generic JUnit has no signal');
   assert.equal(jestJson().incomplete, undefined, 'Jest JSON has no signal');
 });

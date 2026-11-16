@@ -167,7 +167,7 @@ A Rule about absent tests (`noSkippedTests`, `noXfailTests`) can only pass if ev
 test ran. If pytest stopped early (`-x` or `--maxfail`, `pytest.exit()`, a collection
 error, or exit code 2) and nothing breached, the Check REFUSES with
 `test-run-incomplete` instead of passing. pytest prints its stop banner even when
-`-x` stops on the very last test, so that case refuses too although every test ran. A breach still FAILs, because a breach decides the result either way.
+`-x` stops on the very last test, so that case refuses too although every test ran. The stop is read from pytest's banner on stdout, with colour codes removed, so a plugin that ends the session silently at exit 0 is not detected. A breach still FAILs, because a breach decides the result either way.
 `testsPass` is unaffected. A test that skipped and then errored in teardown still
 counts as skipped.
 
