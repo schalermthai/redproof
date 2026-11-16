@@ -39,8 +39,8 @@ export type CosmicRayConfig = {
   readonly catalog: Readonly<Record<string, Rule>>;
 };
 
-export const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
-export const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
+const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 const RULE_NAMES = ['mutantsDetected', 'mutationScore'] as const;
 

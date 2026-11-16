@@ -69,9 +69,9 @@ nativeTest('real cosmic-ray: a suite failing on unmutated code REFUSES for each 
 
 nativeTest('real cosmic-ray: tests that hit the timeout REFUSE for each rule alone', () => withWorkspace(async root => {
   await writeFile(join(root, 'mod.py'), MODULE);
-  await project(root, SLOW, 4);
+  await project(root, SLOW, 2);
   // The baseline itself takes ~5s with a 4s limit, so shrink the sleep for it and keep the mutants slow.
-  await writeFile(join(root, 'test_mod.py'), SLOW.replace('time.sleep(5)', 'time.sleep(2 if add(1, 1) == 2 else 20)'));
+  await writeFile(join(root, 'test_mod.py'), SLOW.replace('time.sleep(5)', 'time.sleep(0.2 if add(1, 1) == 2 else 20)'));
   assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-incomplete']);
   assert.deepEqual(await outcome(root, SCORE), ['refuse', 'cosmic-ray-incomplete']);
 }));
