@@ -632,7 +632,7 @@ const adapter = tach({
 export default defineGate({ id: 'python-boundaries', adapter });
 ```
 
-`tach.toml` must be in the working directory. A skipped file, a project with nothing to inspect, a crash, a timeout, a tach newer than the verified minor, or an unknown diagnostic is REFUSE, not PASS. So is a selected rule whose configuration is missing or off (for example `circular-dependency` without `forbid_circular_dependencies = true`, or `interface-violation` with no `[[interfaces]]`), and Python files that a `.gitignore` hides from tach; `allowInactiveRules` and `allowIgnoredSources` acknowledge the last two. Unused module dependencies are not available: tach prints them only as text. Project settings such as `# tach-ignore`, a partial `exclude`, and `TYPE_CHECKING` imports still decide what tach reports.
+`tach.toml` must be in the working directory. A skipped file, a project with nothing to inspect, a crash, a timeout, a tach newer than the verified minor, or an unknown diagnostic is REFUSE, not PASS. So is a selected rule whose configuration is missing or off (for example `circular-dependency` without `forbid_circular_dependencies = true`, or `interface-violation` with no `[[interfaces]]`), and Python files that a `.gitignore`, `.ignore` or `.git/info/exclude` hides from tach, or that sit behind a symbolic link; `allowInactiveRules` and `allowIgnoredSources` acknowledge the last two. `tach.toml` is read with a real TOML parser, and one that is not valid TOML REFUSES. Unused module dependencies are not available: tach prints them only as text. Project settings such as `# tach-ignore` and `TYPE_CHECKING` imports still decide what tach reports.
 
 See the [tach package](../packages/tach/README.md) for every rule and the blind spots.
 
