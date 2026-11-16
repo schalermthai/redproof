@@ -26,25 +26,27 @@ export type VultureFinding = {
   readonly confidence: number;
 };
 
-// `<file>:<line>: <message> (<n>% confidence[, <m> lines])`. The file may contain colons, so the line number is the last `:<digits>: `.
-const LINE = /^(.+?):(\d+): (.+) \((\d{1,3})% confidence(?:, \d+ lines?)?\)$/u;
-const UNUSED = /^unused (import|function|class|method|variable|attribute|property) '(.*)'$/u;
-const REACHABILITY = /^(?:unreachable code after '[^']*'|unsatisfiable '[^']*' condition|unreachable '[^']*' block)$/u;
+// `<file>:<line>: <message> (<n>% confidence[, <m> lines])`, read from the right. The message must be exactly one of the
+// shapes vulture prints, and the name in it cannot hold a space or a quote, so a file name that imitates a finding can
+// neither swallow the real one nor change its kind: the greedy file part always ends at the last `:<digits>: <message>`.
+const NAME = `[^\\s'"]+`;
+const WORD = `[A-Za-z_]+`;
+const MESSAGE = `(?:unused (import|function|class|method|variable|attribute|property) '(${NAME})'`
+  + `|(unreachable code after '${WORD}'|unsatisfiable '${WORD}' condition|unreachable '${WORD}' block`
+  + `|redundant if-condition|unreachable 'else' expression))`;
+const LINE = new RegExp(`^(.+):(\\d+): ${MESSAGE} \\((\\d{1,3})% confidence(?:, \\d+ lines?)?\\)$`, 'u');
 
 function parseLine(line: string): VultureFinding | null {
   const match = LINE.exec(line);
   if (!match) return null;
-  const [, file, lineNo, message, confidence] = match;
-  const unused = UNUSED.exec(message!);
+  const [, file, lineNo, unusedKind, name, reachability, confidence] = match;
   const row = Number(lineNo);
   const percent = Number(confidence);
   if (!Number.isSafeInteger(row) || row < 1 || percent > 100) return null;
-  if (unused) {
-    return { kind: `unused-${unused[1]}` as VultureKind, file: file!, line: row, name: unused[2]!, message: message!, confidence: percent };
-  }
-  return REACHABILITY.test(message!)
-    ? { kind: 'unreachable-code', file: file!, line: row, name: null, message: message!, confidence: percent }
-    : null;
+  const message = unusedKind ? `unused ${unusedKind} '${name}'` : reachability!;
+  return unusedKind
+    ? { kind: `unused-${unusedKind}` as VultureKind, file: file!, line: row, name: name!, message, confidence: percent }
+    : { kind: 'unreachable-code', file: file!, line: row, name: null, message, confidence: percent };
 }
 
 export type VultureReport = {
@@ -115,48 +117,74 @@ export function vultureVersionSupported(version: readonly [number, number]): boo
   return version[0] !== minimum[0] ? version[0] > minimum[0]! : version[1] >= minimum[1]!;
 }
 
-const WARNING_HEADER = /^\S.*:\d+: [A-Za-z]*Warning: /u;
-
 /**
- * What vulture said on stderr that means part of the input was not read: a syntax error, an
- * unreadable file, a missing path. Python warnings (a header line and the source line under it) are
- * not: vulture still read that file. Anything else fails closed.
+ * What vulture said on stderr. The run goes out with `PYTHONWARNINGS=ignore`, so no Python warning reaches
+ * stderr, and everything that does is a syntax error, an unreadable file, a missing path or a crash: input that
+ * was not read. Nothing is classified by its shape, because a file name or source text can imitate any shape.
  */
 export function unreadInput(stderr: string): readonly string[] {
-  const kept: string[] = [];
-  let underWarning = false;
-  for (const raw of stderr.split('\n')) {
-    const line = raw.replace(/\r$/u, '');
-    if (!line.trim()) { underWarning = false; continue; }
-    if (WARNING_HEADER.test(line)) { underWarning = true; continue; }
-    if (underWarning && /^\s/u.test(line)) continue;
-    underWarning = false;
-    kept.push(line);
-  }
-  return kept;
+  return stderr.split('\n').map(line => line.replace(/\r$/u, '')).filter(line => line.trim());
 }
 
-/** vulture's `--exclude` is `fnmatch` on the absolute path, case-insensitive, and a pattern without wildcards means `*pattern*`. */
-export function excludeMatcher(patterns: readonly string[]): (absolutePath: string) => boolean {
-  const regexes = patterns.filter(pattern => pattern).map(pattern => {
-    const full = /[*?[]/u.test(pattern) ? pattern : `*${pattern}*`;
-    let source = '';
-    for (let i = 0; i < full.length; i += 1) {
-      const c = full[i]!;
-      if (c === '*') source += '[\\s\\S]*';
-      else if (c === '?') source += '[\\s\\S]';
-      else if (c === '[') {
-        const end = full.indexOf(']', i + (full[i + 1] === '!' || full[i + 1] === ']' ? 2 : 1));
-        if (end === -1) source += '\\[';
-        else {
-          let body = full.slice(i + 1, end).replace(/\\/gu, '\\\\');
-          if (body.startsWith('!')) body = `^${body.slice(1)}`;
-          source += `[${body}]`;
-          i = end;
+/** CPython's `fnmatch.translate` (3.12), line for line, so a pattern means here what it means to vulture. */
+function fnmatchSource(pat: string): string {
+  let res = '';
+  let i = 0;
+  const n = pat.length;
+  while (i < n) {
+    const c = pat[i++]!;
+    if (c === '*') res += '[\\s\\S]*';
+    else if (c === '?') res += '[\\s\\S]';
+    else if (c === '[') {
+      let j = i;
+      if (j < n && pat[j] === '!') j += 1;
+      if (j < n && pat[j] === ']') j += 1;
+      while (j < n && pat[j] !== ']') j += 1;
+      if (j >= n) { res += '\\['; continue; }
+      let stuff: string;
+      if (!pat.slice(i, j).includes('-')) stuff = pat.slice(i, j).replaceAll('\\', '\\\\');
+      else {
+        const chunks: string[] = [];
+        let start = i;
+        let k = pat[i] === '!' ? i + 2 : i + 1;
+        for (;;) {
+          k = pat.indexOf('-', k);
+          if (k < 0 || k >= j) break;
+          chunks.push(pat.slice(start, k));
+          start = k + 1;
+          k += 3;
         }
-      } else source += c.replace(/[.*+?^${}()|[\]\\/]/gu, '\\$&');
-    }
-    return new RegExp(`^${source}$`, 'iu');
-  });
-  return path => regexes.some(regex => regex.test(path));
+        const chunk = pat.slice(start, j);
+        if (chunk) chunks.push(chunk); else chunks[chunks.length - 1] += '-';
+        for (let m = chunks.length - 1; m > 0; m -= 1) {
+          if (chunks[m - 1]!.slice(-1) > chunks[m]![0]!) {
+            chunks[m - 1] = chunks[m - 1]!.slice(0, -1) + chunks[m]!.slice(1);
+            chunks.splice(m, 1);
+          }
+        }
+        stuff = chunks.map(part => part.replaceAll('\\', '\\\\').replaceAll('-', '\\-')).join('-');
+      }
+      stuff = stuff.replace(/([&~|])/gu, '\\$1');
+      i = j + 1;
+      if (!stuff) res += '(?!)';
+      else if (stuff === '!') res += '[\\s\\S]';
+      else {
+        if (stuff[0] === '!') stuff = `^${stuff.slice(1)}`;
+        else if (stuff[0] === '^' || stuff[0] === '[') stuff = `\\${stuff}`;
+        res += `[${stuff}]`;
+      }
+    } else res += c.replace(/[.*+?^${}()|[\]\\/-]/gu, '\\$&');
+  }
+  return `^(?:${res})$`;
+}
+
+/**
+ * vulture's `--exclude` is `fnmatch` on the absolute path, and a pattern without wildcards means `*pattern*`.
+ * `fnmatch` folds case and separators on Windows only (untested here); on POSIX it is case-sensitive.
+ */
+export function excludeMatcher(patterns: readonly string[], windows: boolean): (absolutePath: string) => boolean {
+  const fold = (text: string): string => (windows ? text.toLowerCase().replaceAll('/', '\\') : text);
+  const regexes = patterns.filter(pattern => pattern)
+    .map(pattern => new RegExp(fnmatchSource(fold(/[*?[]/u.test(pattern) ? pattern : `*${pattern}*`))));
+  return path => regexes.some(regex => regex.test(fold(path)));
 }

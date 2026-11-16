@@ -41,7 +41,8 @@ test('REFUSE, never PASS: input vulture did not read, on any exit code', () => {
   refusedWith(evaluateRun(done(3, reports.dirty, reports.syntaxError), plan, 1, everything as never, show), 'vulture-input-unread');
   refusedWith(evaluateRun(done(0, '', reports.syntaxError), plan, 1, everything as never, show), 'vulture-input-unread');
   refusedWith(evaluateRun(done(1), plan, 1, everything as never, show), 'vulture-input-invalid');
-  assert.equal(evaluateRun(done(0, '', reports.syntaxWarning), plan, 1, everything as never, show).kind, 'evidence', 'a Python warning is not unread input');
+  refusedWith(evaluateRun(done(0, '', reports.syntaxWarning), plan, 1, everything as never, show), 'vulture-input-unread');
+  refusedWith(evaluateRun(done(3, reports.dirty, '/p/a:1: Warning: .py:1: invalid syntax at "x = = 1"\n'), plan, 1, only('unused-function') as never, show), 'vulture-input-unread');
 });
 
 test('REFUSE, never PASS: unexpected exit codes, an unreadable report, a report that disagrees with the exit', () => {

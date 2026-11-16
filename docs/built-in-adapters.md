@@ -634,7 +634,7 @@ const adapter = vulture({
 export default defineGate({ id: 'python-dead-code', adapter });
 ```
 
-Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) decides which findings count. vulture only prints text, so the adapter parses `file:line: unused X 'name' (NN% confidence)` and REFUSES on any line it does not understand. A project's own `[tool.vulture]` is not read unless you pass `configFile`, because its `exclude` could hide findings. vulture exits 0 after skipping a file it cannot parse and prints that only on stderr, even when it also exits 3 for findings elsewhere, so the adapter reads stderr on every exit and REFUSES when a file was not read, when no Python file would be read, and when the run did not finish.
+Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) decides which findings count. vulture only prints text, so the adapter parses `file:line: unused X 'name' (NN% confidence)` and REFUSES on any line it does not understand. A project's own `[tool.vulture]` is not read unless you pass `configFile`, because its `exclude` could hide findings. vulture exits 0 after skipping a file it cannot parse and prints that only on stderr, even when it also exits 3 for findings elsewhere, so the adapter reads stderr on every exit (the run goes out with `PYTHONWARNINGS=ignore`, so any stderr line means input was not read) and REFUSES when a file was not read, when no Python file would be read, and when the run did not finish.
 
 See the [vulture package](../packages/vulture/README.md) for every refusal and blind spot.
 

@@ -30,7 +30,8 @@ const isRefusal = (value: string | VultureRefusal): value is VultureRefusal => t
 /** The `.py` files below a directory, as `Path.rglob('*.py')` finds them: symlinked directories are not entered. */
 async function pythonFiles(directory: string): Promise<string[]> {
   const found: string[] = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  // `Path.rglob` skips a directory it cannot read, and so does this.
+  for (const entry of await readdir(directory, { withFileTypes: true }).catch(() => [])) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) found.push(...await pythonFiles(path));
     else if (entry.name.endsWith('.py') && (entry.isFile() || (entry.isSymbolicLink() && (await stat(path).catch(() => undefined))?.isFile()))) {
@@ -42,7 +43,7 @@ async function pythonFiles(directory: string): Promise<string[]> {
 
 /** What vulture will read: every named file, and every `.py` file below a named directory, less `exclude`. */
 async function countFiles(paths: readonly string[], exclude: readonly string[]): Promise<number> {
-  const excluded = excludeMatcher(exclude);
+  const excluded = excludeMatcher(exclude, process.platform === 'win32');
   let count = 0;
   for (const path of paths) {
     const files = (await lstat(path).then(() => stat(path))).isDirectory() ? await pythonFiles(path) : [path];
@@ -86,15 +87,17 @@ export function vultureCheck<R extends RuleRef>(
           }
           const command = settings.command ?? 'vulture';
           const timeoutMs = settings.timeoutMs ?? 60_000;
+          // No Python warning may reach stderr: every stderr line is read as input vulture could not read.
+          const env = { PYTHONWARNINGS: 'ignore' };
           return await decideVulture({
             plan: {
               paths, minConfidence: settings.minConfidence ?? 60,
               exclude: settings.exclude, ignoreNames: settings.ignoreNames, ignoreDecorators: settings.ignoreDecorators,
             },
             runner: {
-              version: () => executeCommand({ command, args: ['--version'], cwd, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
+              version: () => executeCommand({ command, args: ['--version'], cwd, env, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
               countFiles: () => countFiles(paths, settings.exclude ?? []),
-              run: args => executeCommand({ command, args, cwd, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
+              run: args => executeCommand({ command, args, cwd, env, label: 'vulture', timeoutMs, maxOutputBytes: limit }),
             },
             selected,
             displayPath: file => displayPath(root, cwd, file),

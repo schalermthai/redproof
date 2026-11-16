@@ -5,16 +5,24 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-/** The python of the virtualenv holding the vulture under test (the battle-test venv by default). */
-export const python: string = process.env.REDPROOF_VULTURE_PYTHON
-  ?? fileURLToPath(new URL('../../../../../24-vulture/.venv/bin/python', import.meta.url));
-export const vultureBinary: string = join(dirname(python), 'vulture');
+export type Tool = { readonly label: string; readonly python: string; readonly binary: string };
+
+const tool = (label: string, python: string): Tool => ({ label, python, binary: join(dirname(python), 'vulture') });
 
 /**
- * The repo gate bans skipped tests, so without vulture the native tests are not registered at all.
- * Run them with REDPROOF_VULTURE_PYTHON pointing at a python that has vulture installed.
+ * The vultures under test: REDPROOF_VULTURE_PYTHON (the battle-test venv by default) and, when set,
+ * REDPROOF_VULTURE_PYTHON_OLDEST, the python of a virtualenv with the oldest supported vulture.
  */
-export const nativeTest: typeof test = existsSync(vultureBinary) ? test : (Object.assign(() => undefined, test) as never);
+export const tools: readonly Tool[] = [
+  tool('latest', process.env.REDPROOF_VULTURE_PYTHON ?? fileURLToPath(new URL('../../../../../24-vulture/.venv/bin/python', import.meta.url))),
+  ...(process.env.REDPROOF_VULTURE_PYTHON_OLDEST ? [tool('oldest', process.env.REDPROOF_VULTURE_PYTHON_OLDEST)] : []),
+].filter(candidate => existsSync(candidate.binary));
+
+/** CI sets this beside the virtualenv: a missing vulture there must fail, not silently unregister the native tests. */
+export const vultureRequired: boolean = process.env.REDPROOF_VULTURE_REQUIRED === '1';
+
+/** The repo gate bans skipped tests, so without vulture the native tests are not registered at all. */
+export const nativeTest: typeof test = tools.length ? test : (Object.assign(() => undefined, test) as never);
 
 export async function withProject<T>(files: Readonly<Record<string, string>>, action: (root: string) => Promise<T>): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), 'redproof-vulture-test-'));

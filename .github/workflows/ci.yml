@@ -50,6 +50,23 @@ jobs:
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
 
+      # The @redproof/vulture native tests run the real tool, the newest pinned release and the oldest supported
+      # one. They are only registered when an interpreter is found, so REDPROOF_VULTURE_REQUIRED makes a missing one fail.
+      - name: Install Python for the native adapter tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Point the native tests at vulture
+        run: |
+          python -m venv "$RUNNER_TEMP/vulture-venv"
+          "$RUNNER_TEMP/vulture-venv/bin/python" -m pip install vulture==2.16
+          python -m venv "$RUNNER_TEMP/vulture-oldest-venv"
+          "$RUNNER_TEMP/vulture-oldest-venv/bin/python" -m pip install vulture==2.12
+          echo "REDPROOF_VULTURE_PYTHON=$RUNNER_TEMP/vulture-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_VULTURE_PYTHON_OLDEST=$RUNNER_TEMP/vulture-oldest-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_VULTURE_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Run quality and integration checks
         run: npm run check:quality
 
@@ -110,6 +127,25 @@ jobs:
           python -m venv "$RUNNER_TEMP/coverage-venv"
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
+
+      # The @redproof/vulture native tests run the real tool, the newest pinned release and the oldest supported
+      # one. They are only registered when an interpreter is found, so REDPROOF_VULTURE_REQUIRED makes a missing one fail.
+      - name: Install Python for the native adapter tests
+        if: matrix.gate == 'test-health'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Point the native tests at vulture
+        if: matrix.gate == 'test-health'
+        run: |
+          python -m venv "$RUNNER_TEMP/vulture-venv"
+          "$RUNNER_TEMP/vulture-venv/bin/python" -m pip install vulture==2.16
+          python -m venv "$RUNNER_TEMP/vulture-oldest-venv"
+          "$RUNNER_TEMP/vulture-oldest-venv/bin/python" -m pip install vulture==2.12
+          echo "REDPROOF_VULTURE_PYTHON=$RUNNER_TEMP/vulture-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_VULTURE_PYTHON_OLDEST=$RUNNER_TEMP/vulture-oldest-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_VULTURE_REQUIRED=1" >> "$GITHUB_ENV"
 
       - name: Build the proof runtime
         run: npm run build
