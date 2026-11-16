@@ -210,6 +210,14 @@ export function parseEchoBlock(output: string): ReadonlyMap<string, string> | nu
   return entries;
 }
 
+/** Every key `--verbose` echoes in the releases this adapter has run against (0.21.2 to 0.25.1). A key outside it is a setting the adapter has never judged. */
+export const KNOWN_ECHO_KEYS: ReadonlySet<string> = new Set([
+  'root', 'config', 'no_ansi', 'per_rule_ignores', 'ignore', 'exclude', 'extend_exclude', 'using_default_exclude', 'ignore_notebooks',
+  'requirements_files', 'using_default_requirements_files', 'requirements_files_dev', 'known_first_party', 'json_output',
+  'package_module_name_map', 'pep621_dev_dependency_groups', 'optional_dependencies_dev_groups', 'non_dev_dependency_groups',
+  'experimental_namespace_package', 'enforce_posix_paths', 'github_output', 'github_warning_errors',
+]);
+
 /** Packages deptry could not find installed, so it assumed their module name equals the package name. */
 export function assumedModuleNames(output: string): readonly string[] {
   return [...clean(output).matchAll(/^Assuming the corresponding module name of package '([^']*)' is '[^']*'\./gmu)].map(match => match[1]!);

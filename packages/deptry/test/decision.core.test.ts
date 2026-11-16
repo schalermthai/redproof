@@ -223,3 +223,8 @@ test('scan roots never start with a dash; the walk and deptry use the same exclu
   assert.deepEqual(excludePatterns({ paths: ['.'], extendExclude: ['gen'] }), ['venv', '\\.venv', '\\.direnv', 'tests', '\\.git', 'setup\\.py', 'gen', '$^']);
   assert.deepEqual(fileListDifference(['a.py', 'b.py'], ['b.py', 'c.py']), ['missing: a.py', 'unexpected: c.py']);
 });
+
+test('REFUSE, never PASS: an echo key outside the known list', () => {
+  refusedWith(decide(completed(0, header(1).replace('\nignore:', '\nsome_new_setting: True\nignore:')), '[]'), 'deptry-config-unknown-key');
+  assert.equal(decide(completed(0, header(1, { pep621_dev_dependency_groups: '()', enforce_posix_paths: 'False', github_output: 'False', github_warning_errors: '()', json_output: 'None' })), '[]').kind, 'evidence');
+});

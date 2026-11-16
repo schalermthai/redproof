@@ -2,7 +2,7 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution, CompletedCommand } from 'redproof/command';
 import {
-  DEPTRY_DEFAULT_EXCLUDE, MATCHES_NOTHING, MINIMUM_DEPTRY_VERSION, NOTHING, assumedModuleNames, attribute, deptryVersionSupported,
+  DEPTRY_DEFAULT_EXCLUDE, KNOWN_ECHO_KEYS, MATCHES_NOTHING, MINIMUM_DEPTRY_VERSION, NOTHING, assumedModuleNames, attribute, deptryVersionSupported,
   inlineIgnoredCodes, parseDeptryReport, parseDeptryVersion, parseEchoBlock, parseFileList, parseScannedFiles, pythonTuple, scanRoot, skippedInput,
   type DeptryCode, type DeptryFinding,
 } from './model.ts';
@@ -157,6 +157,10 @@ export function evaluateScan<R extends RuleRef>(
 
   const echo = parseEchoBlock(output);
   if (!echo) return refusal('deptry-config-unreadable', 'deptry did not echo its resolved configuration in the expected block, so the verdict cannot be tied to the rules asked for.', detail);
+  const unknown = [...echo.keys()].filter(key => !KNOWN_ECHO_KEYS.has(key));
+  if (unknown.length) {
+    return refusal('deptry-config-unknown-key', 'deptry echoes settings this adapter has never judged, and one of them could hide a finding. Use a deptry release the adapter has been run against.', unknown.join(', '));
+  }
   for (const { key, value, optional } of expectedEcho(plan)) {
     const got = echo.get(key);
     if (got === undefined) {

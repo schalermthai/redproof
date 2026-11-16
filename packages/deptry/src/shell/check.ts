@@ -59,6 +59,15 @@ async function censusOf(cwd: string, plan: DeptryPlan): Promise<ScanCensus> {
   return { files, unreadable, unsafeNames };
 }
 
+/** The working directory's own `pyproject.toml` is read by deptry without a flag, so a symbolic link in its place must not lead outside the Gate root. */
+async function confinePyproject(root: string, cwd: string): Promise<DeptryRefusal | undefined> {
+  let actual: string;
+  try { actual = await realpath(join(cwd, 'pyproject.toml')); } catch { return undefined; } // absent: deptry reports that itself
+  return withinRoot(root, actual)
+    ? undefined
+    : refusal('deptry-path-outside-root', 'The working directory\'s pyproject.toml resolves outside the Gate root.', actual);
+}
+
 const isRefusal = (value: string | DeptryRefusal): value is DeptryRefusal => typeof value !== 'string';
 
 export function deptryCheck<R extends RuleRef>(
@@ -77,10 +86,13 @@ export function deptryCheck<R extends RuleRef>(
           const root = await realpath(ctx.root);
           const cwd = await confine(root, root, settings.cwd ?? '.', 'working directory');
           if (isRefusal(cwd)) return cwd;
+          const escaped = await confinePyproject(root, cwd);
+          if (escaped) return escaped;
           const paths: string[] = [];
           for (const path of settings.paths ?? ['.']) {
             const confined = await confine(root, cwd, path, 'path');
             if (isRefusal(confined)) return confined;
+            if (!(await stat(confined)).isDirectory()) return refusal('deptry-path-not-directory', `The path is not a directory: ${path}`, 'deptry scans directories; name the directory that holds the file.');
             paths.push(confined);
           }
           const configFile = settings.configFile ? await confine(root, root, settings.configFile, 'configFile') : undefined;

@@ -22,11 +22,14 @@ const candidates: readonly Tool[] = [
 export const tools: readonly Tool[] = candidates.filter(candidate => existsSync(candidate.binary));
 
 /** Tools whose environment variable is set but whose binary is not there: with REQUIRED set, that must be loud, not a quietly smaller suite. */
-export const missingTools: readonly Tool[] = candidates.filter(candidate => !existsSync(candidate.binary)
-  && (candidate.label === 'oldest' || process.env.REDPROOF_DEPTRY_PYTHON !== undefined));
+export const missingTools: readonly Tool[] = [
+  ...candidates.filter(candidate => !existsSync(candidate.binary) && (candidate.label === 'oldest' || process.env.REDPROOF_DEPTRY_PYTHON !== undefined)),
+  // In CI the oldest supported deptry is part of the promise: not naming it must not quietly drop its tests.
+  ...(process.env.REDPROOF_DEPTRY_PYTHON_OLDEST ? [] : [{ label: 'oldest', python: '(REDPROOF_DEPTRY_PYTHON_OLDEST is not set)', binary: '(REDPROOF_DEPTRY_PYTHON_OLDEST is not set)' }]),
+];
 
 /** CI sets this beside the virtualenv: a missing deptry there must fail, not silently unregister the native tests. */
-export const deptryRequired: boolean = process.env.REDPROOF_DEPTRY_REQUIRED === '1';
+export const deptryRequired: boolean = /^(1|true|yes)$/iu.test(process.env.REDPROOF_DEPTRY_REQUIRED ?? '');
 
 /** The repo gate bans skipped tests, so without deptry the native tests are not registered at all. */
 export const nativeTest: typeof test = tools.length ? test : (Object.assign(() => undefined, test) as never);
