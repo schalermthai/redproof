@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { defineRules } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
 import { checkVersion, decideDeptry, deptryArguments, displayPath, evaluateScan, type DeptryPlan } from '../src/core/decision.ts';
 import { ruleDefinition, type DeptryCode } from '../src/core/model.ts';
-import { fixtures, header } from './support/workspace.ts';
+import { header, reports } from './support/reports.ts';
 
-const real = (name: string): string => readFileSync(`${fixtures}${name}`, 'utf8');
 const codes: readonly DeptryCode[] = ['DEP001', 'DEP002', 'DEP003', 'DEP004', 'DEP005'];
 const rules = defineRules(Object.fromEntries(codes.map(c => [c, ruleDefinition(c)])) as never) as Record<DeptryCode, never>;
 const everything = new Map(codes.map(c => [c, rules[c]]));
@@ -25,7 +23,7 @@ const refusedWith = (decision: ReturnType<typeof decide>, code: string): void =>
 };
 
 test('the real example report becomes one breach per finding of a selected rule', () => {
-  const decision = decide(completed(1, header(2)), real('example.json'));
+  const decision = decide(completed(1, header(2)), reports.example);
   assert.equal(decision.kind, 'evidence');
   if (decision.kind === 'evidence') {
     assert.equal(decision.inspected, 2);
@@ -37,14 +35,14 @@ test('the real example report becomes one breach per finding of a selected rule'
 
 test('only the selected rule is judged: the others are not this Gate\'s concern', () => {
   for (const [code, expected] of [['DEP001', 1], ['DEP002', 2], ['DEP003', 0], ['DEP004', 1], ['DEP005', 0]] as const) {
-    const decision = decide(completed(1, header(2)), real('example.json'), only(code));
+    const decision = decide(completed(1, header(2)), reports.example, only(code));
     assert.equal(decision.kind, 'evidence');
     if (decision.kind === 'evidence') assert.equal(decision.breaches.length, expected, code);
   }
 });
 
 test('a clean report with exit 0 is evidence of no breaches', () => {
-  const decision = decide(completed(0, header(2)), real('clean.json'));
+  const decision = decide(completed(0, header(2)), reports.clean);
   assert.equal(decision.kind, 'evidence');
   if (decision.kind === 'evidence') assert.deepEqual(decision.breaches, []);
 });
@@ -66,7 +64,7 @@ test('REFUSE, never PASS: configuration that could silence a selected rule', () 
 test('REFUSE, never PASS: exit 1 that is a crash, not findings', () => {
   refusedWith(decide(completed(1, 'Traceback (most recent call last):\nDependencySpecificationNotFoundError'), null), 'deptry-report-unavailable');
   refusedWith(decide(completed(1, header(1)), '[]'), 'deptry-report-inconsistent');
-  refusedWith(decide(completed(0, header(1)), real('example.json')), 'deptry-report-inconsistent');
+  refusedWith(decide(completed(0, header(1)), reports.example), 'deptry-report-inconsistent');
   refusedWith(decide(completed(1, header(1)), 'not json'), 'deptry-report-invalid');
   refusedWith(decide(completed(2, 'Error: Invalid value for ROOT'), null), 'deptry-usage-error');
   refusedWith(decide(completed(3, ''), '[]'), 'deptry-unsuccessful');

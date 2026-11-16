@@ -1,23 +1,21 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   DEPTRY_CODES, deptryVersionSupported, hasPerRuleIgnores, ignoreIsCleared, parseDeptryReport, parseDeptryVersion,
   parseResolvedConfig, parseScannedFiles, skippedInput,
 } from '../src/core/model.ts';
-import { fixtures } from './support/workspace.ts';
+import { reports } from './support/reports.ts';
 
-const real = (name: string): string => readFileSync(`${fixtures}${name}`, 'utf8');
 
 test('a real report parses into findings with their codes, modules and positions', () => {
-  const findings = parseDeptryReport(real('example.json'));
+  const findings = parseDeptryReport(reports.example);
   assert.deepEqual(findings.map(f => `${f.code}:${f.module}`), ['DEP002:isort', 'DEP002:requests', 'DEP004:black', 'DEP001:white']);
   assert.deepEqual([findings[2]!.file, findings[2]!.line, findings[2]!.column], ['src/main.py', 4, 8]);
   assert.deepEqual([findings[0]!.line, findings[0]!.column], [null, null], 'a declaration finding has no line');
 });
 
 test('a clean report is an empty list; anything else is rejected', () => {
-  assert.deepEqual(parseDeptryReport(real('clean.json')), []);
+  assert.deepEqual(parseDeptryReport(reports.clean), []);
   assert.throws(() => parseDeptryReport('{}'), /array/u);
   assert.throws(() => parseDeptryReport('[{"error":{"code":"DEP001"},"module":"x","location":{"file":"a"}}]'), /message/u);
   assert.throws(() => parseDeptryReport('[{"error":{"code":"DEP001","message":"m"},"module":"x","location":{}}]'), /file/u);
@@ -25,7 +23,7 @@ test('a clean report is an empty list; anything else is rejected', () => {
 });
 
 test('every code the real fixtures use is one of the five this adapter knows', () => {
-  const seen = new Set(['example', 'pep_621', 'poetry', 'requirements_txt', 'transitive'].flatMap(n => parseDeptryReport(real(`${n}.json`)).map(f => f.code)));
+  const seen = new Set(['example', 'pep_621', 'poetry', 'requirements_txt', 'transitive'].flatMap(n => parseDeptryReport(reports[n as keyof typeof reports]).map(f => f.code)));
   assert.deepEqual([...seen].sort(), [...DEPTRY_CODES]);
 });
 

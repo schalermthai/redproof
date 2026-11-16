@@ -34,15 +34,17 @@ export async function withProject<T>(files: Readonly<Record<string, string>>, ac
 export const pyproject = (dependencies: readonly string[] = [], extra = ''): string =>
   `[project]\nname = "demo"\nversion = "0.1"\ndependencies = ${JSON.stringify(dependencies)}\n${extra}`;
 
-/** What deptry prints before its findings, as deptry 0.25 prints it: the configuration echo and the scan line. */
-export const header = (scanned: number, ignore = "('',)", perRule = '{}'): string =>
-  `Running with the following configuration:\nroot: (PosixPath('.'),)\nper_rule_ignores: ${perRule}\nignore: ${ignore}\n\nScanning ${scanned} file${scanned === 1 ? '' : 's'}...\n`;
+export { header } from './reports.ts';
 
 /**
  * A stand-in `deptry` executable, to rehearse outputs the real tool will not produce on demand.
  * It answers `--version`, and for a scan prints `stderr` and writes `report` to the `--json-output` file (when not null).
  */
-export async function fakeDeptry(root: string, options: { report: string | null; stderr: string; exitCode: number; version?: string }): Promise<string> {
+export async function fakeDeptry(root: string, options: {
+  report: string | null; stderr: string; exitCode: number; version?: string;
+  /** `hang` never exits (timeout); `kill` SIGKILLs itself after writing, like an out-of-memory kill. */
+  behaviour?: 'hang' | 'kill';
+}): Promise<string> {
   const file = join(root, 'fake-deptry.mjs');
   await writeFile(file, `#!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
@@ -51,7 +53,7 @@ if (args.includes('--version')) { process.stdout.write(${JSON.stringify((options
 const out = args[args.indexOf('--json-output') + 1];
 ${options.report === null ? '' : `writeFileSync(out, ${JSON.stringify(options.report)});`}
 process.stderr.write(${JSON.stringify(options.stderr)});
-process.exit(${options.exitCode});
+${options.behaviour === 'hang' ? 'setInterval(() => {}, 1000);' : options.behaviour === 'kill' ? "process.kill(process.pid, 'SIGKILL');" : `process.exit(${options.exitCode});`}
 `);
   await chmod(file, 0o755);
   return file;
