@@ -15,6 +15,7 @@ const PACKAGE_DIRS = [
   'packages/testing',
   'packages/istanbul',
   'packages/ruff',
+  'packages/coverage-py',
 ] as const;
 
 const INTERNAL_DEPENDENCIES = new Set([

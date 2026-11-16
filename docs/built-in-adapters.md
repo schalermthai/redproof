@@ -113,6 +113,7 @@ These map to:
 | `noFlakyTests` | `testing/no-flaky-tests` | Tests must not require retries to pass |
 | `noSkippedTests` | `testing/no-skipped-tests` | Tests must not be skipped |
 | `noTodoTests` | `testing/no-todo-tests` | Tests must not be marked TODO |
+| `noXfailTests` | `testing/no-xfail-tests` | Tests must not be marked as expected failures (pytest) |
 
 Only enable the Rules that matter to your project.
 
@@ -185,6 +186,34 @@ JUnit XML only records the final test result, so it cannot reliably prove that a
 
 Redproof also validates test totals when the report provides them. A contradictory or incomplete report produces `REFUSE` instead of an incorrect `PASS`.
 
+### pytest
+
+If you use pytest, start with the built-in `pytest()` integration:
+
+```ts
+import { pytest } from '@redproof/testing';
+
+const adapter = pytest({
+  command: '.venv/bin/pytest',
+  files: ['tests'],
+  rules: {
+    testsPass: true,
+    noSkippedTests: true,
+    noXfailTests: true,
+  },
+});
+```
+
+It runs `pytest -q --junitxml=<report>`, then your `args`, then `files`, and reads the report with `report.pytestJunitXml()`. `command` defaults to `pytest`; point it at the `pytest` entry point, not `python -m pytest`. `files` entries are passed to pytest as written, so treat them as trusted configuration.
+
+pytest writes an expected failure (xfail) as `<skipped type="pytest.xfail">`, the same element it uses for a real skip. The pytest reader tells them apart, so `noSkippedTests` counts only real skips and `noXfailTests` counts expected failures. The generic `report.junitXml()` counts both as skipped.
+
+A Rule about absent tests (`noSkippedTests`, `noXfailTests`) can only pass if every selected test ran. If pytest stopped early (`-x` or `--maxfail`, `pytest.exit()`, a collection error, or any exit code other than 0, 1 and 5) and nothing breached, the Check REFUSES with `test-run-incomplete` instead of passing. A breach still fails. pytest prints its stop banner even when `-x` stops on the very last test, so that case also refuses although every test ran. The stop is read from any `!!! text !!!` banner pytest prints on stdout (colour codes removed) and from the exit code, so a plugin that ends the session silently at exit 0, or drops tests from the run (`pytest_runtestloop` returning early, `pytest_collection_modifyitems` deleting items), is not detected: like `-k`, that changes which tests are selected. A subset you choose yourself (`-k`, `-m`, `--lf`, `--deselect`) is not detected.
+
+pytest's JUnit XML cannot show retries, TODO tests or an unexpected pass, so `noFlakyTests` and `noTodoTests` are not available here. Set `xfail_strict = true` in your pytest config to make an unexpected pass a failure.
+
+pytest also runs `unittest.TestCase` tests, so `pytest()` covers them. Plain `python -m unittest` writes no structured report.
+
 ### Other test runners
 
 You do not need a dedicated Redproof package for every test framework.
@@ -219,6 +248,7 @@ import { report } from '@redproof/testing';
 
 report.jestJson()
 report.junitXml()
+report.pytestJunitXml()
 ```
 
 This means you can combine:

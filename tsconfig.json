@@ -34,6 +34,7 @@
         "packages/stryker/src/index.ts"
       ],
       "@redproof/istanbul": ["packages/istanbul/src/index.ts"],
+      "@redproof/coverage-py": ["packages/coverage-py/src/index.ts"],
       "@redproof/testing": [
         "packages/testing/src/index.ts"
       ]

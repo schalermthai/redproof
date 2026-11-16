@@ -14,6 +14,7 @@ const dependencies = dependencyCruiser({
     'packages/knip/src',
     'packages/istanbul/src',
     'packages/ruff/src',
+    'packages/coverage-py/src',
     'tests',
     'packages/*/test',
   ],
@@ -136,6 +137,11 @@ export const proofs = defineProofs(gate, [
     rules.adaptersPublicCoreApiOnly,
     'keeps the Istanbul adapter inside the scan and public API boundary',
     mutate.appendText('packages/istanbul/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps the coverage.py adapter inside the scan and public API boundary',
+    mutate.appendText('packages/coverage-py/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.adaptersNoCrossAdapterImports,

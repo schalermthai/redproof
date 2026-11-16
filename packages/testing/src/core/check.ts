@@ -29,6 +29,7 @@ export type SelectedTestRules<R extends RuleRef> = {
   readonly testsPass?: Rule<R>;
   readonly noFlakyTests?: Rule<R>;
   readonly noSkippedTests?: Rule<R>;
+  readonly noXfailTests?: Rule<R>;
   readonly noTodoTests?: Rule<R>;
 };
 
@@ -49,7 +50,7 @@ export type CheckEvidence =
       readonly report: string | Error;
     };
 
-const TEST_RULE_NAMES = ['testsPass', 'noFlakyTests', 'noSkippedTests', 'noTodoTests'] as const;
+const TEST_RULE_NAMES = ['testsPass', 'noFlakyTests', 'noSkippedTests', 'noTodoTests', 'noXfailTests'] as const;
 
 export function validateTestingOptions(options: TestingAdapterOptions<TestRuleOptions>): void {
   rejectUnknownKeys(options, ['runner', 'report', 'rules'], 'testing adapter');
@@ -60,6 +61,7 @@ export function validateTestingOptions(options: TestingAdapterOptions<TestRuleOp
     && !options.rules.noFlakyTests
     && !options.rules.noSkippedTests
     && !options.rules.noTodoTests
+    && !options.rules.noXfailTests
   ) {
     throw new Error('Testing adapter requires at least one Redproof rule.');
   }
@@ -70,6 +72,10 @@ export function validateTestingOptions(options: TestingAdapterOptions<TestRuleOp
 
   if (options.rules.noTodoTests && !options.report.capabilities.todo) {
     throw new Error(`Report format ${options.report.kind} cannot distinguish TODO tests.`);
+  }
+
+  if (options.rules.noXfailTests && !options.report.capabilities.xfail) {
+    throw new Error(`Report format ${options.report.kind} cannot distinguish expected-failure tests.`);
   }
 }
 
@@ -99,6 +105,12 @@ export function testRuleCatalog(rules: TestRuleOptions): Readonly<Record<string,
       description: 'Tests must not be marked TODO.',
     };
   }
+  if (rules.noXfailTests) {
+    catalog.noXfailTests = {
+      id: 'testing/no-xfail-tests',
+      description: 'Tests must not be marked as expected failures.',
+    };
+  }
   return catalog;
 }
 
@@ -111,6 +123,7 @@ export function selectTestRules<R extends RuleRef>(
     ...(options.noFlakyTests ? { noFlakyTests: byAlias.noFlakyTests! } : {}),
     ...(options.noSkippedTests ? { noSkippedTests: byAlias.noSkippedTests! } : {}),
     ...(options.noTodoTests ? { noTodoTests: byAlias.noTodoTests! } : {}),
+    ...(options.noXfailTests ? { noXfailTests: byAlias.noXfailTests! } : {}),
   };
 }
 
@@ -162,6 +175,11 @@ function parseReport(root: string, report: string | Error, format: TestReportFor
   }
 }
 
+/** Rules that pass only when something never showed up, so they need every test to have run. */
+function claimsAbsence(rules: SelectedTestRules<RuleRef>): boolean {
+  return Boolean(rules.noSkippedTests || rules.noXfailTests || rules.noTodoTests || rules.noFlakyTests);
+}
+
 export function decideCheck<R extends RuleRef>(input: {
   readonly times: ScanTimes;
   readonly evidence: CheckEvidence;
@@ -199,5 +217,20 @@ export function decideCheck<R extends RuleRef>(input: {
     });
   }
 
-  return result.fromBreaches(scanOf(format, times, run.tests.length), testRunBreaches(run, rules));
+  const breaches = testRunBreaches(run, rules);
+  // A breach decides the result whether or not the run finished. Only a PASS needs a complete
+  // run, and only for rules that claim something never happened.
+  if (breaches.length === 0 && claimsAbsence(rules)) {
+    const reason = format.incomplete?.({ run, stdout: execution.stdout, exitCode: execution.exitCode });
+    if (reason) {
+      return result.refuse(scanOf(format, times, run.tests.length), {
+        code: 'test-run-incomplete',
+        message: 'The test run stopped before every test ran, so a Rule about absent tests cannot be decided.',
+        location: null,
+        detail: [reason, ...output].filter(Boolean).join('\n'),
+      });
+    }
+  }
+
+  return result.fromBreaches(scanOf(format, times, run.tests.length), breaches);
 }

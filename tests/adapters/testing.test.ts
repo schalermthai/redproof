@@ -69,7 +69,7 @@ test('the testing adapter rejects a rule name it does not know', () => {
       report: report.junitXml(),
       rules: { testsPass: true, noPurpleTests: true } as never,
     }),
-    /Unknown testing rule option: "noPurpleTests"\. Known options: testsPass, noFlakyTests, noSkippedTests, noTodoTests\./,
+    /Unknown testing rule option: "noPurpleTests"\. Known options: testsPass, noFlakyTests, noSkippedTests, noTodoTests, noXfailTests\./,
   );
 });
 
@@ -81,6 +81,22 @@ test('the testing adapter refuses to build a Check that would police nothing', (
       rules: {},
     }),
     /Testing adapter requires at least one Redproof rule\./,
+  );
+});
+
+test('only the pytest JUnit dialect accepts noXfailTests; generic JUnit and Jest JSON cannot tell xfail from skip', () => {
+  const built = fakeRunner(async () => ({ kind: 'completed', exitCode: 0, stdout: '', stderr: '' }));
+
+  assert.throws(
+    () => testing({ runner: built, report: report.junitXml(), rules: { noXfailTests: true } }),
+    /Report format junit-xml cannot distinguish expected-failure tests\./,
+  );
+  assert.throws(
+    () => testing({ runner: built, report: report.jestJson(), rules: { noXfailTests: true } }),
+    /Report format jest-json cannot distinguish expected-failure tests\./,
+  );
+  assert.doesNotThrow(
+    () => testing({ runner: built, report: report.pytestJunitXml(), rules: { noXfailTests: true } }),
   );
 });
 
@@ -300,6 +316,66 @@ test('an unsuccessful exit that no failed test explains refuses rather than pass
     assert.match(why.detail ?? '', /no tests collected/);
     assert.match(why.detail ?? '', /exit code: 5/);
     assert.equal(result.scan.inspected, 0);
+  });
+});
+
+const PYTEST_STOP_BANNER = '!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!';
+const PYTEST_XML_ONE_FAILURE = '<testsuites><testsuite name="pytest"><testcase classname="t" name="test_fails"><failure message="assert False"/></testcase></testsuite></testsuites>';
+const PYTEST_XML_COLLECTION_ERROR = '<testsuites><testsuite name="pytest"><testcase classname="" name="test_broken"><error message="collection failure">ImportError</error></testcase></testsuite></testsuites>';
+
+type PytestRules = Parameters<typeof testing>[0]['rules'];
+
+/** Runs the pytest report format against a fake pytest that wrote `xml`, printed `stdout`, exited `exitCode`. */
+async function pytestCheck(
+  root: string,
+  xml: string,
+  exitCode: number,
+  stdout: string,
+  rules: PytestRules,
+  ruleIds: readonly string[],
+  format = report.pytestJunitXml(),
+): Promise<CheckResult<string>> {
+  const adapter = testing({
+    runner: fakeRunner(async ctx => {
+      await writeFile(ctx.reportFile, xml, 'utf8');
+      return { kind: 'completed', exitCode, stdout, stderr: '' };
+    }),
+    report: format,
+    rules,
+  });
+  return await adapter.check.run({ root, rules: [...ruleIds] }) as unknown as CheckResult<string>;
+}
+
+const NO_SKIPPED = ['testing/no-skipped-tests'];
+
+test('a run that stopped early refuses an absence Rule instead of passing, because the skips never ran', async () => {
+  await withWorkspace(async root => {
+    const why = refusalOf(await pytestCheck(root, PYTEST_XML_ONE_FAILURE, 1, `F\n${PYTEST_STOP_BANNER}\n1 failed in 0.08s`, { noSkippedTests: true }, NO_SKIPPED));
+    assert.equal(why.code, 'test-run-incomplete');
+    assert.match(why.detail ?? '', /stopped early/);
+
+    const control = await pytestCheck(root, PYTEST_XML_ONE_FAILURE, 1, 'F\n1 failed in 0.08s', { noSkippedTests: true }, NO_SKIPPED);
+    assert.equal(control.verdict, 'pass', 'negative control: a complete run with a failure and no skips still passes noSkippedTests');
+  });
+});
+
+test('a collection error refuses an absence Rule, and exit code 2 does too', async () => {
+  await withWorkspace(async root => {
+    const collection = refusalOf(await pytestCheck(root, PYTEST_XML_COLLECTION_ERROR, 2, 'Interrupted: 1 error during collection', { noSkippedTests: true }, NO_SKIPPED));
+    assert.equal(collection.code, 'test-run-incomplete');
+
+    const interrupted = refusalOf(await pytestCheck(root, PYTEST_XML_ONE_FAILURE, 2, '', { noSkippedTests: true }, NO_SKIPPED));
+    assert.match(interrupted.detail ?? '', /exit code 2, not a finished run/);
+
+    const asTestsPass = await pytestCheck(root, PYTEST_XML_COLLECTION_ERROR, 2, '', { testsPass: true }, ['testing/tests-pass']);
+    assert.equal(asTestsPass.verdict, 'fail');
+  });
+});
+
+test('generic JUnit XML has no incompleteness signal, so its behaviour is unchanged', async () => {
+  await withWorkspace(async root => {
+    const result = await pytestCheck(root, PYTEST_XML_ONE_FAILURE, 1, PYTEST_STOP_BANNER, { noSkippedTests: true }, NO_SKIPPED, report.junitXml());
+    assert.equal(result.verdict, 'pass');
   });
 });
 
