@@ -50,6 +50,13 @@ jobs:
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
 
+      - name: Point the native tests at cosmic-ray
+        run: |
+          python -m venv "$RUNNER_TEMP/cosmic-ray-venv"
+          "$RUNNER_TEMP/cosmic-ray-venv/bin/python" -m pip install cosmic-ray==8.9.0 pytest==9.2.0
+          echo "REDPROOF_COSMIC_RAY_PYTHON=$RUNNER_TEMP/cosmic-ray-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_COSMIC_RAY_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Run quality and integration checks
         run: npm run check:quality
 
@@ -110,6 +117,14 @@ jobs:
           python -m venv "$RUNNER_TEMP/coverage-venv"
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Point the native tests at cosmic-ray
+        if: matrix.gate == 'test-health'
+        run: |
+          python -m venv "$RUNNER_TEMP/cosmic-ray-venv"
+          "$RUNNER_TEMP/cosmic-ray-venv/bin/python" -m pip install cosmic-ray==8.9.0 pytest==9.2.0
+          echo "REDPROOF_COSMIC_RAY_PYTHON=$RUNNER_TEMP/cosmic-ray-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_COSMIC_RAY_REQUIRED=1" >> "$GITHUB_ENV"
 
       - name: Build the proof runtime
         run: npm run build
