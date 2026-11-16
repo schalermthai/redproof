@@ -53,6 +53,13 @@ const VERDICTS: ReadonlyArray<readonly [string, Parameters<typeof evaluateLint>[
   ['output limit reached', refused('command-output-limit'), 'command-output-limit'],
 ];
 
+test('a numeric prefix selector (F40) is as exposed as the exact code when Ruff drops a rule it covers; a family (F) is not', () => {
+  const notice = done(0, '[]', 'warning: `unused-import` (F401) and `other-rule` (F402) are incompatible. Ignoring `unused-import`.');
+  const decide = (selector: string) => codeOf(evaluateLint(1, notice, new Map([[selector, defineRule({ id: `ruff/${selector}`, description: 'x' })]]), f => f));
+  assert.equal(decide('F40'), 'ruff-input-skipped');
+  assert.equal(decide('F'), 'evidence');
+});
+
 for (const [name, exec, expected] of VERDICTS) {
   test(`lint verdict: ${name} -> ${expected}`, () => assert.equal(codeOf(lint(exec)), expected));
 }

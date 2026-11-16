@@ -85,7 +85,7 @@ const HARMLESS_NOTICE = [
 
 // "`incorrect-blank-line-before-class` (D203) and `blank-line-before-class` (D211) are incompatible.
 // Ignoring `incorrect-blank-line-before-class`." (Ruff before 0.5 names codes only). A family (`D`) drops
-// one by design; a Gate that selected the dropped code exactly never had it run, yet Ruff exits 0.
+// one by design; a Gate that selected the dropped code, or a numeric prefix of it (`D20`), never had it run, yet Ruff exits 0.
 const INCOMPATIBLE_NOTICE = /^(.*?) are incompatible\. Ignoring `([^`]+)`/u;
 const CODE_IN_NOTICE = /`?([^`\s(]+)`?(?: \(([A-Z]+[0-9]+)\))?/gu;
 
@@ -103,7 +103,7 @@ function skippedInput(stderr: string, alsoHarmless: readonly RegExp[] = [], exac
     .map(match => match[1]!)
     .filter(notice => {
       const dropped = droppedByIncompatibility(notice);
-      if (dropped !== undefined) return dropped.some(code => exactCodes.has(code));
+      if (dropped !== undefined) return dropped.some(code => [...exactCodes].some(selector => code.startsWith(selector)));
       return ![...HARMLESS_NOTICE, ...alsoHarmless].some(harmless => harmless.test(notice));
     });
 }
