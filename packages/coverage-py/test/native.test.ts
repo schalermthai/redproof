@@ -109,3 +109,18 @@ test('real coverage.py: auto-discovered config that omits files REFUSES; naming 
   const excl = await adapter.check.run({ root, rules: [adapter.rules.lineCoverage.id] });
   assert.equal(excl.verdict, 'refuse'); if (excl.verdict === 'refuse') assert.match(excl.why.detail ?? '', /exclusion patterns/);
 }));
+test('real coverage.py: a [report] include or [run] include that narrows the report REFUSES, so an unrun file cannot vanish from the verdict', real, () => withWorkspace(async root => {
+  await fixture(root, BOTH); await writeFile(join(root, 'b.py'), 'def b():\n    return 2\n');
+  const rules = { lineCoverage: { minimum: 100 }, noUncoveredFiles: {} };
+  assert.deepEqual(await ids(root, rules), ['fail', 'coverage-py/line-coverage:line-coverage-below-minimum', 'coverage-py/no-uncovered-files:file-never-executed']);
+  for (const section of ['report', 'run']) {
+    await writeFile(join(root, '.coveragerc'), `[${section}]\ninclude = a.py\n`);
+    const adapter = make(rules);
+    const refused = await adapter.check.run({ root, rules: [adapter.rules.lineCoverage.id] });
+    assert.equal(refused.verdict, 'refuse', section);
+    if (refused.verdict === 'refuse') { assert.equal(refused.why.code, 'coverage-py-config-excludes'); assert.match(refused.why.detail ?? '', /restricts the report to a\.py/); }
+  }
+  // Acknowledged explicitly, the adapter honours the narrowing the project asked for.
+  await writeFile(join(root, '.coveragerc'), '[report]\ninclude = a.py\n');
+  assert.deepEqual(await ids(root, { lineCoverage: { minimum: 100 } }, { rcfile: '.coveragerc' }), ['pass']);
+}));

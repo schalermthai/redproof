@@ -23,6 +23,7 @@ const PROBE = [
   'c = coverage.Coverage(config_file=True)',
   'print(json.dumps({"files": list(c.config.config_files_read),',
   ' "omit": sorted(set((c.get_option("run:omit") or []) + (c.get_option("report:omit") or []))),',
+  ' "include": sorted(set((c.get_option("run:include") or []) + (c.get_option("report:include") or []))),',
   ' "exclude": [x for x in (c.get_option("report:exclude_lines") or []) if x not in default]}))',
 ].join('\n');
 export const probeArgs = (): readonly string[] => ['-c', `import sys\nif sys.path and sys.path[0] == "": sys.path.pop(0)\n${PROBE}`];

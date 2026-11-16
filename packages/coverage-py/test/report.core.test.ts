@@ -45,17 +45,20 @@ test('trustFiles judges raw shell facts: unresolved, errored, escaping, and fine
 test('probeArgs asks coverage.py for config without cwd on sys.path so a local module cannot shadow it', () => {
   const [flag, script] = probeArgs();
   assert.equal(flag, '-c'); assert.match(script ?? '', /sys\.path\.pop\(0\)/); assert.match(script ?? '', /config_file=True/); assert.match(script ?? '', /report:exclude_lines/);
+  assert.match(script ?? '', /report:include/); assert.match(script ?? '', /run:include/);
 });
 test('parseProjectConfig reads the last JSON line and fails closed on anything else', () => {
-  assert.deepEqual(parseProjectConfig('warning\n{"files":["a"],"omit":["x"],"exclude":[]}\n'), { files: ['a'], omit: ['x'], exclude: [] });
-  for (const bad of ['', 'nope', '{"files":"a","omit":[],"exclude":[]}', '{"files":[],"omit":[1],"exclude":[]}', 'null']) assert.throws(() => parseProjectConfig(bad));
+  assert.deepEqual(parseProjectConfig('warning\n{"files":["a"],"omit":["x"],"exclude":[],"include":["i"]}\n'), { files: ['a'], omit: ['x'], exclude: [], include: ['i'] });
+  for (const bad of ['', 'nope', '{"files":"a","omit":[],"exclude":[],"include":[]}', '{"files":[],"omit":[1],"exclude":[],"include":[]}', '{"files":[],"omit":[],"exclude":[]}', '{"files":[],"omit":[],"exclude":[],"include":"a.py"}', 'null']) assert.throws(() => parseProjectConfig(bad));
 });
 test('configExclusions refuses exclusions unless the rcfile is explicit', () => {
-  const clean = { files: ['p.toml'], omit: [], exclude: [] }, omits = { files: ['p.toml'], omit: ['a.py'], exclude: [] }, excl = { files: ['p.toml'], omit: [], exclude: ['def g'] };
+  const clean = { files: ['p.toml'], omit: [], exclude: [], include: [] }, omits = { ...clean, omit: ['a.py'] }, excl = { ...clean, exclude: ['def g'] }, narrows = { ...clean, include: ['a.py'] };
   assert.equal(configExclusions(clean, false), null);
   assert.equal(configExclusions(omits, true), null);
   assert.equal(configExclusions(omits, false)?.code, 'coverage-py-config-excludes');
   assert.match(configExclusions(excl, false)?.detail ?? '', /exclusion patterns def g/);
+  assert.match(configExclusions(narrows, false)?.detail ?? '', /restricts the report to a\.py/);
+  assert.equal(configExclusions(narrows, true), null);
 });
 test('confineRequired returns root-relative paths, or refuses on error, escape, or an unresolved file', () => {
   const ok = new Map<string, Resolved>([['a.py', { real: '/w/a.py' }], ['sub/b.py', { real: '/w/sub/b.py' }]]);

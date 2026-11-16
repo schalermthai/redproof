@@ -33,8 +33,8 @@ Known blind spots (all found in battle testing, see `20-coveragepy/REDPROOF_COVE
 
 - coverage.py only lists files it was told about (`source`) or that ran. Unimported namespace-package files are invisible;
   list them in `expectedFiles` so their absence REFUSES.
-- Auto-discovered project config (`.coveragerc`, `setup.cfg`, `tox.ini`, `pyproject.toml`) that `omit`s files or adds
-  `exclude_lines`/`exclude_also` patterns shrinks the denominator without the report disagreeing with itself, so the adapter
+- Auto-discovered project config (`.coveragerc`, `setup.cfg`, `tox.ini`, `pyproject.toml`) that `omit`s files, adds
+  `exclude_lines`/`exclude_also` patterns, or restricts the report with `include` (`[run]` or `[report]`) shrinks the denominator without the report disagreeing with itself, so the adapter
   REFUSES (`coverage-py-config-excludes`). Name the file as `rcfile` to accept it. The default `# pragma: no cover` is fine.
 - A report that measures zero statements REFUSES: nothing to cover would otherwise count as 100 % and pass every rule.
 - Modules imported before tracing starts show as never executed, which trips `noUncoveredFiles`.
