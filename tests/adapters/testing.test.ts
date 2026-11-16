@@ -365,7 +365,7 @@ test('a collection error refuses an absence Rule, and exit code 2 does too', asy
     assert.equal(collection.code, 'test-run-incomplete');
 
     const interrupted = refusalOf(await pytestCheck(root, PYTEST_XML_ONE_FAILURE, 2, '', { noSkippedTests: true }, NO_SKIPPED));
-    assert.match(interrupted.detail ?? '', /interrupted \(exit code 2\)/);
+    assert.match(interrupted.detail ?? '', /exit code 2, not a finished run/);
 
     const asTestsPass = await pytestCheck(root, PYTEST_XML_COLLECTION_ERROR, 2, '', { testsPass: true }, ['testing/tests-pass']);
     assert.equal(asTestsPass.verdict, 'fail');

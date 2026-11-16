@@ -39,12 +39,11 @@ function element(body: string, name: string): { attrs: Readonly<Record<string, s
 }
 
 /**
- * pytest's banner when the run ends early: -x or --maxfail, a stepwise stop, or `pytest.exit()` (which can
- * exit 0, so the exit code alone is not enough). xdist adds a dotted module prefix
- * (`xdist.dsession.Interrupted:`), `pytest.exit` is `_pytest.outcomes.Exit`, with an optional, possibly
- * multi-line, message. A stray banner in captured output can only cause a REFUSE, never a PASS.
+ * pytest draws any early stop as a `!!! text !!!` line: -x or --maxfail, a stepwise stop, a plugin's own
+ * `session.shouldfail`/`shouldstop` string, or `pytest.exit()` (which can exit 0, so the exit code alone is not
+ * enough; its message can span lines). A stray banner in captured output can only cause a REFUSE, never a PASS.
  */
-const PYTEST_STOPPED_EARLY = /^!{3,} (?:stopping after \d+ failures?|(?:[\w.]*\.)?Interrupted: .+) !{3,}$/mu;
+const PYTEST_STOPPED_EARLY = /^!{3,} .+ !{3,}$/mu;
 const PYTEST_EXIT_BANNER = /^!{3,} (?:[\w.]*\.)?Exit(?:: [\s\S]*?)? !{3,}$/mu;
 
 /** `--color=yes`, `PY_COLORS=1`, `FORCE_COLOR` and `PYTEST_ADDOPTS` all colour the banner. */
@@ -191,7 +190,8 @@ export function pytestJunitXml(): TestReportFormat {
       if (run.tests.some(test => test.failure?.message === 'collection failure')) {
         return 'A collection error stopped some test modules from being collected, so their tests never ran.';
       }
-      if (exitCode === 2) return 'pytest was interrupted (exit code 2).';
+      // 0 = passed, 1 = tests failed, 5 = nothing collected; 2 = interrupted, 3 = internal error, 4 = usage error, 128+ = killed.
+      if (exitCode !== 0 && exitCode !== 1 && exitCode !== 5) return `pytest ended with exit code ${exitCode}, not a finished run.`;
       const plain = withoutAnsi(stdout);
       if (PYTEST_STOPPED_EARLY.test(plain) || PYTEST_EXIT_BANNER.test(plain)) {
         return 'pytest stopped early (-x, --maxfail or pytest.exit), so later tests never ran.';

@@ -337,7 +337,12 @@ test('pytest incompleteness signals, each on its own: collection error (even at 
 
   // --continue-on-collection-errors exits 1 and prints no banner: the XML is the only signal.
   assert.match(incomplete({ run: collection, stdout: '', exitCode: 1 }) ?? '', /collection error/);
-  assert.match(incomplete({ run: ordinary, stdout: '', exitCode: 2 }) ?? '', /interrupted \(exit code 2\)/);
+  assert.match(incomplete({ run: ordinary, stdout: '', exitCode: 2 }) ?? '', /exit code 2/);
+  // INTERNALERROR (3) after a failed test, a usage error (4), a killed process (137): none is a finished run.
+  for (const code of [3, 4, 137]) assert.match(incomplete({ run: ordinary, stdout: '', exitCode: code }) ?? '', new RegExp(`exit code ${code}`));
+  for (const code of [0, 1, 5]) assert.equal(incomplete({ run: ordinary, stdout: '', exitCode: code }), null, `exit ${code} is a finished run`);
+  // session.shouldfail / shouldstop take any string; pytest still draws it as !!! text !!!
+  assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!!!!!!!!!!! enough !!!!!!!!!!!!!!!!!', exitCode: 1 }) ?? '', /stopped early/, 'custom session.shouldfail string');
   assert.match(incomplete({ run: ordinary, stdout: `F\n${banner}\n1 failed`, exitCode: 1 }) ?? '', /stopped early/);
   assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!! Interrupted: Test failed, continuing from this test next run. !!!!!!!!!', exitCode: 1 }) ?? '', /stopped early/, '--stepwise banner');
 
@@ -346,8 +351,7 @@ test('pytest incompleteness signals, each on its own: collection error (even at 
   // pytest.exit() can end the session with exit code 0, so the banner is the only signal.
   assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit: bye !!!!!!!!!!!!!!!!!!!!!!!!!!', exitCode: 0 }) ?? '', /stopped early/, 'pytest.exit()');
   assert.match(incomplete({ run: ordinary, stdout: '!!!!!!!!!!!! xdist.dsession.Interrupted: stopping after 1 failures !!!!!!!!!!!!!', exitCode: 1 }) ?? '', /stopped early/, 'xdist banner');
-  assert.equal(incomplete({ run: ordinary, stdout: '!!!!!!!! Exit code 0 is fine !!!!!!!!', exitCode: 0 }), null, 'only the Exit:/Interrupted: banners count');
-
+  
   // Found by review: colour, a missing message and a multi-line message each hid the banner.
   const colour = `\u001b[31m${banner}\u001b[0m`;
   assert.match(incomplete({ run: ordinary, stdout: `F\n${colour}\n1 failed`, exitCode: 1 }) ?? '', /stopped early/, '--color=yes / PY_COLORS=1');

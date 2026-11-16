@@ -85,7 +85,7 @@ const REPORTS: readonly (readonly Entry[])[] = [
 
 test('decideCheck precedence: a breach FAILs; else an incomplete run REFUSES an absence rule; testsPass is never refused for it', () => {
   const subsets = [['testsPass'], ['noSkippedTests'], ['noXfailTests'], ['testsPass', 'noSkippedTests'], ['noSkippedTests', 'noXfailTests'], ['testsPass', 'noSkippedTests', 'noXfailTests']] as const;
-  for (const entries of REPORTS) for (const selected of subsets) for (const stdout of ['', BANNER]) for (const exitCode of [0, 1, 2]) {
+  for (const entries of REPORTS) for (const selected of subsets) for (const stdout of ['', BANNER]) for (const exitCode of [0, 1, 2, 3]) {
     const execution: TestRunnerCompleted = { kind: 'completed', exitCode, stdout, stderr: '' };
     const picked = Object.fromEntries(selected.map(name => [name, rules[name]]));
     const outcome = decideCheck({
@@ -100,7 +100,7 @@ test('decideCheck precedence: a breach FAILs; else an incomplete run REFUSES an 
     const breach = (selected as readonly string[]).includes('testsPass') && failed
       || (selected as readonly string[]).includes('noSkippedTests') && statuses.includes('skipped')
       || (selected as readonly string[]).includes('noXfailTests') && statuses.includes('xfail');
-    const incomplete = exitCode === 2 || stdout === BANNER;
+    const incomplete = exitCode === 2 || exitCode === 3 || stdout === BANNER;
     const absence = selected.some(s => s !== 'testsPass');
     const unexplainedExit = exitCode !== 0 && !failed;
     const expected = unexplainedExit ? 'refuse' : breach ? 'fail' : incomplete && absence ? 'refuse' : 'pass';

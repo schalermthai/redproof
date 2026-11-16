@@ -165,9 +165,9 @@ and keeps both messages. For the same reason a test retried by
 
 A Rule about absent tests (`noSkippedTests`, `noXfailTests`) can only pass if every
 test ran. If pytest stopped early (`-x` or `--maxfail`, `pytest.exit()`, a collection
-error, or exit code 2) and nothing breached, the Check REFUSES with
+error, or any exit code other than 0, 1 and 5) and nothing breached, the Check REFUSES with
 `test-run-incomplete` instead of passing. pytest prints its stop banner even when
-`-x` stops on the very last test, so that case refuses too although every test ran. The stop is read from pytest's banner on stdout, with colour codes removed, so a plugin that ends the session silently at exit 0 is not detected. A breach still FAILs, because a breach decides the result either way.
+`-x` stops on the very last test, so that case refuses too although every test ran. The stop is read from any `!!! text !!!` banner pytest prints on stdout (colour codes removed) and from the exit code, so a plugin that ends the session silently at exit 0, or drops tests from the run (`pytest_runtestloop` returning early, `pytest_collection_modifyitems` deleting items), is not detected: like `-k`, that changes which tests are selected. A breach still FAILs, because a breach decides the result either way.
 `testsPass` is unaffected. A test that skipped and then errored in teardown still
 counts as skipped.
 
