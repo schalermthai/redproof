@@ -285,3 +285,15 @@ test('a run is pinned to the configuration that was judged', async () => {
   const pinned = await decide('clean', { run: done('', 0) });
   assert.equal(pinned.kind, 'evidence');
 });
+
+test('law: the verdict does not depend on the order mypy printed its findings', async () => {
+  const rows = [row({ line: 1, code: 'assignment' }), row({ line: 2, code: 'arg-type' }), row({ line: 3, code: 'assignment' }), row({ line: 4, severity: 'note', code: 'misc' })];
+  const summary = async (order: readonly string[]) => {
+    const decision = await decide('clean', { run: done(`${order.join('\n')}\n`, 1) });
+    assert.equal(decision.kind, 'evidence');
+    return decision.kind === 'evidence' ? decision.breaches.map(b => `${b.rule}:${b.location?.line}`).sort() : [];
+  };
+  const expected = await summary(rows);
+  assert.deepEqual(expected, ['mypy/assignment:1', 'mypy/assignment:3']);
+  for (const order of [[...rows].reverse(), [rows[2]!, rows[0]!, rows[3]!, rows[1]!]]) assert.deepEqual(await summary(order), expected);
+});
