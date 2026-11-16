@@ -38,7 +38,7 @@ export async function collect<R extends RuleRef>(ctx: CheckContext<R>, config: C
       const dataFile = join(temp, 'data'), reportFile = join(temp, 'coverage.json');
       // Ambient config that can silently change what is measured or where it is written is scrubbed; the explicit `rcfile` option is the only
       // config channel. PYTHONPATH, COVERAGE_CORE and the interpreter itself are deliberately left alone: the environment is trusted, not hostile.
-      const scrubbed = { COVERAGE_RCFILE: undefined, COVERAGE_FILE: undefined, COVERAGE_PROCESS_START: undefined, COVERAGE_DEBUG: undefined, COVERAGE_DEBUG_FILE: undefined };
+      const scrubbed = { COVERAGE_RCFILE: undefined, COVERAGE_FILE: undefined, COVERAGE_PROCESS_START: undefined, COVERAGE_PROCESS_CONFIG: undefined, COVERAGE_DEBUG: undefined, COVERAGE_DEBUG_FILE: undefined };
       const limits = { cwd, timeoutMs: config.timeoutMs, maxOutputBytes: config.maxOutputBytes, env: scrubbed };
       if (!config.rcfile) {
         const probe = await executeCommand({ command: config.python, args: probeArgs(), ...limits });

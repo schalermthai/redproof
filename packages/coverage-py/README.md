@@ -11,7 +11,7 @@ import { coveragePy } from '@redproof/coverage-py';
 coveragePy({
   python: '.venv/bin/python',            // default: python3
   args: ['-m', 'pytest'],                // everything after `coverage run`
-  source: ['src'],                       // needed to see files that never ran
+  source: ['src'],                       // sees files that never ran; also measures explicitly when config narrows
   rules: {
     lineCoverage: { minimum: 90 },       // coverage-py/line-coverage
     branchCoverage: { minimum: 80 },     // coverage-py/branch-coverage
@@ -33,9 +33,14 @@ Known blind spots (all found in battle testing, see `20-coveragepy/REDPROOF_COVE
 
 - coverage.py only lists files it was told about (`source`) or that ran. Unimported namespace-package files are invisible;
   list them in `expectedFiles` so their absence REFUSES.
-- Auto-discovered project config (`.coveragerc`, `setup.cfg`, `tox.ini`, `pyproject.toml`) that `omit`s files, adds
-  `exclude_lines`/`exclude_also` patterns, or restricts the report with `include` (`[run]` or `[report]`) shrinks the denominator without the report disagreeing with itself, so the adapter
-  REFUSES (`coverage-py-config-excludes`). Name the file as `rcfile` to accept it. The default `# pragma: no cover` is fine.
+- Auto-discovered project config (`.coveragerc`, `setup.cfg`, `tox.ini`, `pyproject.toml` in the run directory) can shrink or
+  rewrite what is judged while the report still agrees with itself, so the adapter REFUSES (`coverage-py-config-excludes`) when it:
+  - `omit`s files, adds `exclude_lines`/`exclude_also` patterns, or restricts the report with `include` (`[run]` or `[report]`);
+  - narrows measurement with `source`, `source_pkgs` or `source_dirs` (not when the adapter's own `source` option is set: coverage.py
+    unions the two, so nothing is hidden);
+  - loads `plugins` (a configurer can rewrite any option after the adapter has read it);
+  - sets `[report] ignore_errors`, which silently drops an unparseable source file.
+  Name the file as `rcfile` to accept it. The default `# pragma: no cover` is fine.
 - A report that measures zero statements REFUSES: nothing to cover would otherwise count as 100 % and pass every rule.
 - Modules imported before tracing starts show as never executed, which trips `noUncoveredFiles`.
 - Subprocesses are measured only with `patch = subprocess` in your rcfile.

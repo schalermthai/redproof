@@ -48,12 +48,12 @@ test('probeArgs asks coverage.py for config without cwd on sys.path so a local m
   assert.match(script ?? '', /run:source_pkgs/); assert.match(script ?? '', /run:plugins/); assert.match(script ?? '', /config_file=True/); assert.match(script ?? '', /report:exclude_lines/);
   assert.match(script ?? '', /report:include/); assert.match(script ?? '', /run:include/);
 });
-const probe = (extra: Record<string, unknown> = {}) => JSON.stringify({ files: ['p.toml'], omit: [], exclude: [], include: [], source: [], plugins: [], ...extra });
+const probe = (extra: Record<string, unknown> = {}) => JSON.stringify({ files: ['p.toml'], omit: [], exclude: [], include: [], source: [], plugins: [], ignoreErrors: false, ...extra });
 test('parseProjectConfig reads the last JSON line and fails closed on anything else', () => {
-  assert.deepEqual(parseProjectConfig(`warning\n${probe({ omit: ['x'], include: ['i'], source: ['pkg'], plugins: ['redplug'] })}\n`),
-    { files: ['p.toml'], omit: ['x'], exclude: [], include: ['i'], source: ['pkg'], plugins: ['redplug'] });
-  for (const bad of ['', 'nope', 'null', probe({ files: 'a' }), probe({ omit: [1] }), probe({ include: 'a.py' }), probe({ source: 'pkg' }), probe({ plugins: null }),
-    JSON.stringify({ files: [], omit: [], exclude: [], include: [] })]) assert.throws(() => parseProjectConfig(bad));
+  assert.deepEqual(parseProjectConfig(`warning\n${probe({ omit: ['x'], include: ['i'], source: ['pkg'], plugins: ['redplug'], ignoreErrors: true })}\n`),
+    { files: ['p.toml'], omit: ['x'], exclude: [], include: ['i'], source: ['pkg'], plugins: ['redplug'], ignoreErrors: true });
+  for (const bad of ['', 'nope', 'null', probe({ files: 'a' }), probe({ omit: [1] }), probe({ include: 'a.py' }), probe({ source: 'pkg' }), probe({ plugins: null }), probe({ ignoreErrors: 'yes' }),
+    JSON.stringify({ files: [], omit: [], exclude: [], include: [], source: [], plugins: [] })]) assert.throws(() => parseProjectConfig(bad));
 });
 test('configExclusions refuses anything that can shrink or rewrite the judged set unless acknowledged', () => {
   const clean = parseProjectConfig(probe());
@@ -68,6 +68,9 @@ test('configExclusions refuses anything that can shrink or rewrite the judged se
   assert.match(configExclusions(plugins, false, true)?.detail ?? '', /loads plugins redplug/); // plugins refuse even with an adapter source
   assert.match(configExclusions(sources, false, false)?.detail ?? '', /measures only pkg\.a/);
   assert.equal(configExclusions(sources, false, true), null); // coverage.py unions the adapter's --source with config source
+  const ignores = { ...clean, ignoreErrors: true };
+  assert.match(configExclusions(ignores, false, true)?.detail ?? '', /ignore_errors/); // refuses even with an adapter source
+  assert.equal(configExclusions(ignores, true, true), null);
 });
 test('confineRequired returns root-relative paths, or refuses on error, escape, or an unresolved file', () => {
   const ok = new Map<string, Resolved>([['a.py', { real: '/w/a.py' }], ['sub/b.py', { real: '/w/sub/b.py' }]]);

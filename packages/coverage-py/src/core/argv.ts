@@ -31,6 +31,7 @@ const PROBE = [
   ' "include": sorted(set((c.get_option("run:include") or []) + (c.get_option("report:include") or []))),',
   ' "source": sorted(set(_list(c, "run:source") + _list(c, "run:source_pkgs") + _list(c, "run:source_dirs"))),',
   ' "plugins": _list(c, "run:plugins"),',
+  ' "ignoreErrors": bool(c.get_option("report:ignore_errors")),',
   ' "exclude": [x for x in (c.get_option("report:exclude_lines") or []) if x not in default]}))',
 ].join('\n');
 export const probeArgs = (): readonly string[] => ['-c', `import sys\nif sys.path and sys.path[0] == "": sys.path[0] = "/nonexistent-redproof"\n${PROBE}`];

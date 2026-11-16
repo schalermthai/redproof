@@ -155,3 +155,14 @@ test('real coverage.py: a plugin configurer that rewrites report:omit REFUSES (t
   const refused = await adapter.check.run({ root, rules: [adapter.rules.lineCoverage.id] });
   assert.equal(refused.verdict, 'refuse'); if (refused.verdict === 'refuse') { assert.equal(refused.why.code, 'coverage-py-config-excludes'); assert.match(refused.why.detail ?? '', /loads plugins redplug/); }
 }));
+test('real coverage.py: config ignore_errors cannot hide an unparseable source file; an explicit rcfile accepts it', real, () => withWorkspace(async root => {
+  await fixture(root, BOTH); await writeFile(join(root, 'bad.py'), 'def broken(:\n');
+  const rules = { lineCoverage: { minimum: 0 } };
+  const control = make(rules);
+  const failed = await control.check.run({ root, rules: [control.rules.lineCoverage.id] }); // control: the unparseable file makes coverage json fail
+  assert.equal(failed.verdict, 'refuse'); if (failed.verdict === 'refuse') assert.equal(failed.why.code, 'coverage-py-producer-unsuccessful');
+  await writeFile(join(root, '.coveragerc'), '[report]\nignore_errors = true\n');
+  const refused = await control.check.run({ root, rules: [control.rules.lineCoverage.id] });
+  assert.equal(refused.verdict, 'refuse'); if (refused.verdict === 'refuse') { assert.equal(refused.why.code, 'coverage-py-config-excludes'); assert.match(refused.why.detail ?? '', /ignore_errors/); }
+  assert.deepEqual(await ids(root, rules, { rcfile: '.coveragerc' }), ['pass']); // acknowledged
+}));
