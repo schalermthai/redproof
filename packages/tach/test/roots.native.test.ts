@@ -140,3 +140,34 @@ t('hatches: a gitignored virtual environment named venv (pyvenv.cfg inside) is n
     assert.deepEqual(await verdict(root, RULE), SOURCES, 'another directory is still hidden code');
   });
 });
+
+t('round 5: a whitelisted exclude trusts a directory NAME, so it refuses whenever the walk finds first-party Python or a domain file under such a directory', async () => {
+  const cases: readonly (readonly [string, string])[] = [
+    ['**/build', 'build'], ['**/dist', 'dist'], ['**/venv', 'venv'], ['**/node_modules', 'node_modules'], ['**/__pycache__', '__pycache__'],
+    ['build', 'build'], ['/dist', 'dist'], ['node_modules/', 'node_modules'], ['**/build/**', 'build'],
+    ['**/*egg-info', 'x.egg-info'], ['**/*.egg-info', 'x.egg-info'], ['**/*__pycache__', 'my__pycache__'],
+  ];
+  for (const [pattern, dir] of cases) {
+    await withFiles({ ...LEGACY, 'src/a/legacy/impl.py': 'x = 1\n', [`src/a/${dir}/__init__.py`]: '', [`src/a/${dir}/impl.py`]: 'from b import thing\n', 'tach.toml': toml('["src"]', `exclude = [${JSON.stringify(pattern)}]\n`) }, async root => {
+      assert.deepEqual(await verdict(root, RULE), SOURCES, `${pattern} over ${dir}`);
+      assert.notEqual((await verdict(root, RULE, { allowExcludedSources: true }))[0], 'refuse', `${pattern}: accepted knowingly`);
+      await write(root, 'tach.toml', toml('["src"]'));
+      assert.deepEqual(await verdict(root, RULE), ['fail', `UndeclaredDependency@src/a/${dir}/impl.py`], `${pattern}: control, tach sees it`);
+    });
+  }
+  await withFiles({ ...LEGACY, 'src/a/build/tach.domain.toml': '[[modules]]\npath = "zz"\ndepends_on = []\n', 'tach.toml': toml('["src"]', 'exclude = ["**/build"]\n') }, async root => {
+    assert.deepEqual(await verdict(root, RULE), SOURCES, 'a domain file under the named directory');
+  });
+  await withFiles({ ...LEGACY, 'src/venv/pyvenv.cfg': 'home = /x\n', 'src/venv/lib/site.py': 'x = 1\n', 'tach.toml': toml('["src"]', 'exclude = ["**/venv", "**/*__pycache__"]\n') }, async root => {
+    assert.deepEqual(await verdict(root, RULE), FAIL, 'a real virtual environment holds Python and is not first-party');
+  });
+});
+
+t('round 5: depends_on with any glob character is as open as no depends_on, because tach\'s globs cannot be told apart from a list of names', async () => {
+  for (const open of ['?*', '[!_]*', '{*,x}', 'b.*', '*.b', '[a-z]*']) {
+    await withFiles({ ...LEGACY, 'tach.toml': toml('["src"]').replace('path = "a"\ndepends_on = []', `path = "a"\ndepends_on = [${JSON.stringify(open)}]`) },
+      async root => assert.deepEqual(await verdict(root, RULE), ['refuse', 'tach-rule-inactive'], open));
+  }
+  await withFiles({ ...LEGACY, 'tach.toml': toml('["src"]').replace('path = "a"\ndepends_on = []', 'path = "a"\ndepends_on = ["c"]') },
+    async root => assert.deepEqual(await verdict(root, RULE), FAIL, 'a plain name is not open'));
+});

@@ -163,7 +163,21 @@ test('exclude is kept as written and never interpreted: environment and cache na
   for (const pattern of ['venv', '**/venv', '**/*__pycache__', '**/*egg-info', '.venv', 'node_modules/', '/build', 'dist', '**/.tox', '.git', '**/build/**']) {
     assert.equal(sourcesRefusal([], found, readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`), {}), undefined, pattern);
   }
-  assert.equal(unsafeExcludes(readConfig('exclude = ["**/venv"]\n[[modules]]\npath = "app.venv"\n')).length, 1, 'an entry that names a module is not an environment');
+  assert.equal(unsafeExcludes(readConfig('exclude = ["**/venv"]\n[[modules]]\npath = "app.venv"\n'), EMPTY).length, 1, 'an entry that names a module is not an environment');
+});
+
+test('a whitelisted exclude is not trusted by name: first-party files under a directory of that name make it unsafe, a real environment does not', () => {
+  const config = (pattern: string) => readConfig(`source_roots = ["src"]\nexclude = [${JSON.stringify(pattern)}]\n`);
+  const under = (dir: string, more: Partial<SourceTree> = {}): SourceTree => tree([`src/a/${dir}/impl.py`], more);
+  for (const [pattern, dir] of [['**/build', 'build'], ['dist/', 'dist'], ['**/venv', 'venv'], ['**/node_modules', 'node_modules'], ['**/__pycache__', '__pycache__'], ['**/*egg-info', 'x.egg-info'], ['**/*.egg-info', 'x.egg-info'], ['*egg-info', 'egg-info'], ['**/*__pycache__', 'my__pycache__']] as const) {
+    assert.deepEqual(unsafeExcludes(config(pattern), under(dir)), [pattern], `${pattern} over ${dir}`);
+    assert.deepEqual(unsafeExcludes(config(pattern), tree(['src/a/other/impl.py'])), [], `${pattern} over nothing`);
+  }
+  assert.deepEqual(unsafeExcludes(config('**/build'), { ...under('build'), domainFiles: [], environments: [] }), ['**/build']);
+  assert.deepEqual(unsafeExcludes(config('**/build'), { ...EMPTY, domainFiles: ['src/a/build/tach.domain.toml'] }), ['**/build'], 'a domain file counts too');
+  assert.deepEqual(unsafeExcludes(config('**/venv'), under('venv', { environments: ['src/a/venv'] })), [], 'a real environment is not first-party');
+  assert.deepEqual(unsafeExcludes(config('**/build'), tree(['other/build/x.py'])), [], 'outside the source roots');
+  assert.deepEqual(unsafeExcludes(config('**/build'), tree(['src/a/build.py'])), [], 'a file, not a directory, called build');
 });
 
 test('source roots: a glob covers the whole tree; roots that contain each other, or a glob beside another root, overlap', () => {
@@ -207,10 +221,10 @@ test('layers and interfaces must be anchored to modules to enforce anything', ()
   assert.equal(interfacesAnchored(readConfig('')), false);
 });
 
-test('depends_on that matches every module is as open as no depends_on', () => {
+test('depends_on with any glob character is as open as no depends_on', () => {
   const open = (pattern: string): boolean | undefined => readConfig(`[[modules]]\npath = "a"\ndepends_on = [${JSON.stringify(pattern)}]\n`).modules[0]?.dependsOnAnything;
-  for (const pattern of ['**', '*', '**/*', '.*']) assert.equal(open(pattern), true, pattern);
-  for (const pattern of ['b', 'b.*', 'b.**', '*.b']) assert.equal(open(pattern), false, pattern);
+  for (const pattern of ['**', '*', '**/*', '.*', '?*', '[!_]*', '{*,x}', 'b.*', '*.b']) assert.equal(open(pattern), true, pattern);
+  for (const pattern of ['b', 'b.c', 'app.core']) assert.equal(open(pattern), false, pattern);
 });
 
 test('a config that cannot be read is an error, never a guess: a value of the wrong type (text that is not TOML is refused by the shell, see hidden.native.test.ts)', () => {

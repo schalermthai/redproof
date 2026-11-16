@@ -34,7 +34,7 @@ function table(value: unknown, what: string): Table {
 export type ModuleFacts = {
   readonly paths: readonly string[];
   readonly hasDependsOn: boolean;
-  /** `depends_on` holds a pattern that matches every module (`**`), which allows what no `depends_on` allows. */
+  /** `depends_on` holds a glob pattern, which may match every module and so allows what no `depends_on` allows. */
   readonly dependsOnAnything: boolean;
   readonly hasLayer: boolean;
   readonly unchecked: boolean;
@@ -61,8 +61,8 @@ export type ConfigFacts = {
 
 const DEFAULT_SOURCE_ROOTS = ['.'] as const;
 
-/** A `depends_on` pattern made only of wildcards matches every module. */
-const MATCHES_EVERYTHING = /^[*./]*\*[*./]*$/u;
+/** A `depends_on` entry with any glob character may match every module (`**`, `?*`, `[!_]*`, `{*,x}`); tach's globs cannot be told from a list of names. */
+const GLOB_CHARACTER = /[*?[\]{}]/u;
 
 function moduleFacts(entry: Table, paths: readonly string[]): ModuleFacts {
   const dependsOn = field(entry, 'depends_on');
@@ -77,7 +77,7 @@ function moduleFacts(entry: Table, paths: readonly string[]): ModuleFacts {
   return {
     paths,
     hasDependsOn: dependsOn !== undefined,
-    dependsOnAnything: targets.some(target => MATCHES_EVERYTHING.test(target.path)),
+    dependsOnAnything: targets.some(target => GLOB_CHARACTER.test(target.path)),
     hasLayer: layer !== undefined && layer !== '' && !(Array.isArray(layer) && layer.length === 0),
     unchecked: field(entry, 'unchecked') === true,
     hasCannotDependOn: strings(field(entry, 'cannot_depend_on'), 'cannot_depend_on').length > 0,
@@ -198,22 +198,32 @@ export function symlinkedSources(tree: SourceTree, facts: ConfigFacts): readonly
 }
 
 const SAFE_NAMES = ['venv', '.venv', 'node_modules', '__pycache__', '.git', '.tox', 'build', 'dist'] as const;
-/** The spellings that name one directory and nothing else; compared as whole strings, never interpreted as a glob. */
-const SAFE_EXCLUDES: ReadonlySet<string> = new Set([
-  ...SAFE_NAMES.flatMap(name => [name, `${name}/`, `/${name}`, `/${name}/`, `**/${name}`, `**/${name}/`, `**/${name}/**`, `${name}/**`, `/${name}/**`]),
-  '**/*__pycache__', '**/*egg-info', '**/*.egg-info', '*egg-info', '*.egg-info',
+
+/**
+ * The spellings that name a directory by its name alone, each with the test a directory name must pass to be "that
+ * directory". Compared as whole strings, never interpreted as globs.
+ */
+const SAFE_EXCLUDES: ReadonlyMap<string, (segment: string) => boolean> = new Map([
+  ...SAFE_NAMES.flatMap(name => [name, `${name}/`, `/${name}`, `/${name}/`, `**/${name}`, `**/${name}/`, `**/${name}/**`, `${name}/**`, `/${name}/**`]
+    .map((entry): [string, (segment: string) => boolean] => [entry, segment => segment === name])),
+  ...(['**/*__pycache__', '**/*egg-info', '**/*.egg-info', '*egg-info', '*.egg-info'] as const)
+    .map((entry): [string, (segment: string) => boolean] => [entry, segment => segment.endsWith(entry.includes('pycache') ? '__pycache__' : entry.includes('.egg') ? '.egg-info' : 'egg-info')]),
 ]);
 
 /**
- * The `exclude` entries that are not a plain spelling of an environment or cache directory (`.venv`, `venv`,
- * `node_modules`, `__pycache__`, `.git`, `.tox`, `build`, `dist`, egg-info). Those may remove first-party code, and
- * the adapter does not interpret tach's globs to find out. An entry for such a name is also unsafe when a module
- * path contains that name: then it removes a module.
+ * The `exclude` entries that may remove first-party code. An entry is safe only if it is a plain spelling of an
+ * environment or cache directory name AND the walk finds no Python or domain file under a directory of that name
+ * outside a real virtual environment: a name says nothing about what the directory holds (`src/a/build/impl.py`).
+ * An entry for such a name is also unsafe when a module path contains that name.
  */
-export function unsafeExcludes(facts: ConfigFacts): readonly string[] {
+export function unsafeExcludes(facts: ConfigFacts, tree: SourceTree): readonly string[] {
   const segments = new Set(facts.modules.flatMap(module => module.paths.flatMap(path => path.split(/[./:]/u))));
+  const files = [...tree.python, ...tree.domainFiles].filter(file => inRoots(file, facts) && !underAny(file, tree.environments));
+  const directories = new Set(files.flatMap(file => file.split('/').slice(0, -1)));
   return facts.exclude.filter(entry => {
-    if (!SAFE_EXCLUDES.has(entry)) return true;
+    const names = SAFE_EXCLUDES.get(entry);
+    if (!names) return true;
+    if ([...directories].some(names)) return true;
     return [...segments].some(segment => segment !== '' && entry.includes(segment) && SAFE_NAMES.includes(segment as never));
   });
 }

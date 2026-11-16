@@ -79,7 +79,7 @@ export function needsIgnoredListing(options: GuardOptions): boolean {
 
 export function sourcesRefusal(ignored: IgnoredFiles, tree: SourceTree, facts: ConfigFacts, options: GuardOptions): GuardRefusal | undefined {
   // The adapter does not interpret tach's glob syntax, so an exclude entry that is not a plain environment or cache directory may remove code.
-  const unsafe = unsafeExcludes(facts);
+  const unsafe = unsafeExcludes(facts, tree);
   if (unsafe.length && !options.allowExcludedSources) {
     return { code: 'tach-ignored-sources', message: '`exclude` may remove first-party code from tach\'s walk, and the adapter does not interpret tach\'s glob syntax. `tach init` writes an exclude for tests and docs, so an initialised project lands here.',
       detail: `${list(unsafe.map(pattern => JSON.stringify(pattern)))}\nRemove those entries, or set allowExcludedSources to accept that tach skips those paths. Plain environment and cache entries (.venv, venv, node_modules, __pycache__, .git, .tox, build, dist, egg-info) are not refused.` };
