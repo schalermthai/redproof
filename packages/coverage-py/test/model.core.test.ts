@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { fixture } from './support/fixture.ts';
 import { parseCoveragePy } from '../src/core/evidence.ts';
 import { coveragePyBreaches, type Selection } from '../src/core/rules.ts';
 import { percent } from '../src/core/thresholds.ts';
 import { report } from './support/report.ts';
 
-const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const rule = (id: string) => ({ id }) as never;
 const select = (config: Record<string, Record<string, unknown>>): Selection<never> => Object.fromEntries(
   Object.entries(config).map(([name, c]) => [name, { rule: rule(`coverage-py/${name}`), config: c }]));
