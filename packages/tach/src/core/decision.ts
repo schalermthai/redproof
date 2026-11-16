@@ -1,8 +1,10 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import { breach, result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
+import type { ConfigFacts } from './config.ts';
+import { configRefusal, escapingRoots, ignoredRefusal, type GuardOptions, type IgnoredFiles } from './guards.ts';
 import {
-  MINIMUM_TACH_VERSION, attribute, parseTachReport, parseTachVersion, tachVersionSupported,
+  MINIMUM_TACH_VERSION, NEWEST_VERIFIED_MINOR, attribute, parseTachReport, parseTachVersion, tachVersionSupported, tachVersionVerified,
   type TachReport, type TachRuleKind,
 } from './model.ts';
 
@@ -36,12 +38,15 @@ const output = (execution: { readonly stdout: string; readonly stderr: string })
   [execution.stderr.trim(), execution.stdout.trim()].filter(Boolean).join('\n');
 
 /** Decide from `tach --version` whether this tach is one the evidence covers. */
-export function checkVersion(execution: CommandExecution): TachRefusal | undefined {
+export function checkVersion(execution: CommandExecution, allowUnverifiedVersion = false): TachRefusal | undefined {
   if (execution.kind === 'refused') return refusal(execution.code, execution.message, execution.detail);
   const version = execution.exitCode === 0 ? parseTachVersion(execution.stdout) : null;
   if (!version) return refusal('tach-version-unknown', 'The command did not identify itself as tach.', output(execution));
   if (!tachVersionSupported(version)) {
     return refusal('tach-version-unsupported', `tach ${version.join('.')} is older than ${MINIMUM_TACH_VERSION}, the oldest release this Adapter has been verified against.`, output(execution));
+  }
+  if (!allowUnverifiedVersion && !tachVersionVerified(version)) {
+    return refusal('tach-version-unverified', `tach ${version.join('.')} is newer than 0.${NEWEST_VERIFIED_MINOR[1]}, the newest minor this Adapter has been verified against. Set allowUnverifiedVersion to run it anyway.`, output(execution));
   }
   return undefined;
 }
@@ -98,7 +103,7 @@ export function evaluateCheck<R extends RuleRef>(
   // A configuration diagnostic means tach skipped input or found nothing to check, so a pass would mean nothing.
   const configuration = diagnostics.filter(d => d.scope === 'configuration');
   if (configuration.length) {
-    return refusal('tach-configuration-diagnostic', 'tach reported a problem with what it was asked to check, so its absence of findings proves nothing.',
+    return refusal('tach-configuration-diagnostic', 'tach reported a problem with what it was asked to check (a skipped file, a missing module or source root, or no first-party import to inspect), so its absence of findings proves nothing. A project whose modules import nothing of each other cannot pass.',
       configuration.map(d => `${d.variant}${Object.keys(d.fields).length ? ` ${JSON.stringify(d.fields)}` : ''}`).join('\n'));
   }
   const placed = attribute(diagnostics, selected, displayPath);
@@ -114,14 +119,28 @@ export function evaluateCheck<R extends RuleRef>(
 /** How the shell runs tach: arguments in, a finished or refused run out. The only effect the core calls. */
 export type RunTach = (args: readonly string[]) => Promise<CommandExecution>;
 
-/** The order of a check, in the core so it is testable without tach: version, then the check. */
+function guards(selected: ReadonlyMap<TachRuleKind, Rule<RuleRef>>, facts: ConfigFacts, ignored: IgnoredFiles, options: GuardOptions): TachRefusal | undefined {
+  const escaping = escapingRoots(facts.sourceRoots);
+  const found = escaping.length
+    ? { code: 'tach-path-outside-root', message: 'A source root leaves the Gate root, so tach would read files the Gate never named.', detail: escaping.join('\n') }
+    : configRefusal([...selected.keys()], facts, options) ?? ignoredRefusal(ignored, facts, options);
+  return found ? refusal(found.code, found.message, found.detail) : undefined;
+}
+
+/** The order of a check, in the core so it is testable without tach: version, then the configuration guards, then the check. */
 export async function decideTach<R extends RuleRef>(input: {
   readonly run: RunTach;
+  /** The text of tach.toml, as the shell read it, plus any distributed `tach.domain.toml` facts already merged by the shell. */
+  readonly facts: ConfigFacts;
+  readonly ignored: IgnoredFiles;
+  readonly options?: GuardOptions & { readonly allowUnverifiedVersion?: boolean | undefined };
   readonly selected: ReadonlyMap<TachRuleKind, Rule<R>>;
   readonly displayPath: (file: string) => string;
 }): Promise<TachDecision<R>> {
-  const unsupported = checkVersion(await input.run(['--version']));
+  const unsupported = checkVersion(await input.run(['--version']), input.options?.allowUnverifiedVersion);
   if (unsupported) return unsupported;
+  const guard = guards(input.selected, input.facts, input.ignored, input.options ?? {});
+  if (guard) return guard;
   return evaluateCheck(await input.run(tachCheckArguments), input.selected, input.displayPath);
 }
 

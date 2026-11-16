@@ -49,7 +49,9 @@ runAdapterTck([{
   purity: {
     kind: 'sources',
     files: [
+      'packages/tach/src/core/config.ts',
       'packages/tach/src/core/decision.ts',
+      'packages/tach/src/core/guards.ts',
       'packages/tach/src/core/model.ts',
       'packages/tach/src/core/options.ts',
     ],

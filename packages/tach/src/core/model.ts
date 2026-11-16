@@ -12,7 +12,7 @@ export const ruleDefinitions = {
   'deprecated-dependency': { id: 'tach/deprecated-dependency', description: 'A module must not import from a module its configuration marks as a deprecated dependency.' },
   'layer-violation': { id: 'tach/layer-violation', description: 'A module must not import from a higher layer, or across a closed layer.' },
   'interface-violation': { id: 'tach/interface-violation', description: 'A module must import only what the other module exposes in its interface, with the declared data types.' },
-  'ignore-directive': { id: 'tach/ignore-directive', description: 'tach-ignore directives must be needed and, where the configuration asks, carry a reason.' },
+  'ignore-directive': { id: 'tach/ignore-directive', description: 'tach-ignore directives must be needed and, where the project asks for it, carry a reason.' },
   'circular-dependency': { id: 'tach/circular-dependency', description: 'Declared module dependencies must not form a cycle.' },
   'visibility-violation': { id: 'tach/visibility-violation', description: 'A module must not depend on a module whose visibility excludes it.' },
 } as const satisfies Record<TachRuleKind, { readonly id: string; readonly description: string }>;
@@ -112,7 +112,6 @@ const owners: Readonly<Record<string, TachRuleKind | null>> = {
   ClosedLayerViolation: 'layer-violation',
   PrivateDependency: 'interface-violation',
   InvalidDataTypeExport: 'interface-violation',
-  UnnecessarilyIgnoredDependency: 'ignore-directive',
   UnusedIgnoreDirective: 'ignore-directive',
   MissingIgnoreDirectiveReason: 'ignore-directive',
   // External-package diagnostics belong to `check-external`; `check` does not print them.
@@ -136,7 +135,6 @@ export function messageOf(d: Diagnostic): string {
     case 'DeprecatedDependency': return `Dependency '${f(d, 'dependency')}' is deprecated. Module '${f(d, 'usage_module')}' should not depend on '${f(d, 'definition_module')}'.`;
     case 'LayerViolation': return `Cannot use '${f(d, 'dependency')}'. Layer '${f(d, 'usage_layer')}' ('${f(d, 'usage_module')}') is lower than layer '${f(d, 'definition_layer')}' ('${f(d, 'definition_module')}').`;
     case 'ClosedLayerViolation': return `Cannot use '${f(d, 'dependency')}'. Layer '${f(d, 'usage_layer')}' ('${f(d, 'usage_module')}') cannot import from layer '${f(d, 'definition_layer')}' ('${f(d, 'definition_module')}') because layer '${f(d, 'closed_layer')}' is a closed layer between them.`;
-    case 'UnnecessarilyIgnoredDependency': return `Dependency '${f(d, 'dependency')}' is unnecessarily ignored by a directive.`;
     case 'UnusedIgnoreDirective': return 'Ignore directive is unused.';
     case 'MissingIgnoreDirectiveReason': return 'Ignore directive is missing a reason.';
     default: return d.variant;
@@ -190,4 +188,15 @@ export function tachVersionSupported(version: readonly [number, number, number])
     if (part !== minimum[i]) return part > minimum[i]!;
   }
   return true;
+}
+
+/**
+ * The newest minor release the evidence covers. tach is 0.x and changes defaults between minors, so a newer minor
+ * is not trusted until someone runs the battery against it; unknown diagnostic variants refuse on their own, but
+ * a changed default (as `respect_gitignore` once was) would not show up as a variant.
+ */
+export const NEWEST_VERIFIED_MINOR = [0, 35] as const;
+
+export function tachVersionVerified(version: readonly [number, number, number]): boolean {
+  return version[0] < NEWEST_VERIFIED_MINOR[0] || (version[0] === NEWEST_VERIFIED_MINOR[0] && version[1] <= NEWEST_VERIFIED_MINOR[1]);
 }

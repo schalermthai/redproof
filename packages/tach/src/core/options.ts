@@ -11,6 +11,12 @@ export type TachOptions<M extends Selection = Selection> = {
   readonly cwd?: string;
   /** The tach executable. Defaults to `tach` on PATH. */
   readonly command?: string;
+  /** Accept a selected rule that has nothing configured to enforce (see the README). */
+  readonly allowInactiveRules?: boolean;
+  /** Accept gitignored Python files under a source root that tach will not read. */
+  readonly allowIgnoredSources?: boolean;
+  /** Run a tach newer than the newest verified minor. */
+  readonly allowUnverifiedVersion?: boolean;
   readonly timeoutMs?: number;
   readonly maxOutputBytes?: number;
 };
@@ -23,7 +29,7 @@ function validatePath(name: string, value: string | undefined): void {
 }
 
 export function validateTachOptions(options: TachOptions): void {
-  rejectUnknownKeys(options, ['rules', 'cwd', 'command', 'timeoutMs', 'maxOutputBytes'], 'tach adapter');
+  rejectUnknownKeys(options, ['rules', 'cwd', 'command', 'allowInactiveRules', 'allowIgnoredSources', 'allowUnverifiedVersion', 'timeoutMs', 'maxOutputBytes'], 'tach adapter');
   const entries = Object.entries(options.rules ?? {});
   if (!entries.length) throw new Error('tach requires at least one Redproof rule.');
   for (const [alias, kind] of entries) {
@@ -38,6 +44,9 @@ export function validateTachOptions(options: TachOptions): void {
   validatePath('cwd', options.cwd);
   if (options.command !== undefined && (typeof options.command !== 'string' || !options.command.trim())) {
     throw new Error('tach command must not be empty.');
+  }
+  for (const name of ['allowInactiveRules', 'allowIgnoredSources', 'allowUnverifiedVersion'] as const) {
+    if (options[name] !== undefined && typeof options[name] !== 'boolean') throw new Error(`tach ${name} must be boolean.`);
   }
   for (const name of ['timeoutMs', 'maxOutputBytes'] as const) {
     const value = options[name];

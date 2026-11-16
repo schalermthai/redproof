@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { defineGate, runGate } from 'redproof';
 import { tach, type TachRuleKind } from '../src/index.ts';
 import { projects, type ProjectName } from './support/projects.ts';
-import { nativeTest, tachBinary, withProject } from './support/workspace.ts';
+import { nativeTest, tachBinary, withFiles, withProject } from './support/workspace.ts';
 
 // Real tach, through the Gate a user would write, one rule selected alone each time.
 const t = nativeTest(test);
@@ -27,8 +27,13 @@ const okToml = projects.ok['tach.toml'];
 
 const CASES: readonly Case[] = [
   { kind: 'undeclared-dependency', project: 'undeclared', red: ['fail', `tach/undeclared-dependency:UndeclaredDependency@${A}:1`], fix: r => write(r, 'tach.toml', okToml) },
-  { kind: 'forbidden-dependency', project: 'forbidden', red: ['fail', `tach/forbidden-dependency:ForbiddenDependency@${A}:1`], fix: r => write(r, 'tach.toml', okToml) },
-  { kind: 'deprecated-dependency', project: 'deprecated', red: ['fail', `tach/deprecated-dependency:DeprecatedDependency@${A}:1`], fix: r => write(r, 'tach.toml', okToml) },
+  { kind: 'forbidden-dependency', project: 'forbidden', red: ['fail', `tach/forbidden-dependency:ForbiddenDependency@${A}:1`],
+    fix: r => write(r, 'tach.toml', projects.forbidden['tach.toml'].replace('cannot_depend_on = ["b"]', 'cannot_depend_on = ["c"]')) },
+  { kind: 'deprecated-dependency', project: 'deprecated', red: ['fail', `tach/deprecated-dependency:DeprecatedDependency@${A}:1`],
+    fix: async r => {
+      await write(r, 'src/c/__init__.py', 'y = 1\n');
+      await write(r, 'tach.toml', `${projects.deprecated['tach.toml'].replace('{ path = "b", deprecated = true }', '{ path = "b", deprecated = false }, { path = "c", deprecated = true }')}[[modules]]\npath = "c"\ndepends_on = []\n`);
+    } },
   { kind: 'layer-violation', project: 'layer', red: ['fail', `tach/layer-violation:LayerViolation@${A}:1`],
     fix: r => write(r, 'tach.toml', projects.layer['tach.toml'].replace('layer = "low"', 'layer = "X"').replace('layer = "high"', 'layer = "low"').replace('layer = "X"', 'layer = "high"')) },
   { kind: 'layer-violation', project: 'closed-layer', red: ['fail', `tach/layer-violation:ClosedLayerViolation@${A}:1`],
@@ -53,14 +58,17 @@ for (const c of CASES) {
   }));
 }
 
-t('real tach: a project that only breaks other rules passes the rule that was asked', () => withProject('undeclared', async root => {
+t('real tach: a project that only breaks other rules passes the rule that was asked (rules the project switches on)', () => withFiles({
+  ...projects.undeclared,
+  'tach.toml': `forbid_circular_dependencies = true\nlayers = ["high", "low"]\n${projects.undeclared['tach.toml'].replace('depends_on = []', 'depends_on = []\ncannot_depend_on = ["c"]\nlayer = "high"')}[[interfaces]]\nexpose = [".*"]\nfrom = ["b"]\n`,
+}, async root => {
   for (const kind of ['layer-violation', 'interface-violation', 'forbidden-dependency', 'ignore-directive', 'circular-dependency'] as const) {
     assert.deepEqual(await verdict(root, kind), ['pass'], kind);
   }
 }));
 
 t('real tach: a cycle stops tach before any other rule runs, so a wider Gate REFUSES instead of passing the rest', () => withProject('cycle', async root => {
-  const both = tach({ rules: { a: 'circular-dependency', b: 'layer-violation' }, command: tachBinary });
+  const both = tach({ rules: { a: 'circular-dependency', b: 'layer-violation' }, command: tachBinary, allowInactiveRules: true });
   const result = await runGate(defineGate({ id: 'wide', adapter: both }), root);
   assert.equal(result.verdict, 'refuse');
   if (result.verdict === 'refuse') assert.equal(result.why.code, 'tach-run-aborted');
@@ -74,7 +82,7 @@ const REFUSALS: ReadonlyArray<readonly [ProjectName, string]> = [
 for (const [project, code] of REFUSALS) {
   t(`real tach: ${project} REFUSES with ${code}, for every rule`, () => withProject(project, async root => {
     for (const kind of ['undeclared-dependency', 'layer-violation', 'interface-violation'] as const) {
-      assert.deepEqual(await verdict(root, kind), ['refuse', code], kind);
+      assert.deepEqual(await verdict(root, kind, { allowInactiveRules: true }), ['refuse', code], kind);
     }
   }));
 }

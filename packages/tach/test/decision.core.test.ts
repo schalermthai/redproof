@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRule } from 'redproof';
+import { readConfig } from '../src/core/config.ts';
 import { checkVersion, decideTach, evaluateCheck, type TachDecision } from '../src/core/decision.ts';
 import type { TachRuleKind } from '../src/core/model.ts';
 
@@ -17,6 +18,8 @@ const global = (variant: string, fields: object | never[] = []) => ({ Global: { 
 const undeclared = located('UndeclaredDependency', { dependency: 'b.x', usage_module: 'a', definition_module: 'b' });
 const check = (exec: Parameters<typeof evaluateCheck>[0], selected = only('undeclared-dependency')): TachDecision<string> =>
   evaluateCheck(exec, selected, f => f);
+const READY = readConfig('forbid_circular_dependencies = true\n');
+const inputs = { facts: READY, ignored: [] as readonly string[], options: { allowInactiveRules: true } };
 const codeOf = (d: { kind: string; code?: string }) => d.kind === 'refuse' ? d.code : d.kind;
 
 // The verdict table needs values, not processes.
@@ -64,8 +67,11 @@ test('an error elsewhere does not fail a rule that was not selected, but its exi
 
 test('version gate: unknown, too old, and refused commands', () => {
   assert.equal(checkVersion(done(0, 'tach 0.35.3\n')), undefined);
-  assert.equal(checkVersion(done(0, 'tach 0.40.1\n')), undefined);
-  assert.equal(checkVersion(done(0, 'tach 1.0.0\n')), undefined);
+  assert.equal(checkVersion(done(0, 'tach 0.35.4\n')), undefined);
+  assert.equal(checkVersion(done(0, 'tach 0.35.9\n')), undefined, 'a patch release of the verified minor');
+  assert.equal(checkVersion(done(0, 'tach 0.36.0\n'))?.code, 'tach-version-unverified');
+  assert.equal(checkVersion(done(0, 'tach 1.0.0\n'))?.code, 'tach-version-unverified');
+  assert.equal(checkVersion(done(0, 'tach 1.0.0\n'), true), undefined, 'allowUnverifiedVersion');
   assert.equal(checkVersion(done(0, 'tach 0.35.2\n'))?.code, 'tach-version-unsupported');
   assert.equal(checkVersion(done(0, 'tach 0.9.9\n'))?.code, 'tach-version-unsupported');
   assert.equal(checkVersion(done(0, 'ruff 0.17.5\n'))?.code, 'tach-version-unknown');
@@ -79,15 +85,15 @@ test('order: the version is read first, and a refused version never reaches the 
     calls.push(args[0]!);
     return args[0] === '--version' ? done(0, version) : done(0, '[]');
   };
-  assert.equal(codeOf(await decideTach({ run: run('nonsense'), selected: only('layer-violation'), displayPath: f => f })), 'tach-version-unknown');
+  assert.equal(codeOf(await decideTach({ ...inputs, run: run('nonsense'), selected: only('layer-violation'), displayPath: f => f })), 'tach-version-unknown');
   assert.deepEqual(calls, ['--version']);
   calls.length = 0;
-  assert.equal(codeOf(await decideTach({ run: run('tach 0.35.3'), selected: only('layer-violation'), displayPath: f => f })), 'evidence');
+  assert.equal(codeOf(await decideTach({ ...inputs, run: run('tach 0.35.3'), selected: only('layer-violation'), displayPath: f => f })), 'evidence');
   assert.deepEqual(calls, ['--version', 'check']);
 });
 
 test('the check runs every check: no narrowing flag is passed', async () => {
   const seen: (readonly string[])[] = [];
-  await decideTach({ run: async args => { seen.push(args); return done(0, args[0] === '--version' ? 'tach 0.35.3' : '[]'); }, selected: some, displayPath: f => f });
+  await decideTach({ ...inputs, run: async args => { seen.push(args); return done(0, args[0] === '--version' ? 'tach 0.35.3' : '[]'); }, selected: some, displayPath: f => f });
   assert.deepEqual(seen[1], ['check', '--output', 'json']);
 });
