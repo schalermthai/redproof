@@ -146,8 +146,16 @@ export const proofs = defineProofs(gate, [
   ),
   proof.red(
     rules.adaptersPublicCoreApiOnly,
-    'keeps the cosmic-ray adapter inside the scan and public API boundary',
+    'keeps the cosmic-ray adapter on the public API boundary',
     mutate.appendText('packages/cosmic-ray/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
+    rules.adapterCoreNoShell,
+    'scans a cosmic-ray source file that nothing else imports',
+    mutate.createFile(
+      'packages/cosmic-ray/src/core/proof-orphan.ts',
+      "import { createCosmicRayAdapter } from '../shell/adapter.ts';\nexport const orphan = createCosmicRayAdapter;\n",
+    ),
   ),
   proof.red(
     rules.adaptersNoCrossAdapterImports,
