@@ -154,7 +154,7 @@ export function normalRoot(root: string): string {
 }
 
 /** tach resolves a source root containing these as a glob over directories, which this adapter does not expand. */
-export const isGlobRoot = (root: string): boolean => /[*?[\]{}]/u.test(root);
+const isGlobRoot = (root: string): boolean => /[*?[\]{}]/u.test(root);
 
 /** A glob root may name any directory, so the whole tree counts as inside it. */
 export const inRoots = (file: string, facts: ConfigFacts): boolean =>
