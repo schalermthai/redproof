@@ -58,6 +58,9 @@ export async function runCosmicRayCheck<R extends string>(
       // cosmic-ray rewrites source files in place and a kill (timeout, abort) leaves them mutated, so every step runs on a copy.
       const sandbox = join(temp, 'project');
       const copied = await copyProject(root, sandbox, config.maxCopyBytes, config.maxCopyEntries);
+      if (copied.kind === 'collision') {
+        return refuse('cosmic-ray-copy-collision', 'Two files in the project share one name in the sandbox (names that differ only by case on a case-insensitive disk).', copied.path);
+      }
       if (copied.kind === 'too-large') {
         return refuse('cosmic-ray-copy-too-large', 'The project is too large to copy for a mutation run.',
           `Over ${config.maxCopyBytes} bytes or ${config.maxCopyEntries} entries (seen ${copied.bytes} bytes, ${copied.entries} entries). Raise maxCopyBytes or maxCopyEntries, or point cwd at a smaller project.`);

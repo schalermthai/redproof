@@ -106,12 +106,12 @@ nativeTest('real cosmic-ray: a killed run leaves the project byte-identical and 
   assert.deepEqual(await outcome(root, DETECTED), ['pass']);
 }));
 
-nativeTest('real cosmic-ray: a test executable that does not exist REFUSES (baseline alone would pass)', () => withWorkspace(async root => {
+nativeTest('real cosmic-ray: a test executable that does not exist REFUSES at the baseline (its own baseline command would pass)', () => withWorkspace(async root => {
   await project(root, STRONG);
   const toml = join(root, 'cosmic-ray.toml');
   await writeFile(toml, (await readFile(toml, 'utf8')).replace(/test-command = ".*"/u, 'test-command = "/nonexistent/pytest"'));
-  assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-incomplete']);
-  assert.deepEqual(await outcome(root, SCORE), ['refuse', 'cosmic-ray-incomplete']);
+  assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-baseline-unrunnable']);
+  assert.deepEqual(await outcome(root, SCORE), ['refuse', 'cosmic-ray-baseline-unrunnable']);
 }));
 
 nativeTest('real cosmic-ray: excluding the only module (zero mutants) REFUSES for each rule alone', () => withWorkspace(async root => {
@@ -249,4 +249,54 @@ nativeTest('real cosmic-ray: a relative link to a shared environment outside the
   await writeFile(toml, (await readFile(toml, 'utf8')).replace(python, '.venv/bin/python'));
   const verdict = await runGate(defineGate({ id: 'mutation', adapter: cosmicRay({ cwd: 'proj', python: '.venv/bin/python', rules: DETECTED }) as never }), root);
   assert.equal(verdict.verdict, 'pass', JSON.stringify(verdict).slice(0, 300));
+}));
+
+// Tests that die by signal AFTER printing something (pytest -s, a banner, a wrapper): the output is not empty, so it cannot be told
+// from an assertion failure by looking at it. Only the weak assertion below is satisfied by the survivors.
+const dying = (kill: string) => `import os, signal, sys\nfrom mod import add\n\ndef test_add():\n    print('collected 1 item, running')\n    sys.stdout.flush()\n    if add(1, 1) != 2:\n        ${kill}\n    assert add(0, 0) == 0\n`;
+
+for (const [name, kill] of [
+  ['SIGKILL', 'os.kill(os.getpid(), signal.SIGKILL)'],
+  ['SIGTERM', 'os.kill(os.getpid(), signal.SIGTERM)'],
+  ['an OOM-style exit 137', 'os._exit(137)'],
+  ['a shell-style exit 143', 'os._exit(143)'],
+] as const) {
+  nativeTest(`real cosmic-ray: a test process that prints and then dies by ${name} is not a kill, for each rule alone`, () => withWorkspace(async root => {
+    await project(root, dying(kill));
+    const toml = join(root, 'cosmic-ray.toml');
+    await writeFile(toml, (await readFile(toml, 'utf8')).replace('-x -q', '-x -q -s'));
+    assert.deepEqual(await outcome(root, SCORE), ['refuse', 'cosmic-ray-incomplete']);
+    assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-incomplete']);
+  }));
+}
+
+const UNITTEST_STRONG = 'import unittest\nfrom mod import add\n\nclass T(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n';
+const UNITTEST_WEAK = 'import unittest\nfrom mod import add\n\nclass T(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(0, 0), 0)\n';
+
+nativeTest('real cosmic-ray: a stdlib unittest suite passes when strong and fails when weak (its failures go to stderr)', () => withWorkspace(async root => {
+  const use = async (tests: string) => {
+    await project(root, tests);
+    await writeFile(join(root, 'test_ut.py'), tests);
+    const toml = join(root, 'cosmic-ray.toml');
+    await writeFile(toml, (await readFile(toml, 'utf8')).replace(/test-command = ".*"/u, `test-command = "${python} -m unittest -q test_ut"`));
+  };
+  await use(UNITTEST_STRONG);
+  assert.deepEqual(await outcome(root, DETECTED), ['pass']);
+  assert.deepEqual(await outcome(root, SCORE), ['pass']);
+  await use(UNITTEST_WEAK);
+  const weak = await outcome(root, DETECTED);
+  assert.equal(weak[0], 'fail');
+  assert.equal(weak.length, 8);
+  assert.deepEqual(await outcome(root, SCORE), ['fail', 'cosmic-ray/mutation-score:mutation-score-below-minimum@undefined:undefined']);
+}));
+
+nativeTest('real cosmic-ray: writes through a linked environment (pyvenv.cfg) reach the real directory, writes through a plain venv package do not', () => withWorkspace(async root => {
+  await mkdir(join(root, '.venv', 'lib'), { recursive: true });
+  await writeFile(join(root, '.venv', 'pyvenv.cfg'), 'home = /x\n');
+  await mkdir(join(root, 'venv'));
+  await writeFile(join(root, 'venv', 'data.py'), 'x = 1\n');
+  await project(root, "from pathlib import Path\nfrom mod import add\n\ndef test_add():\n    Path('.venv/lib/written.txt').write_text('w')\n    Path('venv/written.txt').write_text('w')\n    assert add(2, 3) == 5\n");
+  assert.deepEqual(await outcome(root, DETECTED), ['pass']);
+  assert.equal(existsSync(join(root, '.venv', 'lib', 'written.txt')), true, 'documented exception: environments are shared');
+  assert.equal(existsSync(join(root, 'venv', 'written.txt')), false, 'a plain venv package is copied, so the write stays in the sandbox');
 }));

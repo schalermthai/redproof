@@ -54,15 +54,24 @@ test('cosmic-ray 8.3.15 output (oldest verified) parses; the flat 8.1.0 shape is
   assert.ok(parseCosmicRayDump(dumpText('old-format-8.1.0')) instanceof Error);
 });
 
-test('a kill with no output is not evidence of detection (a SIGKILLed test process looks like this)', () => {
-  const killed = (output: string) => parseCosmicRayDump(JSON.stringify([
+test('only the driver marker proves a kill: output is never used to guess', () => {
+  const result = (testOutcome: string, output: string) => (parseCosmicRayDump(JSON.stringify([
     { job_id: 'j', mutations: [{ module_path: 'm.py', operator_name: 'o', occurrence: 0, start_pos: [1, 0], end_pos: [1, 1], operator_args: {} }] },
-    { worker_outcome: 'normal', output, test_outcome: 'killed', diff: '' },
-  ]));
-  assert.equal((killed('') as readonly { status: string }[])[0]?.status, 'invalid');
-  assert.equal((killed('  \n') as readonly { status: string }[])[0]?.status, 'invalid');
-  assert.equal((killed('F\nFAILED test_x') as readonly { status: string }[])[0]?.status, 'killed');
-  assert.equal((killed('timeout') as readonly { status: string }[])[0]?.status, 'timeout');
+    { worker_outcome: 'normal', output, test_outcome: testOutcome, diff: '' },
+  ])) as readonly { status: string; reason?: string }[])[0] as { status: string; reason?: string };
+  assert.equal(result('killed', 'REDPROOF-EXIT 1\nF\nFAILED').status, 'killed');
+  assert.equal(result('killed', 'REDPROOF-EXIT 5\n').status, 'killed');
+  // Unmarked kills are refused however much output they carry: a banner, a traceback, a copied pytest header.
+  assert.equal(result('killed', '').status, 'invalid');
+  assert.equal(result('killed', '=== test session starts ===\ncollected 1 item\n').status, 'invalid');
+  assert.equal(result('killed', 'F\nFAILED test_x.py::t').status, 'invalid');
+  // The marker has to be the first line: code under test cannot forge one by printing it.
+  assert.equal(result('killed', 'boom\nREDPROOF-EXIT 1\n').status, 'invalid');
+  assert.equal(result('killed', 'REDPROOF-EXIT 0\n').status, 'invalid');
+  assert.equal(result('incompetent', 'REDPROOF-SIGNALLED -9\n').status, 'invalid');
+  assert.match(result('incompetent', 'REDPROOF-SIGNALLED -9\n').reason ?? '', /REDPROOF-SIGNALLED -9/u);
+  assert.equal(result('killed', 'timeout').status, 'timeout');
+  assert.equal(result('survived', 'REDPROOF-EXIT 0\nok').status, 'survived');
 });
 
 test('final jobs must be exactly the planned jobs', () => {
@@ -70,4 +79,7 @@ test('final jobs must be exactly the planned jobs', () => {
   assert.equal(jobsDiffer(a, a), false);
   assert.equal(jobsDiffer(a, a.slice(1)), true);
   assert.equal(jobsDiffer(a, [...a.slice(1), { ...a[0]!, id: 'someone-else' }]), true);
+  // same ids, different mutation: still a different job list
+  assert.equal(jobsDiffer(a, [{ ...a[0]!, operator: 'other/Operator' }, ...a.slice(1)]), true);
+  assert.equal(jobsDiffer(a, [{ ...a[0]!, line: 99 }, ...a.slice(1)]), true);
 });

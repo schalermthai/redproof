@@ -29,3 +29,9 @@ test('every other failure is a producer failure carrying the output', () => {
   assert.equal(failure.code, 'cosmic-ray-producer-unsuccessful');
   assert.match(failure.detail ?? '', /exit code: 137[\s\S]*err[\s\S]*out/u);
 });
+
+test('a baseline whose tests were signalled or could not start is not blamed on the assertions', () => {
+  assert.equal(code('baseline', 1, '', 'ERROR:root:Baseline failed.\n  >>> REDPROOF-SIGNALLED -9'), 'cosmic-ray-baseline-unrunnable');
+  assert.equal(code('baseline', 1, '', 'Baseline failed. REDPROOF-UNSTARTED Traceback'), 'cosmic-ray-baseline-unrunnable');
+  assert.equal(code('exec', 1, '', 'REDPROOF-SIGNALLED -9'), 'cosmic-ray-producer-unsuccessful');
+});

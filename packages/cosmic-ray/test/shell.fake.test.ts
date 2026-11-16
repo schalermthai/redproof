@@ -40,7 +40,8 @@ test('runs baseline, init, exec and dump in order, in the working directory', ()
   assert.equal(verdict.verdict, 'fail');
   assert.deepEqual(calls.map(call => call.args?.[2]), ['baseline', 'init', 'dump', 'exec', 'dump']);
   assert.ok(calls.every(call => call.command === 'py'));
-  assert.deepEqual(calls[0]?.args, ['-m', 'cosmic_ray.cli', 'baseline', 'c.toml']);
+  assert.deepEqual(calls[0]?.args?.slice(0, 1).concat(calls[0]?.args?.slice(2) ?? []), ['-c', 'baseline', 'c.toml']);
+  assert.match(calls[0]?.args?.[1] ?? '', /cosmic_ray\.mutating[\s\S]*REDPROOF-EXIT/u);
 }));
 
 test('a failing baseline refuses before any mutant is judged', () => withProject(async root => {
@@ -269,4 +270,29 @@ test('documented boundary: a test may write into a linked environment directory,
   await createCosmicRayAdapter({ rules }, run as never).check.run({ root, rules: ['cosmic-ray/mutants-detected'] });
   assert.equal(existsSync(join(root, '.venv', 'cache.bin')), true, 'linked environments are shared, as the README says');
   assert.equal(await readFile(join(root, 'mod.py'), 'utf8'), 'def add(a, b):\n    return a + b\n');
+}));
+
+test('a link to the project root or one of its ancestors is not followed (it would pull the rest of the disk into the copy)', () => withProject(async root => withWorkspace(async parent => {
+  const project = join(parent, 'project');
+  await mkdir(project);
+  await writeFile(join(project, 'mod.py'), 'def add(a, b):\n    return a + b\n');
+  await writeFile(join(parent, 'unrelated-secret.txt'), 'not part of the project');
+  await symlink('..', join(project, 'up'), 'dir');
+  await symlink('.', join(project, 'self'), 'dir');
+  const seen: string[] = [];
+  const run = async (options: { cwd: string; args?: readonly string[] }) => {
+    if (options.args?.[2] === 'baseline') seen.push(existsSync(join(options.cwd, 'up')) ? 'up copied' : 'up skipped', existsSync(join(options.cwd, 'self')) ? 'self copied' : 'self skipped');
+    return done(options.args?.[2] === 'dump' ? dumpText('all-killed') : '');
+  };
+  await createCosmicRayAdapter({ rules }, run as never).check.run({ root: project, rules: ['cosmic-ray/mutants-detected'] });
+  assert.deepEqual(seen, ['up skipped', 'self skipped']);
+  assert.ok(root.length > 0);
+})));
+
+test('a kill without the Redproof marker (a distributor that does not run through the driver) refuses', () => withProject(async root => {
+  const unmarked = dumpText('all-killed').replaceAll('REDPROOF-EXIT 1\\n', '');
+  const adapter = createCosmicRayAdapter({ rules: { mutationScore: { minimum: 1 } } }, fake({ dump: done(unmarked) }).run);
+  const verdict = await adapter.check.run({ root, rules: ['cosmic-ray/mutation-score'] });
+  assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-incomplete');
+  assert.match(verdict.verdict === 'refuse' ? verdict.why.detail ?? '' : '', /not made through the Redproof driver/u);
 }));

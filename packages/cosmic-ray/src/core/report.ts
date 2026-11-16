@@ -28,6 +28,13 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+const EXIT_MARKER = /^REDPROOF-EXIT (\d+)\n/u;
+
+/** The first line of the recorded output, which the driver (not the code under test) writes. */
+function firstLine(output: unknown): string {
+  return typeof output === 'string' ? output.split('\n', 1)[0] ?? '' : '';
+}
+
 function status(result: unknown): { readonly status: CosmicRayStatus; readonly reason?: string } {
   if (result === null) return { status: 'pending' };
   if (!isRecord(result)) return { status: 'invalid', reason: 'result is not an object' };
@@ -37,14 +44,13 @@ function status(result: unknown): { readonly status: CosmicRayStatus; readonly r
   if (result.test_outcome === 'survived') return { status: 'survived' };
   if (result.test_outcome === 'killed') {
     if (result.output === 'timeout') return { status: 'timeout' };
-    // A real kill is a test command that ran and failed, so it leaves output (an assertion, a traceback, a collection error).
-    // `killed` with nothing printed is what a SIGKILL (OOM killer, a stray pkill) looks like: no evidence of detection.
-    if (typeof result.output !== 'string' || result.output.trim() === '') {
-      return { status: 'invalid', reason: 'killed with no output (the test process was probably signalled)' };
-    }
-    return { status: 'killed' };
+    // cosmic-ray calls every non-zero exit AND every signal death `killed`. Only the driver's marker, written by the cosmic-ray
+    // worker, says the runner exited with its own failure code; output is never used to guess.
+    const marker = typeof result.output === 'string' ? EXIT_MARKER.exec(result.output) : null;
+    if (marker !== null && Number(marker[1]) > 0) return { status: 'killed' };
+    return { status: 'invalid', reason: `killed without a runner failure code (${firstLine(result.output) || 'no output'}); the test process may have been signalled, or the run was not made through the Redproof driver` };
   }
-  return { status: 'invalid', reason: `test outcome ${String(result.test_outcome)}` };
+  return { status: 'invalid', reason: `test outcome ${String(result.test_outcome)} (${firstLine(result.output) || 'no output'})` };
 }
 
 function parseLine(text: string, index: number): CosmicRayMutant | Error {
@@ -101,9 +107,13 @@ export function moduleFileInsideRoot(root: string, cwd: string, modulePath: stri
   return rel.split(sep).join('/');
 }
 
-/** True when the final dump does not describe exactly the jobs that were planned. */
+function identity(mutant: CosmicRayMutant): string {
+  return [mutant.id, mutant.modulePath, mutant.operator, mutant.line, mutant.column].join('\u0000');
+}
+
+/** True when the final dump does not describe exactly the jobs that were planned: same ids, same modules, operators and positions. */
 export function jobsDiffer(planned: readonly CosmicRayMutant[], final: readonly CosmicRayMutant[]): boolean {
   if (planned.length !== final.length) return true;
-  const ids = new Set(planned.map(mutant => mutant.id));
-  return ids.size !== planned.length || final.some(mutant => !ids.has(mutant.id));
+  const identities = new Set(planned.map(identity));
+  return identities.size !== planned.length || final.some(mutant => !identities.has(identity(mutant)));
 }

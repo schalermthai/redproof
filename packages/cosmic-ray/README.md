@@ -38,12 +38,26 @@ export default defineGate({ id: 'python-test-strength', adapter });
 Each Check copies the Gate root into a temporary sandbox and runs `cosmic_ray.cli baseline`, `init`, `dump`, `exec`, `dump` there.
 cosmic-ray rewrites source files in place, and killing it (a timeout, an abort) leaves them mutated, so it never runs on the real tree: your source files stay byte-identical on every exit path.
 **One exception, by design:** environment directories (`node_modules`, `.tox`, `.nox`, and `venv`/`.venv` when they hold a `pyvenv.cfg`) are linked, not copied, so a test that writes into one (bytecode, caches, logs) writes into the real directory. Writes anywhere else in the project land in the sandbox and are discarded.
-The copy skips `.git`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.hypothesis` and `*.egg-info`, and links environment directories instead of copying them (a directory named `venv`, `.venv` or `env` without a `pyvenv.cfg` is a real package and is copied), so a relative test command such as `.venv/bin/python -m pytest` still works. The copy costs one pass over the project's files; over `maxCopyBytes` (default 512 MiB) or `maxCopyEntries` (default 200000) the run REFUSES `cosmic-ray-copy-too-large`.
+A link to the project root or to one of its ancestors is not followed. The copy skips `.git`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.hypothesis` and `*.egg-info`, and links environment directories instead of copying them (a directory named `venv`, `.venv` or `env` without a `pyvenv.cfg` is a real package and is copied), so a relative test command such as `.venv/bin/python -m pytest` still works. The copy costs one pass over the project's files; over `maxCopyBytes` (default 512 MiB) or `maxCopyEntries` (default 200000) the run REFUSES `cosmic-ray-copy-too-large`.
 Nothing in the copy may lead back to your tree: a symlink that stays inside the project is rebuilt inside the sandbox, one that leaves it is copied by value, a dangling one is dropped. After `init`, every module path is resolved through the sandbox's links; one that is absolute, resolves outside the sandbox (for example through a linked `.venv`) or does not exist there REFUSES before `exec` (`cosmic-ray-module-path-escapes`).
-Real-tool tests check the real tree is byte-identical after PASS, FAIL, REFUSE and a timeout kill, with an absolute symlinked source directory, a source package called `env`, and a module path through a linked environment.
+Real-tool tests (also pinning the linked-environment exception above) check the real tree is byte-identical after PASS, FAIL, REFUSE and a timeout kill, with an absolute symlinked source directory, a source package called `env`, and a module path through a linked environment.
 
 `timeoutMs` is one deadline for the whole run: each step gets what is left, and an exhausted deadline REFUSES `command-timeout`.
 The sandbox is removed on every path. Error precedence: the check's own outcome wins. A cleanup failure demotes a PASS to REFUSE `cosmic-ray-cleanup-unavailable`; a REFUSE keeps its code and gains the leftover path in its detail; a FAIL keeps its breaches and the first one names the leftover path. If the host process itself is killed, the sandbox (up to `maxCopyBytes`) stays in the system temp directory.
+
+## What counts as a kill
+
+cosmic-ray records every non-zero test exit AND every signal death as `killed`, with whatever stdout it captured, and it drops stderr. An OOM-killed or `kill -9`-ed pytest therefore looks like a failed assertion, and a `unittest` failure (written to stderr) looks like a silent run. The adapter does not guess from the output. It runs cosmic-ray through a small Python driver (`python -c`, source in `src/core/driver.ts`) that replaces cosmic-ray's test runner and writes the result as the FIRST line of the recorded output, from the cosmic-ray worker process that the code under test cannot reach:
+
+| First line | Meaning |
+| --- | --- |
+| `REDPROOF-EXIT 0` | tests passed: the mutant survived |
+| `REDPROOF-EXIT n` (n > 0) | the runner failed with its own exit code: a kill |
+| `REDPROOF-SIGNALLED n` | died by a signal, or exited 129-192 (a shell reporting one): not a kill, REFUSE |
+| `REDPROOF-UNSTARTED` | the test command could not start: not a kill, REFUSE |
+| `timeout` | cosmic-ray's own timeout, see below |
+
+A `killed` result without the marker (a distributor that does not run in the driver process, an old format) is not counted: the run REFUSES. A kill is decided by the runner's exit code, never by its output, so a stderr-only reporter such as `unittest` works; stderr is also merged into the recorded output so refusal details carry it. During `baseline` anything but a pass fails the baseline, so a test command that cannot run no longer passes it. A test that kills the cosmic-ray worker itself leaves jobs without results, which also refuses; one that edits the session database is outside what the adapter can defend.
 
 ## Your tests run on the copy
 
@@ -63,10 +77,12 @@ cosmic-ray's own exit codes and `cr-rate` look healthy in all of these. The adap
 | Situation | Refusal code |
 | --- | --- |
 | tests fail on unmutated code (every mutant would look killed) | `cosmic-ray-baseline-failed` |
+| the test command is signalled or cannot start on unmutated code | `cosmic-ray-baseline-unrunnable` |
+| two project files share one name in the sandbox (case-insensitive temp disk) | `cosmic-ray-copy-collision` |
 | the Python has no cosmic-ray, or the config cannot be loaded (exit 78) | `cosmic-ray-not-installed`, `cosmic-ray-config-invalid` |
 | `init`, `exec` or `dump` exit non-zero (killed process, bad config, no module) | `cosmic-ray-producer-unsuccessful` |
 | process timeout, signal, or output limit | `command-timeout`, `command-signaled`, `command-output-limit` |
-| a job has no result, a mutant is `killed` with no output (a SIGKILLed test process, not an assertion), a worker failed, a test could not start, or a job was skipped (and, with `timeouts: 'refuse'`, a mutant timed out) | `cosmic-ray-incomplete` |
+| a job has no result, a mutant is `killed` without the driver's runner-failure marker (a signalled or OOM-killed test process, not an assertion), a worker failed, a test could not start, or a job was skipped (and, with `timeouts: 'refuse'`, a mutant timed out) | `cosmic-ray-incomplete` |
 | more than half of the mutants timed out | `cosmic-ray-timeouts-excessive` |
 | zero mutants (module excluded, nothing to mutate) | `cosmic-ray-no-mutants` |
 | a dump that is not the 8.3+ format, or whose final jobs differ from the planned jobs | `cosmic-ray-report-invalid` |

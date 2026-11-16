@@ -90,6 +90,8 @@ const spec = {
     kind: 'sources',
     files: [
       'packages/cosmic-ray/src/core/copy.ts',
+      'packages/cosmic-ray/src/core/driver.ts',
+      'packages/cosmic-ray/src/core/failure.ts',
       'packages/cosmic-ray/src/core/options.ts',
       'packages/cosmic-ray/src/core/report.ts',
       'packages/cosmic-ray/src/core/verdict.ts',

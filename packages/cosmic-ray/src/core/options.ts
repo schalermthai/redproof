@@ -1,5 +1,6 @@
 import { isAbsolute } from 'node:path';
 import { rejectUnknownKeys, type Rule } from 'redproof';
+import { COSMIC_RAY_DRIVER } from './driver.ts';
 
 export type CosmicRayRuleOptions = {
   readonly mutantsDetected?: true;
@@ -135,9 +136,12 @@ export function parseCosmicRayOptions(
   };
 }
 
-/** `python -m cosmic_ray.cli <step> ...`, so only the interpreter has to be found, not a console script. */
+/**
+ * `python -c <driver> <step> ...`: the driver runs cosmic-ray's own CLI after replacing its test runner (see driver.ts), and only
+ * the interpreter has to be found, not a console script.
+ */
 export function cosmicRayArgs(step: 'baseline' | 'init' | 'exec' | 'dump', config: string, session?: string): readonly string[] {
-  const base = ['-m', 'cosmic_ray.cli', step];
+  const base = ['-c', COSMIC_RAY_DRIVER, step];
   switch (step) {
     case 'baseline': return [...base, config];
     case 'dump': return [...base, session ?? ''];
