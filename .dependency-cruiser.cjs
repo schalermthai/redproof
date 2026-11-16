@@ -82,7 +82,7 @@ module.exports = {
       name: 'adapters-public-core-api-only',
       severity: 'error',
       comment: 'Adapters must consume Redproof through its public entrypoints.',
-      from: { path: '^packages/(?:adapter-tck|eslint|dependency-cruiser|istanbul|knip|stryker|testing)/src/' },
+      from: { path: '^packages/(?:adapter-tck|coverage-py|eslint|dependency-cruiser|istanbul|knip|stryker|testing)/src/' },
       to: {
         path: '^packages/redproof/src/',
         pathNot: [

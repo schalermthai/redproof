@@ -22,6 +22,7 @@ const PACKAGES = [
   { name: '@redproof/knip', tarballPrefix: 'redproof-knip-', probe: 'knip' },
   { name: '@redproof/testing', tarballPrefix: 'redproof-testing-', probe: 'testing' },
   { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
+  { name: '@redproof/coverage-py', tarballPrefix: 'redproof-coverage-py-', probe: 'coveragePy' },
 ] as const;
 
 // Node refuses to strip types under node_modules, so shipped source is unusable.
@@ -304,6 +305,9 @@ assert.equal(red.breaches[0].rule, 'knip/unused-exports');
     + "import { nyc } from '@redproof/istanbul';\n"
     + "export const coverage = nyc({ command: 'node', rules: { lines: { minimum: 90, perFile: true } } });\n"
     + "export const coverageId: 'istanbul/lines-coverage' = coverage.rules.lines.id;\n"
+    + "import { coveragePy } from '@redproof/coverage-py';\n"
+    + "export const pyCoverage = coveragePy({ args: ['-m', 'pytest'], rules: { lineCoverage: { minimum: 90 }, perFileMinimum: { minimum: 60, metric: 'branches' } } });\n"
+    + "export const pyCoverageId: 'coverage-py/line-coverage' = pyCoverage.rules.lineCoverage.id;\n"
     + "import { knip } from '@redproof/knip';\n"
     + "export const unused = knip({ rules: { files: 'files', unusedExports: 'exports' }, timeoutMs: 1000 });\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"
