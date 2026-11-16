@@ -18,6 +18,9 @@ const allowances = [
   'disabled-codes',
   'exclude',
   'reachability',
+  'skipped-files',
+  'no-type-check',
+  'unreachable-code',
   'plugins',
   'host-defaults',
 ] as const;

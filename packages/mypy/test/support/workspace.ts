@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -38,15 +38,26 @@ export async function withFiles<T>(files: Files, action: (root: string) => Promi
   }
 }
 
+/** The closure a one-file project `a.py` gives, as the closure probe would print it. */
+export const closureOf = (root: string): string => {
+  const path = `${realpathSync(root)}/a.py`;
+  return JSON.stringify({ kind: 'closure', mypyVersion: '2.4.1', modules: [{ module: 'a', path, stub: false, unreadable: null, ignores: [], inline: [], noTypeCheck: [] }], promised: [path] });
+};
+
 /**
- * A stand-in interpreter: answers the probe (`-c`) with `probe` and the check (`-m mypy`) with a script body, so
- * a run can end in ways real mypy will not produce on demand (killed, truncated, garbled).
+ * A stand-in interpreter: answers the probe (`-c`) with `probe`, the closure probe (`-c` with the closure script) with
+ * `closure`, and the check (`-m mypy`) with a script body, so a run can end in ways real mypy will not produce on demand
+ * (killed, truncated, garbled).
  */
-export async function scriptedPython(root: string, probe: string, checkBody: string): Promise<string> {
+export async function scriptedPython(root: string, probe: string, checkBody: string, closure: string = closureOf(root)): Promise<string> {
   const file = join(root, 'scripted-python.mjs');
   await writeFile(file, `#!/usr/bin/env node
 const args = process.argv.slice(2);
-if (args.includes('-c')) { process.stdout.write(${JSON.stringify(probe)}); process.exit(0); }
+if (args.includes('-c')) {
+  const script = args[args.indexOf('-c') + 1];
+  process.stdout.write(script.includes('"kind": "closure"') ? ${JSON.stringify(closure)} : ${JSON.stringify(probe)});
+  process.exit(0);
+}
 ${checkBody}
 `);
   await chmod(file, 0o755);
@@ -54,5 +65,5 @@ ${checkBody}
 }
 
 /** A stand-in interpreter that replays a captured mypy report. */
-export const replayPython = (root: string, probe: string, stdout: string, exitCode: number, stderr = ''): Promise<string> =>
-  scriptedPython(root, probe, `process.stdout.write(${JSON.stringify(stdout)});\nprocess.stderr.write(${JSON.stringify(stderr)});\nprocess.exit(${exitCode});`);
+export const replayPython = (root: string, probe: string, stdout: string, exitCode: number, stderr = '', closure?: string): Promise<string> =>
+  scriptedPython(root, probe, `process.stdout.write(${JSON.stringify(stdout)});\nprocess.stderr.write(${JSON.stringify(stderr)});\nprocess.exit(${exitCode});`, closure);

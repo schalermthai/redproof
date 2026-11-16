@@ -107,7 +107,7 @@ export const relatedCodes = (a: string, b: string): boolean => coversCode(a, b) 
 export const unresolvedImportCodes: readonly string[] = ['import-not-found', 'import-untyped'];
 
 /** Codes the adapter must always see, even when no Gate rule selects them, so a silenced signal cannot pass. */
-export const signalCodes: readonly string[] = ['import-not-found', 'import-untyped', 'unused-ignore'];
+export const signalCodes: readonly string[] = ['import-not-found', 'import-untyped', 'unused-ignore', 'unreachable'];
 
 /** Codes that are about ignore comments themselves; an ignore comment cannot hide these. */
 export const ignoreCodes: readonly string[] = ['unused-ignore', 'ignore-without-code'];

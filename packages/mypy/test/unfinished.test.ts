@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mypy } from '../src/index.ts';
-import { readFixture, scriptedPython, withFiles } from './support/workspace.ts';
+import { chmod, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { closureOf, readFixture, scriptedPython, withFiles } from './support/workspace.ts';
 
 /**
  * Runs that did not finish, through the whole shell with a stand-in interpreter: none may PASS, and none may be
@@ -47,14 +49,26 @@ test('control: the same stand-in, finishing with a finding, fails', async () => 
   assert.deepEqual(await verdictOf(`process.stdout.write(${JSON.stringify(row + '\n')}); process.exit(1);`), { verdict: 'fail' });
 });
 
-test('a probe that is killed REFUSES before the check runs', async () => {
-  await withFiles({ 'a.py': 'x: int = 1\n' }, async root => {
-    const file = await scriptedPython(root, '', 'process.exit(0);');
-    const { readFile, writeFile } = await import('node:fs/promises');
-    await writeFile(file, (await readFile(file, 'utf8')).replace("process.stdout.write(\"\"); process.exit(0);", "process.kill(process.pid, 'SIGKILL');"));
-    const adapter = mypy({ rules: { a: 'assignment' }, python: file, pythonVersion: '3.13', platform: 'linux' });
-    const result = await adapter.check.run({ root, rules: ['mypy/assignment'] });
-    assert.equal(result.verdict, 'refuse');
-    if (result.verdict === 'refuse') assert.equal(result.why.code, 'command-signaled');
-  });
+test('a probe, or the closure probe, that is killed REFUSES before the check runs', async () => {
+  for (const victim of ['"kind": "facts"', '"kind": "closure"']) {
+    await withFiles({ 'a.py': 'x: int = 1\n' }, async root => {
+      const file = join(root, 'killer.mjs');
+      const probeText = (await probe(root));
+      await writeFile(file, `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args.includes('-c')) {
+  const closure = args[args.indexOf('-c') + 1].includes('"kind": "closure"');
+  if (closure === (${JSON.stringify(victim)}.includes('closure'))) process.kill(process.pid, 'SIGKILL');
+  process.stdout.write(closure ? ${JSON.stringify(closureOf(root))} : ${JSON.stringify(probeText)});
+  process.exit(0);
+}
+process.exit(0);
+`);
+      await chmod(file, 0o755);
+      const adapter = mypy({ rules: { a: 'assignment' }, python: file, pythonVersion: '3.13', platform: 'linux' });
+      const result = await adapter.check.run({ root, rules: ['mypy/assignment'] });
+      assert.equal(result.verdict, 'refuse', victim);
+      if (result.verdict === 'refuse') assert.equal(result.why.code, 'command-signaled');
+    });
+  }
 });

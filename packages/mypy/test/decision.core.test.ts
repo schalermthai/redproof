@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 import { defineRules } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
-import { decideMypy, mypyArguments, probeArguments, type ConfigChoice, type MypyDecision } from '../src/core/decision.ts';
+import { closureArguments, decideMypy, mypyArguments, probeArguments, type ConfigChoice, type MypyDecision } from '../src/core/decision.ts';
 import { ruleDefinition } from '../src/core/model.ts';
 import type { Allowance } from '../src/core/options.ts';
 import { fixtures } from './support/workspace.ts';
@@ -22,6 +22,7 @@ const row = (extra: Record<string, unknown> = {}): string => JSON.stringify({
 
 type Case = {
   probe?: string | CommandExecution;
+  closure?: string | CommandExecution;
   run?: CommandExecution;
   codes?: readonly string[];
   allow?: readonly Allowance[];
@@ -36,16 +37,22 @@ async function decide(name: string, c: Case = {}): Promise<MypyDecision<never>> 
   const rules = defineRules(Object.fromEntries(codes.map(code => [code, ruleDefinition(code)])));
   const selected = new Map(codes.map(code => [code, (rules as Record<string, never>)[code]!]));
   const probe = c.probe ?? fixture(`probe-${name}.json`);
+  const plan = { codes, paths: ['.'], cacheDir: '/tmp/cache', pythonVersion: '3.13', platform: 'linux' };
   return decideMypy({
-    plan: { codes, paths: ['.'], cacheDir: '/tmp/cache', pythonVersion: '3.13', platform: 'linux' },
+    plan,
     config: c.config ?? { kind: 'discover' },
     allow: new Set(c.allow ?? []),
     pinned: { pythonVersion: c.pinned ?? true, platform: c.pinned ?? true },
     root: ROOT, cwd: ROOT, requested: c.requested ?? [ROOT],
     resolvePlaces: async facts => ({ configFile: c.configFile ?? (facts.configFile ? resolve(ROOT, facts.configFile) : undefined), mypyPath: [] }),
-    run: async args => (args.includes('-c')
-      ? (typeof probe === 'string' ? done(probe, 0) : probe)
-      : c.run ?? captured(name)),
+    run: async args => {
+      if (args[1] === '-c' && args[2] === closureArguments(plan, { kind: 'none' })[2]) {
+        const closure = c.closure ?? fixture(`closure-${name}.json`);
+        return typeof closure === 'string' ? done(closure, 0) : closure;
+      }
+      if (args.includes('-c')) return typeof probe === 'string' ? done(probe, 0) : probe;
+      return c.run ?? captured(name);
+    },
     selected,
   });
 }
@@ -152,7 +159,7 @@ test('syntax errors REFUSE with their own code, whatever rule is selected', asyn
 
 test('type: ignore comments: used ones hide findings and REFUSE, unused ones do not', async () => {
   // fixture `ignores`: line 1 bare (hides an assignment error), line 2 bare but unused, line 3 [assignment] (hides one).
-  const unused = `${row({ line: 2, column: -1, code: 'unused-ignore' })}\n`;
+  const unused = `${row({ line: 2, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore" comment' })}\n`;
   refusedWith(await decide('ignores', { run: done(unused, 1) }), 'mypy-ignore-comments');
   const only2 = await decide('ignores', { codes: ['arg-type'], run: done(unused, 1) });
   refusedWith(only2, 'mypy-ignore-comments'); // the bare ignores on lines 1 and 3 could hide an arg-type
@@ -166,9 +173,8 @@ test('type: ignore comments: used ones hide findings and REFUSE, unused ones do 
 });
 
 test('an ignore that names another code does not hide the selected rule', async () => {
-  const facts = JSON.parse(fixture('probe-ignores.json')) as Record<string, unknown>;
-  (facts.files as { ignores: unknown[] }[])[0]!.ignores = [{ line: 1, codes: ['arg-type'], top: false }];
-  const decision = await decide('ignores', { probe: JSON.stringify(facts), run: done('', 0) });
+  const closure = tweakClosure('ignores', c => { c.modules[0].ignores = [{ line: 1, codes: ['arg-type'], top: false }]; });
+  const decision = await decide('ignores', { closure, run: done('', 0) });
   assert.equal(decision.kind, 'evidence');
 });
 
@@ -190,6 +196,12 @@ const tweak = (name: string, edit: (facts: Record<string, any>) => void): string
   return JSON.stringify(facts);
 };
 
+const tweakClosure = (name: string, edit: (closure: Record<string, any>) => void): string => {
+  const closure = JSON.parse(fixture(`closure-${name}.json`)) as Record<string, any>;
+  edit(closure);
+  return JSON.stringify(closure);
+};
+
 const settingCases: ReadonlyArray<readonly [string, (facts: Record<string, any>) => void, string]> = [
   ['an old mypy', f => { f.mypyVersion = '1.10.1'; }, 'mypy-version-unsupported'],
   ['a version that is not mypy', f => { f.mypyVersion = 'ruff'; }, 'mypy-version-unknown'],
@@ -209,9 +221,6 @@ const settingCases: ReadonlyArray<readonly [string, (facts: Record<string, any>)
   ['implicit_optional on', f => { f.changed.implicit_optional = true; }, 'mypy-setting-unvetted'],
   ['a report written into the tree', f => { f.changed.junit_xml = 'out.xml'; }, 'mypy-setting-unvetted'],
   ['a setting nobody vetted', f => { f.changed.some_future_relaxation = true; }, 'mypy-setting-unvetted'],
-  ['a mypy comment in a source file', f => { f.files[0].inline = [{ line: 1, text: 'ignore-errors' }]; }, 'mypy-inline-config'],
-  ['a type: ignore before the first statement', f => { f.files[0].ignores = [{ line: 1, codes: null, top: true }]; }, 'mypy-ignore-comments'],
-  ['an unreadable source', f => { f.files[0].unreadable = 'EACCES'; }, 'mypy-source-unreadable'],
 ];
 for (const [name, edit, code] of settingCases) {
   test(`REFUSE, never PASS: ${name}`, async () => refusedWith(await decide('clean', { probe: tweak('clean', edit) }), code));
@@ -239,13 +248,10 @@ test('each allowance accepts exactly the setting it names', async () => {
     ['reachability', f => { f.changed.always_true = ['X']; }],
     ['plugins', f => { f.changed.plugins = ['p']; }],
     ['disabled-codes', f => { f.sections = { a: { disable_error_code: ['assignment'] } }; }],
-    ['inline-config', f => { f.files[0].inline = [{ line: 1, text: 'ignore-errors' }]; }],
-    ['type-ignore', f => { f.files[0].ignores = [{ line: 1, codes: null, top: true }]; }],
   ];
   for (const [allowance, edit] of cases) {
     const probe = tweak('clean', edit);
-    refusedWith(await decide('clean', { probe }), allowance === 'inline-config' ? 'mypy-inline-config'
-      : allowance === 'type-ignore' ? 'mypy-ignore-comments' : 'mypy-setting-hides-findings');
+    refusedWith(await decide('clean', { probe }), 'mypy-setting-hides-findings');
     const accepted = await decide('clean', { probe, allow: [allowance], run: done('', 0) });
     assert.equal(accepted.kind, 'evidence', `${allowance}: ${JSON.stringify(accepted)}`);
     for (const other of cases.filter(([name]) => name !== allowance)) {
@@ -253,6 +259,61 @@ test('each allowance accepts exactly the setting it names', async () => {
       assert.equal(still.kind, 'refuse', `${allowance} must not accept ${other[0]}`);
     }
   }
+});
+
+const coverageCases: ReadonlyArray<readonly [string, Allowance, string, (closure: Record<string, any>) => void]> = [
+  ['a mypy comment in a source file', 'inline-config', 'mypy-inline-config', c => { c.modules[0].inline = [{ line: 1, text: 'ignore-errors' }]; }],
+  ['a type: ignore before the first statement', 'type-ignore', 'mypy-ignore-comments', c => { c.modules[0].ignores = [{ line: 1, codes: null, top: true }]; }],
+  ['an unreadable source', 'type-ignore', 'mypy-source-unreadable', c => { c.modules[0].unreadable = 'EACCES'; }],
+  ['@no_type_check', 'no-type-check', 'mypy-no-type-check', c => { c.modules[0].noTypeCheck = [3]; }],
+  ['a Python file mypy never loaded (a .py beside a .pyi, a hidden directory)', 'skipped-files', 'mypy-files-unchecked', c => { c.promised.push('<ROOT>/hidden/.x/b.py'); }],
+  ['a # mypy: comment in a file reached only through an import', 'inline-config', 'mypy-inline-config', c => {
+    c.modules.push({ module: 'lib', path: '<ROOT>/lib.py', stub: false, unreadable: null, ignores: [], inline: [{ line: 1, text: 'ignore-errors' }], noTypeCheck: [] });
+  }],
+  ['a whole-file type: ignore in a file reached only through an import', 'type-ignore', 'mypy-ignore-comments', c => {
+    c.modules.push({ module: 'lib', path: '<ROOT>/lib.py', stub: false, unreadable: null, ignores: [{ line: 1, codes: null, top: true }], inline: [], noTypeCheck: [] });
+  }],
+];
+for (const [name, allowance, code, edit] of coverageCases) {
+  test(`REFUSE, never PASS: ${name}; only ${allowance} accepts it`, async () => {
+    const closure = tweakClosure('clean', edit);
+    refusedWith(await decide('clean', { closure }), code);
+    if (code !== 'mypy-source-unreadable') {
+      assert.equal((await decide('clean', { closure, allow: [allowance], run: done('', 0) })).kind, 'evidence');
+      const other = allowance === 'skipped-files' ? 'no-type-check' : 'skipped-files';
+      refusedWith(await decide('clean', { closure, allow: [other] }), code);
+    }
+  });
+}
+
+test('a type: ignore listing several codes is judged code by code (one unused code says nothing about the others)', async () => {
+  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'call-arg'], top: false }]; });
+  const unusedCall = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[call-arg]" comment' })}\n`;
+  refusedWith(await decide('clean', { closure, run: done(unusedCall, 1) }), 'mypy-ignore-comments');
+  const bothUnused = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[assignment, call-arg]" comment' })}\n`;
+  assert.equal((await decide('clean', { closure, run: done(bothUnused, 1) })).kind, 'evidence');
+  const two = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'arg-type'], top: false }]; });
+  const unusedAssign = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[assignment]" comment' })}\n`;
+  refusedWith(await decide('clean', { closure: two, codes: ['arg-type'], run: done(unusedAssign, 1) }), 'mypy-ignore-comments');
+  assert.equal((await decide('clean', { closure: two, codes: ['call-arg'], run: done(unusedAssign, 1) })).kind, 'evidence', 'the used code is arg-type, which does not hide call-arg');
+  const odd = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'something nobody has seen before' })}\n`;
+  refusedWith(await decide('clean', { closure, run: done(odd, 1) }), 'mypy-ignore-comments');
+});
+
+test('unreachable code REFUSES unless the Gate selects it or accepts it', async () => {
+  const dead = done(`${row({ code: 'unreachable', message: 'Statement is unreachable' })}\n`, 1);
+  refusedWith(await decide('clean', { run: dead }), 'mypy-unreachable-code');
+  assert.equal((await decide('clean', { run: dead, allow: ['unreachable-code'] })).kind, 'evidence');
+  const selected = await decide('clean', { codes: ['unreachable'], run: dead });
+  assert.equal(selected.kind, 'evidence');
+  if (selected.kind === 'evidence') assert.equal(selected.breaches[0]?.rule, 'mypy/unreachable');
+});
+
+test('a blocking error in the closure probe, with a run that finished, is not trusted', async () => {
+  refusedWith(await decide('clean', { closure: fixture('closure-syntax.json'), run: done('', 0) }), 'mypy-probe-failed');
+  refusedWith(await decide('clean', { closure: JSON.stringify({ kind: 'unavailable', detail: 'x' }) }), 'mypy-unavailable');
+  refusedWith(await decide('clean', { closure: 'not json' }), 'mypy-probe-unavailable');
+  refusedWith(await decide('clean', { closure: done('', 1, 'died') }), 'mypy-probe-failed');
 });
 
 test('host-dependent: python and platform must be pinned by the Gate or the configuration', async () => {

@@ -2,14 +2,14 @@ import { relative, resolve } from 'node:path';
 import { result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution, CompletedCommand } from 'redproof/command';
 import {
-  hidingIgnores, judgeFacts, parseProbe, withinRoot, type Facts, type Problem,
+  hidingIgnores, judgeCoverage, judgeFacts, parseClosure, parseProbe, unusedIgnores, withinRoot, type Closure, type Facts, type Problem,
 } from './facts.ts';
 import {
   MINIMUM_MYPY_VERSION, mypyVersionSupported, ownerOf, parseMypyReport, parseMypyVersion, signalCodes,
   toBreach, unresolvedImportCodes, verifiedCodes, coversCode, type MypyFinding,
 } from './model.ts';
 import type { Allowance } from './options.ts';
-import { PROBE_SCRIPT } from './probe.ts';
+import { CLOSURE_SCRIPT, PROBE_SCRIPT } from './probe.ts';
 
 export type MypyRefusal = {
   readonly kind: 'refuse';
@@ -64,7 +64,7 @@ function mypyFlags(plan: MypyPlan, config: ConfigChoice): readonly string[] {
     '--output', 'json',
     '--show-error-codes', '--no-error-summary', '--no-pretty', '--no-color-output',
     '--no-incremental', '--cache-dir', plan.cacheDir,
-    '--check-untyped-defs', '--warn-unused-ignores',
+    '--check-untyped-defs', '--warn-unused-ignores', '--warn-unreachable',
     ...(plan.pythonVersion ? ['--python-version', plan.pythonVersion] : []),
     ...(plan.platform ? ['--platform', plan.platform] : []),
     ...flags,
@@ -79,6 +79,9 @@ export const mypyArguments = (plan: MypyPlan, config: ConfigChoice): readonly st
 
 export const probeArguments = (plan: MypyPlan, config: ConfigChoice): readonly string[] =>
   ['-I', '-c', PROBE_SCRIPT, ...mypyFlags(plan, config)];
+
+export const closureArguments = (plan: MypyPlan, config: ConfigChoice): readonly string[] =>
+  ['-I', '-c', CLOSURE_SCRIPT, ...mypyFlags(plan, config)];
 
 /**
  * Variables mypy reads that would change which files and stubs it sees. The shell unsets them for the run
@@ -174,11 +177,17 @@ export async function decideMypy<R extends RuleRef>(input: DecideInput<R>): Prom
   const config: ConfigChoice = input.config.kind !== 'discover'
     ? input.config
     : facts.configFile === null || places.configFile === undefined ? { kind: 'none' } : { kind: 'file', path: places.configFile };
+  const built = await input.run(closureArguments(input.plan, config));
+  const closure = closureOf(built);
+  if (closure.kind === 'refuse') return closure;
   const executed = await input.run(mypyArguments(input.plan, config));
   if (executed.kind === 'completed' && executed.exitCode === 2) return stopped(executed);
   const finished = unfinished(executed, 'mypy');
   if (finished.kind === 'refuse') return finished;
-  return evaluate(finished, facts, input);
+  if (closure.kind === 'blocked') {
+    return refusal('mypy-probe-failed', 'mypy printed a result, but the same build stopped on a blocking error when its files were listed.', closure.messages.join('\n'));
+  }
+  return evaluate(finished, facts, closure.closure, input);
 }
 
 /**
@@ -199,10 +208,27 @@ function stopped(execution: CompletedCommand): MypyRefusal {
     : refusal('mypy-crashed', 'mypy stopped before it finished (exit code 2).', detail);
 }
 
-/** Where a finding is, as a stable key: the absolute path and the line. */
-const keyOf = (cwd: string, file: string, line: number | null): string => `${resolve(cwd, file)}:${line ?? '?'}`;
+type ClosureResult = MypyRefusal | { readonly kind: 'closure'; readonly closure: Closure } | { readonly kind: 'blocked'; readonly messages: readonly string[] };
 
-function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, input: DecideInput<R>): MypyDecision<R> {
+/** The closure probe answers like the first probe: on stdout, exit 0. A blocking error is not a refusal yet: the real run explains it. */
+function closureOf(execution: CommandExecution): ClosureResult {
+  const finished = unfinished(execution, 'The mypy closure probe');
+  if (finished.kind === 'refuse') return finished;
+  if (finished.exitCode !== 0) {
+    return refusal('mypy-probe-failed', 'The Python interpreter failed before mypy could list what it loaded.',
+      [finished.stderr.trim(), finished.stdout.trim()].filter(Boolean).join('\n'));
+  }
+  try {
+    const parsed = parseClosure(finished.stdout);
+    if (parsed.kind === 'unavailable') return refusal('mypy-unavailable', 'The Python interpreter cannot import mypy.', parsed.detail);
+    if (parsed.kind === 'stopped') return refusal('mypy-usage-error', 'mypy could not read its configuration or arguments.', parsed.detail);
+    return parsed;
+  } catch (error) {
+    return refusal('mypy-probe-unavailable', 'The mypy closure probe did not answer in the form this adapter reads.', String(error));
+  }
+}
+
+function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, closure: Closure, input: DecideInput<R>): MypyDecision<R> {
   const detail = [execution.stderr.trim(), execution.stdout.trim()].filter(Boolean).join('\n');
   if (INVALID_CODE.test(detail)) return refusal('mypy-unknown-rule', 'The installed mypy does not know a selected error code.', detail);
   if (execution.stderr.trim()) {
@@ -239,6 +265,9 @@ function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, 
       nameless.map(f => `${f.file}:${f.line ?? '?'}: ${f.message}`).join('\n'));
   }
 
+  const uncovered = judgeCoverage(closure, input.allow, input.root);
+  if (uncovered) return problem(uncovered);
+
   const display = (file: string): string => displayPath(input.root, resolve(input.cwd, file));
   const breaches: Breach<R>[] = [];
   const unresolved: MypyFinding[] = [];
@@ -255,10 +284,17 @@ function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, 
       'mypy could not resolve some imports and typed them as Any, so other rules saw less than they should. Install the package or its stubs, or allow unresolved-imports.',
       unresolved.map(f => `${f.file}:${f.line ?? '?'}: ${f.message}`).join('\n'));
   }
-  const unused = new Set(errors.filter(f => f.code === 'unused-ignore').map(f => keyOf(input.cwd, f.file, f.line)));
+  const dead = errors.filter(f => f.code === 'unreachable' && !ownerOf('unreachable', input.selected));
+  if (dead.length && !input.allow.has('unreachable-code')) {
+    return refusal('mypy-unreachable-code',
+      'mypy found code it considers unreachable, which it never checks. Remove it, select unreachable, or allow unreachable-code.',
+      dead.map(f => `${f.file}:${f.line ?? '?'}: ${f.message}`).join('\n'));
+  }
+  const key = (file: string, line: number | null): string => `${resolve(input.cwd, file)}:${line ?? '?'}`;
+  const unused = unusedIgnores(errors.filter(f => f.code === 'unused-ignore'), (file, line) => key(file, line));
   const hiding = input.allow.has('type-ignore')
     ? []
-    : hidingIgnores(facts, [...input.selected.keys()], unused, (file, line) => keyOf(input.cwd, file, line));
+    : hidingIgnores(closure, [...input.selected.keys()], unused, (file, line) => key(file, line));
   if (hiding.length) {
     return refusal('mypy-ignore-comments',
       'A `# type: ignore` comment suppressed an error that a selected rule could have reported. Remove it, or allow type-ignore.',

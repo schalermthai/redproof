@@ -2,13 +2,22 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { Allowance } from './options.ts';
 import { ignoreCodes, parseMypyVersion, relatedCodes, signalCodes } from './model.ts';
 
-/** What mypy itself says it will do, read by the probe before the check runs. */
-type FileFacts = {
+/** One file mypy loaded, with what no option shows about it. */
+export type LoadedFile = {
+  readonly module: string;
+  /** Absolute. */
   readonly path: string;
+  readonly stub: boolean;
   readonly unreadable: string | null;
   readonly ignores: readonly { readonly line: number; readonly codes: readonly string[] | null; readonly top: boolean }[];
   readonly inline: readonly { readonly line: number; readonly text: string }[];
+  readonly noTypeCheck: readonly number[];
 };
+
+/** Everything mypy loaded, and every Python file the named paths hold, found without mypy's discovery rules. */
+export type Closure = { readonly modules: readonly LoadedFile[]; readonly promised: readonly string[] };
+
+/** What mypy itself says it will do, read by the probe before the check runs. */
 
 export type Facts = {
   readonly mypyVersion: string;
@@ -22,7 +31,6 @@ export type Facts = {
   readonly changed: Readonly<Record<string, unknown>>;
   /** Per-module sections: pattern to the settings that section sets. */
   readonly sections: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
-  readonly files: readonly FileFacts[];
 };
 
 export type ProbeOutput =
@@ -77,10 +85,32 @@ export function parseProbe(output: string): ProbeOutput {
       }),
       changed: object(data.changed, 'changed settings'),
       sections: Object.fromEntries(Object.entries(sections).map(([pattern, values]) => [pattern, object(values, 'section')])),
-      files: list(data.files, 'files').map((item): FileFacts => {
-        const file = object(item, 'file');
+    },
+  };
+}
+
+export type ClosureOutput =
+  | { readonly kind: 'closure'; readonly closure: Closure }
+  | { readonly kind: 'blocked'; readonly messages: readonly string[] }
+  | { readonly kind: 'unavailable'; readonly detail: string }
+  | { readonly kind: 'stopped'; readonly detail: string };
+
+export function parseClosure(output: string): ClosureOutput {
+  const data = object(JSON.parse(output), 'result');
+  if (data.kind === 'unavailable') return { kind: 'unavailable', detail: text(data.detail, 'detail') };
+  if (data.kind === 'stopped') return { kind: 'stopped', detail: [data.stderr, data.stdout].filter(x => typeof x === 'string' && x).join('\n') };
+  if (data.kind === 'blocked') return { kind: 'blocked', messages: list(data.messages, 'messages').map(String) };
+  if (data.kind !== 'closure') throw new Error('The mypy closure probe answered with something that is not a closure.');
+  return {
+    kind: 'closure',
+    closure: {
+      promised: list(data.promised, 'promised').map(item => text(item, 'promised path')),
+      modules: list(data.modules, 'modules').map((item): LoadedFile => {
+        const file = object(item, 'module');
         return {
-          path: text(file.path, 'file path'),
+          module: text(file.module, 'module name'),
+          path: text(file.path, 'module path'),
+          stub: file.stub === true,
           unreadable: typeof file.unreadable === 'string' ? file.unreadable : null,
           ignores: list(file.ignores, 'ignores').map(entry => {
             const ignore = object(entry, 'ignore');
@@ -91,6 +121,7 @@ export function parseProbe(output: string): ProbeOutput {
             const comment = object(entry, 'inline comment');
             return { line: Number(comment.line), text: text(comment.text, 'inline text') };
           }),
+          noTypeCheck: list(file.noTypeCheck, 'noTypeCheck').map(Number),
         };
       }),
     },
@@ -246,37 +277,78 @@ export function judgeFacts(input: PolicyInput): Problem | undefined {
       'The configuration sets something this adapter has not vetted as unable to hide a finding or change the tree.', unvetted);
   }
 
-  const comments = facts.files.flatMap(file => file.inline.map(entry => `${file.path}:${entry.line}: # mypy: ${entry.text}`));
+  return undefined;
+}
+
+/**
+ * What mypy loaded against what the Gate promised, and what the loaded files say about themselves. This is the one
+ * place that compares "checked" with "promised": a Python file under a named path that mypy did not load (a `.py`
+ * beside a `.pyi`, a hidden directory, anything mypy's own discovery skips) is unchecked, and so is the body of a
+ * `@no_type_check` function. Imported files are held to the same comment rules as named ones, because mypy reports
+ * their errors too.
+ */
+export function judgeCoverage(closure: Closure, allow: ReadonlySet<Allowance>, root: string): Problem | undefined {
+  const loaded = new Set(closure.modules.map(file => file.path));
+  const missing = closure.promised.filter(path => !loaded.has(path)).map(path => relative(root, path) || path);
+  if (missing.length && !allow.has('skipped-files')) {
+    return refused('mypy-files-unchecked',
+      'mypy did not load some Python files under the named paths (a .py beside a .pyi, a hidden directory, a skipped folder), so nothing there was checked. Rename or move them, or allow skipped-files.', missing);
+  }
+  const unreadable = closure.modules.filter(file => file.unreadable !== null).map(file => `${file.path}: ${file.unreadable}`);
+  if (unreadable.length) return refused('mypy-source-unreadable', 'A source file could not be read to look for ignore comments.', unreadable);
+  const comments = closure.modules.flatMap(file => file.inline.map(entry => `${file.path}:${entry.line}: # mypy: ${entry.text}`));
   if (comments.length && !allow.has('inline-config')) {
     return refused('mypy-inline-config', 'A source file configures mypy for itself with a `# mypy:` comment, which can hide findings.', comments);
   }
-  const unreadable = facts.files.filter(file => file.unreadable !== null).map(file => `${file.path}: ${file.unreadable}`);
-  if (unreadable.length) return refused('mypy-source-unreadable', 'A source file could not be read to look for ignore comments.', unreadable);
-  const wholeFile = facts.files.flatMap(file => file.ignores.filter(ignore => ignore.top).map(ignore => `${file.path}:${ignore.line}`));
+  const skipped = closure.modules.flatMap(file => file.noTypeCheck.map(line => `${file.path}:${line}`));
+  if (skipped.length && !allow.has('no-type-check')) {
+    return refused('mypy-no-type-check', 'A function or class is decorated with @no_type_check, so mypy skips its body without a word.', skipped);
+  }
+  const wholeFile = closure.modules.flatMap(file => file.ignores.filter(ignore => ignore.top).map(ignore => `${file.path}:${ignore.line}`));
   if (wholeFile.length && !allow.has('type-ignore')) {
     return refused('mypy-ignore-comments', 'A `# type: ignore` before the first statement makes mypy skip the whole file.', wholeFile);
   }
   return undefined;
 }
 
+/** The codes one `unused-ignore` finding says were unused: all of them (null) or only the listed ones. */
+const UNUSED_IGNORE = /^Unused "type: ignore(?:\[([^\]]*)\])?" comment/u;
+
+/** Keyed by file and line. Null means the whole comment was unused; a message in any other shape is not recorded at all. */
+export function unusedIgnores(
+  findings: readonly { readonly file: string; readonly line: number | null; readonly message: string }[],
+  key: (path: string, line: number) => string,
+): ReadonlyMap<string, readonly string[] | null> {
+  const unused = new Map<string, readonly string[] | null>();
+  for (const finding of findings) {
+    const parsed = UNUSED_IGNORE.exec(finding.message);
+    if (!parsed || finding.line === null) continue;
+    unused.set(key(finding.file, finding.line), parsed[1] === undefined ? null : parsed[1].split(',').map(code => code.trim()).filter(Boolean));
+  }
+  return unused;
+}
+
 /**
  * After the run: `# type: ignore` comments that suppressed something relevant. `--warn-unused-ignores` is forced,
- * so an ignore that hid nothing came back as an `unused-ignore` finding; every other one hid a real error, and
- * if that error could have been one of the selected rules the verdict would be a lie.
+ * so a code on an ignore that hid nothing came back in an `unused-ignore` finding; the codes left over each hid a
+ * real error, and if that error could have been one of the selected rules the verdict would be a lie. A comment
+ * that lists several codes is judged code by code: one unused code says nothing about the others.
  */
 export function hidingIgnores(
-  facts: Facts,
+  closure: Closure,
   selected: readonly string[],
-  unused: ReadonlySet<string>,
+  unused: ReadonlyMap<string, readonly string[] | null>,
   key: (path: string, line: number) => string,
 ): readonly string[] {
   const watched = selected.filter(code => !ignoreCodes.includes(code) && !signalCodes.includes(code));
   if (!watched.length) return [];
   const hiding: string[] = [];
-  for (const file of facts.files) {
+  for (const file of closure.modules) {
     for (const ignore of file.ignores) {
-      if (unused.has(key(file.path, ignore.line))) continue;
-      const relevant = ignore.codes === null || ignore.codes.some(code => watched.some(chosen => relatedCodes(chosen, code)));
+      const said = unused.get(key(file.path, ignore.line));
+      if (said === null) continue; // the whole comment hid nothing
+      const used = ignore.codes === null ? null : ignore.codes.filter(code => !said?.includes(code));
+      const relevant = used === null || used.some(code => watched.some(chosen => relatedCodes(chosen, code)));
       if (relevant) hiding.push(`${file.path}:${ignore.line}: # type: ignore${ignore.codes ? `[${ignore.codes.join(',')}]` : ''}`);
     }
   }

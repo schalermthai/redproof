@@ -1,0 +1,1 @@
+{"kind": "closure", "mypyVersion": "2.4.1", "modules": [{"module": "a", "path": "<ROOT>/a.py", "stub": false, "unreadable": null, "ignores": [], "inline": [{"line": 1, "text": "ignore-errors"}], "noTypeCheck": []}], "promised": ["<ROOT>/a.py"]}

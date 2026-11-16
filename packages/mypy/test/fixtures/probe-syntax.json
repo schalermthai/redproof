@@ -1,1 +1,1 @@
-{"kind": "facts", "mypyVersion": "2.4.1", "hostVersion": [3, 15], "hostPlatform": "darwin", "configFile": null, "stdout": "", "stderr": "", "sources": [{"path": "./a.py", "module": "a"}], "changed": {"config_file": null}, "sections": {}, "files": [{"path": "./a.py", "unreadable": null, "ignores": [], "inline": []}]}
+{"kind": "facts", "mypyVersion": "2.4.1", "hostVersion": [3, 15], "hostPlatform": "darwin", "configFile": null, "stdout": "", "stderr": "", "sources": [{"path": "./a.py", "module": "a"}], "changed": {"config_file": null}, "sections": {}}

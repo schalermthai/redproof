@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { runAdapterTck, type AdapterTckSpec, type EvidenceObservation } from '@redproof/adapter-tck';
 import { mypy } from '../src/index.ts';
 import { hasMypy, python, readFixture, replayPython, withFiles } from './support/workspace.ts';
@@ -12,7 +13,8 @@ const adapter = mypy({ rules });
 const checked = (name: string): Promise<EvidenceObservation> => withFiles({ 'a.py': 'x: int = 1\n' }, async root => {
   const run = JSON.parse((await readFixture(`run-${name}.json`)).replaceAll('<ROOT>', root)) as { exitCode: number; stdout: string; stderr: string };
   const probe = (await readFixture(`probe-${name}.json`)).replaceAll('<ROOT>', root);
-  const command = await replayPython(root, probe, run.stdout, run.exitCode, run.stderr);
+  const closure = (await readFixture(`closure-${name}.json`)).replaceAll('<ROOT>', realpathSync(root));
+  const command = await replayPython(root, probe, run.stdout, run.exitCode, run.stderr, closure);
   const subject = mypy({ rules, python: command, pythonVersion: '3.13', platform: 'linux' });
   return { kind: 'checked', result: await subject.check.run({ root, rules: ['mypy/assignment'] }) };
 });

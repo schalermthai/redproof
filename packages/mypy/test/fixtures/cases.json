@@ -416,10 +416,10 @@
  {
   "code": "truthy-function",
   "red": {
-   "a.py": "def f() -> None: ...\nif f:\n    pass\n"
+   "a.py": "def f() -> int:\n    return 1\nif f:\n    pass\n"
   },
   "green": {
-   "a.py": "def f() -> None: ...\nif f():\n    pass\n"
+   "a.py": "def f() -> int:\n    return 1\nif f():\n    pass\n"
   }
  },
  {
