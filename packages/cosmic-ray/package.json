@@ -1,0 +1,34 @@
+{
+  "name": "@redproof/cosmic-ray",
+  "version": "0.12.0",
+  "description": "Redproof adapter for Python mutation testing with cosmic-ray.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "redproof": "0.12.0"
+  },
+  "devDependencies": {
+    "@redproof/adapter-tck": "0.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schalermthai/redproof.git",
+    "directory": "packages/cosmic-ray"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "Apache-2.0"
+}
