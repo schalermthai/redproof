@@ -85,6 +85,19 @@ jobs:
       - name: Install Ruff
         run: pipx install ruff==0.17.5
 
+      # The @redproof/mypy native tests run the real tool and are required to run.
+      - name: Install Python for mypy
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Point the native tests at mypy
+        run: |
+          python -m venv "$RUNNER_TEMP/mypy-venv"
+          "$RUNNER_TEMP/mypy-venv/bin/python" -m pip install mypy==2.4.1
+          echo "REDPROOF_MYPY_PYTHON=$RUNNER_TEMP/mypy-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_MYPY_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Run the full project check
         run: npm run check
 

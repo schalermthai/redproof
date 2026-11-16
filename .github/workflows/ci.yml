@@ -55,6 +55,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/mypy-venv"
           "$RUNNER_TEMP/mypy-venv/bin/python" -m pip install mypy==2.4.1
           echo "REDPROOF_MYPY_PYTHON=$RUNNER_TEMP/mypy-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_MYPY_REQUIRED=1" >> "$GITHUB_ENV"
 
       - name: Run quality and integration checks
         run: npm run check:quality
@@ -123,6 +124,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/mypy-venv"
           "$RUNNER_TEMP/mypy-venv/bin/python" -m pip install mypy==2.4.1
           echo "REDPROOF_MYPY_PYTHON=$RUNNER_TEMP/mypy-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_MYPY_REQUIRED=1" >> "$GITHUB_ENV"
 
       - name: Build the proof runtime
         run: npm run build
