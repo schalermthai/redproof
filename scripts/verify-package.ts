@@ -24,6 +24,7 @@ const PACKAGES = [
   { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
   { name: '@redproof/ruff', tarballPrefix: 'redproof-ruff-', probe: 'ruff' },
   { name: '@redproof/coverage-py', tarballPrefix: 'redproof-coverage-py-', probe: 'coveragePy' },
+  { name: '@redproof/vulture', tarballPrefix: 'redproof-vulture-', probe: 'vulture' },
 ] as const;
 
 // Node refuses to strip types under node_modules, so shipped source is unusable.
@@ -346,6 +347,9 @@ assert.equal(missing.verdict, 'refuse', JSON.stringify(missing));
     + "import { coveragePy } from '@redproof/coverage-py';\n"
     + "export const pyCoverage = coveragePy({ args: ['-m', 'pytest'], rules: { lineCoverage: { minimum: 90 }, perFileMinimum: { minimum: 60, metric: 'branches' } } });\n"
     + "export const pyCoverageId: 'coverage-py/line-coverage' = pyCoverage.rules.lineCoverage.id;\n"
+    + "import { vulture } from '@redproof/vulture';\n"
+    + "export const deadCode = vulture({ command: 'vulture', minConfidence: 80, rules: { imports: 'unused-import', unreachable: 'unreachable-code' } });\n"
+    + "export const deadCodeId: 'vulture/unused-import' = deadCode.rules.imports.id;\n"
     + "import { knip } from '@redproof/knip';\n"
     + "export const unused = knip({ rules: { files: 'files', unusedExports: 'exports' }, timeoutMs: 1000 });\n"
     + "const rule = defineRule({ id: 'consumer/command', description: 'command succeeds' });\n"

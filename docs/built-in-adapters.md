@@ -15,6 +15,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
+| A Python project has no dead code | [`@redproof/vulture`](#vulture) |
 | A command succeeds based on its exit code | [Command Checks](./commands.md) |
 | Something not covered here | [Custom Adapter](./custom-adapter.md) |
 
@@ -615,6 +616,27 @@ Your Ruff configuration decides the scope, so `exclude`, `per-file-ignores` and 
 A missing Ruff, an unknown rule code, a broken configuration, an unreadable or unparseable file, a missing path, an empty file list, or a Ruff older than 0.4.10 is REFUSE, not PASS.
 
 See the [Ruff package](../packages/ruff/README.md) for every REFUSE code and what the configuration can hide.
+## vulture
+
+Select the kinds of dead Python code you want absent:
+
+```ts
+import { vulture } from '@redproof/vulture';
+import { defineGate } from 'redproof';
+
+const adapter = vulture({
+  command: '.venv/bin/vulture',
+  paths: ['src'],
+  minConfidence: 80,
+  rules: { imports: 'unused-import', unreachable: 'unreachable-code' },
+});
+
+export default defineGate({ id: 'python-dead-code', adapter });
+```
+
+Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) decides which findings count. vulture only prints text, so the adapter parses `file:line: unused X 'name' (NN% confidence)` and REFUSES on any line it does not understand. A project's own `[tool.vulture]` is not read unless you pass `configFile`, because its `exclude` could hide findings. vulture exits 0 after skipping a file it cannot parse and prints that only on stderr, even when it also exits 3 for findings elsewhere, so the adapter reads stderr on every exit and REFUSES when a file was not read, when no Python file would be read, and when the run did not finish.
+
+See the [vulture package](../packages/vulture/README.md) for every refusal and blind spot.
 
 ## Coverage
 
