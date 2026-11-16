@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The @redproof/ruff tests run the real Ruff.
+      - name: Install Ruff
+        run: pipx install ruff==0.17.5
       # The @redproof/coverage-py native tests run the real tool; they are only
       # registered when this interpreter is found.
       - name: Install coverage.py for the native adapter tests
@@ -110,6 +113,10 @@ jobs:
 
       - name: Build the proof runtime
         run: npm run build
+
+      # The test-health Gate runs the @redproof/ruff tests, which run the real Ruff.
+      - name: Install Ruff
+        run: pipx install ruff==0.17.5
 
       - name: Run the proofs of one Gate
         run: npm run check:proofs -- gates/${{ matrix.gate }}.ts

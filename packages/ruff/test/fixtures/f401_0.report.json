@@ -1,0 +1,527 @@
+[
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 17,
+      "row": 2
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import os",
+          "end_location": {
+            "column": 21,
+            "row": 2
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Remove unused import: `functools`"
+    },
+    "location": {
+      "column": 8,
+      "row": 2
+    },
+    "message": "`functools` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 2,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 16,
+      "row": 6
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from collections import (\n    Counter,\n    namedtuple,\n)",
+          "end_location": {
+            "column": 2,
+            "row": 8
+          },
+          "location": {
+            "column": 1,
+            "row": 4
+          }
+        }
+      ],
+      "message": "Remove unused import: `collections.OrderedDict`"
+    },
+    "location": {
+      "column": 5,
+      "row": 6
+    },
+    "message": "`collections.OrderedDict` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 6,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 24,
+      "row": 12
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 12
+          }
+        }
+      ],
+      "message": "Remove unused import: `logging.handlers`"
+    },
+    "location": {
+      "column": 8,
+      "row": 12
+    },
+    "message": "`logging.handlers` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 12,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 18,
+      "row": 32
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 33
+          },
+          "location": {
+            "column": 1,
+            "row": 32
+          }
+        }
+      ],
+      "message": "Remove unused import: `shelve`"
+    },
+    "location": {
+      "column": 12,
+      "row": 32
+    },
+    "message": "`shelve` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 32,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 21,
+      "row": 33
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 34
+          },
+          "location": {
+            "column": 1,
+            "row": 33
+          }
+        }
+      ],
+      "message": "Remove unused import: `importlib`"
+    },
+    "location": {
+      "column": 12,
+      "row": 33
+    },
+    "message": "`importlib` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 33,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 19,
+      "row": 37
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 38
+          },
+          "location": {
+            "column": 1,
+            "row": 37
+          }
+        }
+      ],
+      "message": "Remove unused import: `pathlib`"
+    },
+    "location": {
+      "column": 12,
+      "row": 37
+    },
+    "message": "`pathlib` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 37,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 22,
+      "row": 52
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "pass",
+          "end_location": {
+            "column": 22,
+            "row": 52
+          },
+          "location": {
+            "column": 9,
+            "row": 52
+          }
+        }
+      ],
+      "message": "Remove unused import: `pickle`"
+    },
+    "location": {
+      "column": 16,
+      "row": 52
+    },
+    "message": "`pickle` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 52,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 17,
+      "row": 93
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 94
+          },
+          "location": {
+            "column": 1,
+            "row": 93
+          }
+        }
+      ],
+      "message": "Remove unused import: `x`"
+    },
+    "location": {
+      "column": 16,
+      "row": 93
+    },
+    "message": "`x` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 93,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 17,
+      "row": 94
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 95
+          },
+          "location": {
+            "column": 1,
+            "row": 94
+          }
+        }
+      ],
+      "message": "Remove unused import: `y`"
+    },
+    "location": {
+      "column": 16,
+      "row": 94
+    },
+    "message": "`y` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 94,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 19,
+      "row": 99
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 100
+          },
+          "location": {
+            "column": 1,
+            "row": 99
+          }
+        }
+      ],
+      "message": "Remove unused import: `foo.bar.baz`"
+    },
+    "location": {
+      "column": 8,
+      "row": 99
+    },
+    "message": "`foo.bar.baz` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 99,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 14,
+      "row": 105
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 106
+          },
+          "location": {
+            "column": 1,
+            "row": 105
+          }
+        }
+      ],
+      "message": "Remove unused import: `a1`"
+    },
+    "location": {
+      "column": 12,
+      "row": 105
+    },
+    "message": "`a1` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 105,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 14,
+      "row": 107
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 108
+          },
+          "location": {
+            "column": 1,
+            "row": 107
+          }
+        }
+      ],
+      "message": "Remove unused import: `a2`"
+    },
+    "location": {
+      "column": 12,
+      "row": 107
+    },
+    "message": "`a2` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 107,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 18,
+      "row": 112
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 113
+          },
+          "location": {
+            "column": 1,
+            "row": 112
+          }
+        }
+      ],
+      "message": "Remove unused import: `b1`"
+    },
+    "location": {
+      "column": 16,
+      "row": 112
+    },
+    "message": "`b1` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 112,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 18,
+      "row": 114
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 115
+          },
+          "location": {
+            "column": 1,
+            "row": 114
+          }
+        }
+      ],
+      "message": "Remove unused import: `b2`"
+    },
+    "location": {
+      "column": 16,
+      "row": 114
+    },
+    "message": "`b2` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 114,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 5,
+      "row": 122
+    },
+    "filename": "<ROOT>/F401_0.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 123
+          },
+          "location": {
+            "column": 1,
+            "row": 121
+          }
+        }
+      ],
+      "message": "Remove unused import: `datameta_client_lib.model_helpers.noqa`"
+    },
+    "location": {
+      "column": 1,
+      "row": 122
+    },
+    "message": "`datameta_client_lib.model_helpers.noqa` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 122,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  }
+]

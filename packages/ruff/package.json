@@ -1,0 +1,34 @@
+{
+  "name": "@redproof/ruff",
+  "version": "0.12.0",
+  "description": "Redproof adapter for Ruff lint findings.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "redproof": "0.12.0"
+  },
+  "devDependencies": {
+    "@redproof/adapter-tck": "0.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schalermthai/redproof.git",
+    "directory": "packages/ruff"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "Apache-2.0"
+}

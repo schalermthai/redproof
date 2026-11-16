@@ -13,6 +13,7 @@ const dependencies = dependencyCruiser({
     'packages/testing/src',
     'packages/knip/src',
     'packages/istanbul/src',
+    'packages/ruff/src',
     'packages/coverage-py/src',
     'tests',
     'packages/*/test',

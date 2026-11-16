@@ -22,6 +22,7 @@ const PACKAGES = [
   { name: '@redproof/knip', tarballPrefix: 'redproof-knip-', probe: 'knip' },
   { name: '@redproof/testing', tarballPrefix: 'redproof-testing-', probe: 'testing' },
   { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
+  { name: '@redproof/ruff', tarballPrefix: 'redproof-ruff-', probe: 'ruff' },
   { name: '@redproof/coverage-py', tarballPrefix: 'redproof-coverage-py-', probe: 'coveragePy' },
 ] as const;
 
@@ -221,6 +222,43 @@ assert.equal(red.breaches[0].rule, 'knip/unused-exports');
   const knipRuntime = tryRun('node', ['probe-knip.mjs'], consumer);
   report(knipRuntime.ok, '@redproof/knip: packed reporter runs native GREEN and RED checks',
     knipRuntime.ok ? '' : knipRuntime.output.slice(0, 500));
+
+  await writeFile(join(consumer, 'probe-ruff.mjs'), `
+import assert from 'node:assert/strict';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { ruff } from '@redproof/ruff';
+const root = resolve('ruff-smoke');
+await mkdir(root);
+await writeFile(resolve(root, 'a.py'), 'import os\\n');
+// A stand-in executable, so packaging is verified without installing Python tools in the consumer.
+const standIn = resolve(root, 'ruff-stand-in.mjs');
+await writeFile(standIn, [
+  '#!/usr/bin/env node',
+  "import { readFileSync } from 'node:fs';",
+  'const args = process.argv.slice(2);',
+  "const file = process.cwd() + '/a.py';",
+  "if (args.includes('--version')) { console.log('ruff 0.17.5'); process.exit(0); }",
+  "if (args.includes('--show-files')) { console.log(file); process.exit(0); }",
+  "const bad = !readFileSync(file, 'utf8').includes('print');",
+  "console.log(JSON.stringify(bad ? [{ code: 'F401', message: 'unused', filename: file, location: { row: 1, column: 8 } }] : []));",
+  'process.exit(bad ? 1 : 0);',
+].join('\\n'));
+await chmod(standIn, 0o755);
+const adapter = ruff({ command: standIn, rules: { unusedImports: 'F401' } });
+const run = () => adapter.check.run({ root, rules: ['ruff/F401'] });
+const red = await run();
+assert.equal(red.verdict, 'fail', JSON.stringify(red));
+assert.equal(red.breaches[0].rule, 'ruff/F401');
+await writeFile(resolve(root, 'a.py'), 'import os\\nprint(os.name)\\n');
+const green = await run();
+assert.equal(green.verdict, 'pass', JSON.stringify(green));
+const missing = await ruff({ command: resolve(root, 'absent'), rules: { unusedImports: 'F401' } }).check.run({ root, rules: ['ruff/F401'] });
+assert.equal(missing.verdict, 'refuse', JSON.stringify(missing));
+`);
+  const ruffRuntime = tryRun('node', ['probe-ruff.mjs'], consumer);
+  report(ruffRuntime.ok, '@redproof/ruff: packed adapter runs FAIL, PASS and REFUSE through a stand-in executable',
+    ruffRuntime.ok ? '' : ruffRuntime.output.slice(0, 500));
 
   console.log('\n5. Run the redproof command line tool on a real project');
   await mkdir(join(consumer, 'gates'), { recursive: true });

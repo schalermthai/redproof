@@ -53,6 +53,16 @@
         "src/**/*.ts",
         "test/**/*.ts"
       ]
+    },
+    "packages/ruff": {
+      "entry": [
+        "src/index.ts",
+        "test/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+      ]
     }
   }
 }

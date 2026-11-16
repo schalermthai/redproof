@@ -13,6 +13,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Architecture rules from dependency-cruiser hold | [`@redproof/dependency-cruiser`](#dependency-cruiser) |
 | Mutation-testing requirements hold | [`@redproof/stryker`](#stryker) |
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
+| Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
 | A command succeeds based on its exit code | [Command Checks](./commands.md) |
 | Something not covered here | [Custom Adapter](./custom-adapter.md) |
@@ -587,6 +588,33 @@ export default defineGate({ id: 'unused-code', adapter });
 The Knip configuration decides the scope. A selected category that the Knip configuration disables is REFUSE, not PASS.
 
 See the [Knip package](../packages/knip/README.md) for every category and its Rule ID.
+
+## Ruff
+
+Select Ruff rule codes or whole families. Each selector becomes a Rule named `ruff/<selector>`:
+
+```ts
+import { ruff } from '@redproof/ruff';
+import { defineGate } from 'redproof';
+
+const adapter = ruff({
+  paths: ['src', 'tests'],
+  rules: {
+    unusedImports: 'F401',
+    noAssert: 'S101',
+    bandit: 'S',
+  },
+});
+
+export default defineGate({ id: 'python-lint', adapter });
+```
+
+Any finding of a selected rule breaches that Rule. Ruff exits 1 when it finds something; that is a FAIL, not a crash.
+Your Ruff configuration decides the scope, so `exclude`, `per-file-ignores` and `# noqa` still apply. Set `isolated: true` to ignore all discovered configuration.
+
+A missing Ruff, an unknown rule code, a broken configuration, an unreadable or unparseable file, a missing path, an empty file list, or a Ruff older than 0.4.10 is REFUSE, not PASS.
+
+See the [Ruff package](../packages/ruff/README.md) for every REFUSE code and what the configuration can hide.
 
 ## Coverage
 
