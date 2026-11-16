@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export type Files = Readonly<Record<string, string>>;
+export type Files = Readonly<Record<string, string | Buffer>>;
 
 export const fixtures = fileURLToPath(new URL('../fixtures/', import.meta.url));
 export const readFixture = (name: string): Promise<string> => readFile(join(fixtures, name), 'utf8');
@@ -48,7 +48,7 @@ export async function withFiles<T>(files: Files, action: (root: string) => Promi
 /** The closure a one-file project `a.py` gives, as the closure probe would print it. */
 export const closureOf = (root: string): string => {
   const path = `${realpathSync(root)}/a.py`;
-  return JSON.stringify({ kind: 'closure', mypyVersion: '2.4.1', modules: [{ module: 'a', path, stub: false, unreadable: null, ignores: [], inline: [], noTypeCheck: [] }], promised: [path] });
+  return JSON.stringify({ kind: 'closure', mypyVersion: '2.4.1', modules: [{ module: 'a', path, stub: false, unjudgeable: null, ignores: [], wholeFile: false, inlineOptions: [], noTypeCheck: [] }], promised: [path] });
 };
 
 /**

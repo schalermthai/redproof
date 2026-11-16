@@ -254,6 +254,11 @@ function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, 
     return refusal('mypy-not-evaluated', 'mypy skipped the body of an untyped function, so its rules did not run there.',
       unchecked.map(f => `${f.file}:${f.line ?? '?'}`).join('\n'));
   }
+  // With an unresolved import and many_errors_threshold, mypy hides most later errors and says so in a note.
+  const suppressed = findings.filter(finding => finding.message.startsWith('(Skipping most remaining errors'));
+  if (suppressed.length) {
+    return refusal('mypy-errors-suppressed', 'mypy stopped reporting most remaining errors after an unresolved import, so rules did not get to report.', suppressed[0]!.message);
+  }
   const syntax = errors.filter(finding => finding.code === 'syntax');
   if (syntax.length) {
     return refusal('mypy-syntax-error', 'mypy could not parse some files, so its rules were not evaluated there.',

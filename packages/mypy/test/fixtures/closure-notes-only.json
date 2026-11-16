@@ -1,1 +1,1 @@
-{"kind": "closure", "mypyVersion": "2.4.1", "modules": [{"module": "a", "path": "<ROOT>/a.py", "stub": false, "unreadable": null, "ignores": [], "inline": [], "noTypeCheck": []}], "promised": ["<ROOT>/a.py"]}
+{"kind": "closure", "mypyVersion": "2.4.1", "modules": [{"module": "a", "path": "<ROOT>/a.py", "stub": false, "unjudgeable": null, "ignores": [], "wholeFile": false, "inlineOptions": [], "noTypeCheck": []}], "promised": ["<ROOT>/a.py"]}

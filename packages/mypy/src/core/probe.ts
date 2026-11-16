@@ -102,11 +102,12 @@ emit({
  * The second Python the shell runs, after the configuration was judged: it builds the program the way mypy will and
  * reports everything mypy LOADED (not only the files named), so what mypy checked can be compared with what the Gate
  * promised. For every loaded file that is not typeshed or an installed package it reads what no option shows:
- * `# mypy:` file comments, `# type: ignore` comments, and `@no_type_check` (mypy skips such a body silently).
+ * file-level options, `# type: ignore` comments, and `@no_type_check` (mypy skips such a body silently), all taken from mypy's
+ * own parse of the file, never from a second lexer.
  * It also walks the named paths on its own, without mypy's discovery rules, to list every Python file the Gate promised.
  */
 export const CLOSURE_SCRIPT = String.raw`
-import ast, contextlib, io, json, os, re, sys, tokenize
+import contextlib, io, json, os, sys
 
 def emit(value):
     sys.stdout.write(json.dumps(value))
@@ -117,7 +118,6 @@ try:
     from mypy import build
     from mypy.errors import CompileError
     from mypy.main import process_options
-    from mypy.util import get_mypy_comments
 except BaseException as error:
     emit({"kind": "unavailable", "detail": repr(error)})
     sys.exit(0)
@@ -138,21 +138,12 @@ except CompileError as error:
     emit({"kind": "blocked", "messages": [str(m) for m in list(error.messages)[:5]]})
     sys.exit(0)
 
-TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore\b(?:\[([^\]]*)\])?")
-CODE = re.compile(r"^[a-z][a-z0-9-]*$")
-def codes_of(found):
-    # An empty or odd list ([], [ ], [,], [Bad Code]) is judged like a bare ignore: it must never read as "hides nothing".
-    if found.group(1) is None:
-        return None
-    codes = [c.strip() for c in found.group(1).split(",")]
-    return codes if codes and all(CODE.match(c) for c in codes) else None
-
 NO_TYPE_CHECK = ("typing.no_type_check", "typing_extensions.no_type_check")
 
 def resolved_no_type_check(tree):
     """Decorators mypy RESOLVED to typing.no_type_check, however they were imported or re-exported. Walks the
     statement containers by name because a compiled mypy's visitor classes cannot be subclassed from Python."""
-    from mypy.nodes import Decorator, Node, RefExpr, CallExpr
+    from mypy.nodes import CallExpr, ClassDef, Decorator, Node, RefExpr
     lines, seen = [], set()
     def refers(expr):
         if isinstance(expr, CallExpr):
@@ -173,66 +164,57 @@ def resolved_no_type_check(tree):
             decorators = getattr(node, "original_decorators", None) or node.decorators
             if any(refers(d) for d in decorators):
                 lines.append(node.func.line)
+        if isinstance(node, ClassDef) and any(refers(d) for d in node.decorators):
+            lines.append(node.line)
         for name in ("defs", "body", "else_body", "finally_body", "handlers", "bodies", "items", "impl", "func"):
             child = getattr(node, name, None)
             if child is not None:
                 walk(child)
     walk(tree)
-    return lines
+    return sorted(set(lines))
 
-def no_type_check_names(tree):
-    names = {"no_type_check"}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                if alias.name == "no_type_check" and alias.asname:
-                    names.add(alias.asname)
-    return names
-
-def no_type_check_lines(text):
-    try:
-        tree = ast.parse(text)
-    except (SyntaxError, ValueError):
-        return []
-    names = no_type_check_names(tree)
-    lines = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            for decorator in node.decorator_list:
-                target = decorator.func if isinstance(decorator, ast.Call) else decorator
-                name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else None
-                if name in names:
-                    lines.append(decorator.lineno)
-    return lines
-
-def scan(path, tree=None):
+def has_code_lines(path):
+    """True when some line holds anything but whitespace or a comment. Only used to tell a module mypy emptied from one that was
+    empty to begin with, and only ever in the direction of refusing: any doubt (another encoding, odd bytes) reads as code."""
     try:
         with open(path, "rb") as handle:
-            text = handle.read().decode("utf-8", errors="replace")
-    except OSError as error:
-        return {"unreadable": repr(error), "ignores": [], "inline": [], "noTypeCheck": []}
-    ignores = []
+            data = handle.read()
+    except OSError:
+        return True
+    for line in data.replace(b"\r", b"\n").split(b"\n"):
+        stripped = line.strip()
+        if stripped and not stripped.startswith(b"#"):
+            return True
+    return False
+
+def whole_file_ignored(tree, path):
+    """A type: ignore before the first statement skips the whole module. mypy 1.11 keeps the body as an unreachable block; mypy 2.x
+    keeps no body at all, so a module with no statements whose file still holds code is the same thing."""
+    from mypy.nodes import Block
+    body = tree.defs
+    if len(body) == 1 and isinstance(body[0], Block) and bool(getattr(body[0], "is_unreachable", False)):
+        return True
+    return len(body) == 0 and has_code_lines(path)
+
+def judge(state):
+    """Everything the adapter knows about one loaded file comes from mypy's own parse of it: no second lexer, no second decoder."""
+    tree = state.tree
+    if tree is None:
+        return {"unjudgeable": "mypy did not keep the parsed tree of this file", "ignores": [], "wholeFile": False, "inlineOptions": [], "noTypeCheck": []}
     try:
-        seen_code = False
-        for token in tokenize.generate_tokens(io.StringIO(text).readline):
-            if token.type == tokenize.COMMENT:
-                found = TYPE_IGNORE.search(token.string)
-                if found:
-                    ignores.append({"line": token.start[0], "codes": codes_of(found), "top": not seen_code})
-            elif token.type not in (tokenize.NL, tokenize.NEWLINE, tokenize.ENCODING, tokenize.INDENT, tokenize.DEDENT, tokenize.ENDMARKER):
-                seen_code = True
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        ignores = []
-        for number, line in enumerate(text.split("\n"), 1):
-            found = TYPE_IGNORE.search(line)
-            if found:
-                ignores.append({"line": number, "codes": codes_of(found), "top": False})
-    return {
-        "unreadable": None,
-        "ignores": ignores,
-        "inline": [{"line": number, "text": body} for number, body in get_mypy_comments(text)],
-        "noTypeCheck": sorted(set(no_type_check_lines(text)) | set(resolved_no_type_check(tree) if tree is not None else [])),
-    }
+        recorded = dict(tree.ignored_lines)
+    except AttributeError:
+        return {"unjudgeable": "this mypy does not record ignored_lines on its parsed tree", "ignores": [], "wholeFile": False, "inlineOptions": [], "noTypeCheck": []}
+    ignores = []
+    for line, codes in sorted(recorded.items()):
+        kept = [c for c in codes if c]
+        # No codes, or only empty ones: mypy treats the comment as a bare ignore.
+        ignores.append({"line": line, "codes": kept if kept else None})
+    reference = options.clone_for_module(state.id)
+    inline = [name for name in sorted(dir(state.options))
+              if not name.startswith("_") and not callable(getattr(state.options, name))
+              and getattr(state.options, name) != getattr(reference, name, None)]
+    return {"unjudgeable": None, "ignores": ignores, "wholeFile": whole_file_ignored(tree, state.path), "inlineOptions": inline, "noTypeCheck": resolved_no_type_check(tree)}
 
 # What mypy reports errors for is mypy's own call (ignore_all is False), not a list of directory names kept here:
 # installed packages, typeshed and silent imports are ignore_all; everything else, dist-packages included, is checked.
@@ -241,7 +223,7 @@ for name, state in sorted(result.graph.items()):
     path = state.path
     if not path or state.ignore_all or not os.path.isfile(path):
         continue
-    modules.append({"module": name, "path": os.path.abspath(path), "stub": bool(getattr(state.tree, "is_stub", False)), **scan(path, state.tree)})
+    modules.append({"module": name, "path": os.path.abspath(path), "stub": bool(getattr(state.tree, "is_stub", False)), **judge(state)})
 
 # Every Python file under a named directory is promised: no skip list, so what mypy's own discovery leaves out is found, not assumed.
 promised = []

@@ -173,7 +173,7 @@ test('type: ignore comments: used ones hide findings and REFUSE, unused ones do 
 });
 
 test('an ignore that names another code does not hide the selected rule', async () => {
-  const closure = tweakClosure('ignores', c => { c.modules[0].ignores = [{ line: 1, codes: ['arg-type'], top: false }]; });
+  const closure = tweakClosure('ignores', c => { c.modules[0].ignores = [{ line: 1, codes: ['arg-type'], }]; });
   const decision = await decide('ignores', { closure, run: done('', 0) });
   assert.equal(decision.kind, 'evidence');
 });
@@ -262,23 +262,23 @@ test('each allowance accepts exactly the setting it names', async () => {
 });
 
 const coverageCases: ReadonlyArray<readonly [string, Allowance, string, (closure: Record<string, any>) => void]> = [
-  ['a mypy comment in a source file', 'inline-config', 'mypy-inline-config', c => { c.modules[0].inline = [{ line: 1, text: 'ignore-errors' }]; }],
-  ['a type: ignore before the first statement', 'type-ignore', 'mypy-ignore-comments', c => { c.modules[0].ignores = [{ line: 1, codes: null, top: true }]; }],
-  ['an unreadable source', 'type-ignore', 'mypy-source-unreadable', c => { c.modules[0].unreadable = 'EACCES'; }],
+  ['a mypy comment in a source file', 'inline-config', 'mypy-inline-config', c => { c.modules[0].inlineOptions = ['ignore_errors']; }],
+  ['a type: ignore before the first statement', 'type-ignore', 'mypy-ignore-comments', c => { c.modules[0].wholeFile = true; }],
+  ['a file mypy gave no record of', 'type-ignore', 'mypy-ignores-unjudgeable', c => { c.modules[0].unjudgeable = 'no ignored_lines'; }],
   ['@no_type_check', 'no-type-check', 'mypy-no-type-check', c => { c.modules[0].noTypeCheck = [3]; }],
   ['a Python file mypy never loaded (a .py beside a .pyi, a hidden directory)', 'skipped-files', 'mypy-files-unchecked', c => { c.promised.push('<ROOT>/hidden/.x/b.py'); }],
   ['a # mypy: comment in a file reached only through an import', 'inline-config', 'mypy-inline-config', c => {
-    c.modules.push({ module: 'lib', path: '<ROOT>/lib.py', stub: false, unreadable: null, ignores: [], inline: [{ line: 1, text: 'ignore-errors' }], noTypeCheck: [] });
+    c.modules.push({ module: 'lib', path: '<ROOT>/lib.py', stub: false, unjudgeable: null, ignores: [], wholeFile: false, inlineOptions: ['ignore_errors'], noTypeCheck: [] });
   }],
   ['a whole-file type: ignore in a file reached only through an import', 'type-ignore', 'mypy-ignore-comments', c => {
-    c.modules.push({ module: 'lib', path: '<ROOT>/lib.py', stub: false, unreadable: null, ignores: [{ line: 1, codes: null, top: true }], inline: [], noTypeCheck: [] });
+    c.modules.push({ module: 'lib', path: '<ROOT>/lib.py', stub: false, unjudgeable: null, ignores: [], wholeFile: true, inlineOptions: [], noTypeCheck: [] });
   }],
 ];
 for (const [name, allowance, code, edit] of coverageCases) {
   test(`REFUSE, never PASS: ${name}; only ${allowance} accepts it`, async () => {
     const closure = tweakClosure('clean', edit);
     refusedWith(await decide('clean', { closure }), code);
-    if (code !== 'mypy-source-unreadable') {
+    if (code !== 'mypy-ignores-unjudgeable') {
       assert.equal((await decide('clean', { closure, allow: [allowance], run: done('', 0) })).kind, 'evidence');
       const other = allowance === 'skipped-files' ? 'no-type-check' : 'skipped-files';
       refusedWith(await decide('clean', { closure, allow: [other] }), code);
@@ -287,12 +287,12 @@ for (const [name, allowance, code, edit] of coverageCases) {
 }
 
 test('a type: ignore listing several codes is judged code by code (one unused code says nothing about the others)', async () => {
-  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'call-arg'], top: false }]; });
+  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'call-arg'], }]; });
   const unusedCall = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[call-arg]" comment' })}\n`;
   refusedWith(await decide('clean', { closure, run: done(unusedCall, 1) }), 'mypy-ignore-comments');
   const bothUnused = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[assignment, call-arg]" comment' })}\n`;
   assert.equal((await decide('clean', { closure, run: done(bothUnused, 1) })).kind, 'evidence');
-  const two = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'arg-type'], top: false }]; });
+  const two = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'arg-type'], }]; });
   const unusedAssign = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[assignment]" comment' })}\n`;
   refusedWith(await decide('clean', { closure: two, codes: ['arg-type'], run: done(unusedAssign, 1) }), 'mypy-ignore-comments');
   assert.equal((await decide('clean', { closure: two, codes: ['call-arg'], run: done(unusedAssign, 1) })).kind, 'evidence', 'the used code is arg-type, which does not hide call-arg');
@@ -360,24 +360,38 @@ test('law: the verdict does not depend on the order mypy printed its findings', 
 });
 
 test('B4: "use narrower" means the comment WAS used (its code suppressed a sub-code), not that it hid nothing', async () => {
-  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment'], top: false }]; });
+  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment'], }]; });
   const narrower = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore" comment, use narrower [method-assign] instead of [assignment] code' })}\n`;
   refusedWith(await decide('clean', { closure, codes: ['method-assign'], run: done(narrower, 1) }), 'mypy-ignore-comments');
-  const several = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'call-arg'], top: false }]; });
+  const several = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: ['assignment', 'call-arg'], }]; });
   const mixed = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[assignment, call-arg]" comment, use narrower [method-assign] instead of [assignment] code' })}\n`;
   refusedWith(await decide('clean', { closure: several, codes: ['method-assign'], run: done(mixed, 1) }), 'mypy-ignore-comments');
   assert.equal((await decide('clean', { closure: several, codes: ['assignment'], run: done(mixed, 1) })).kind, 'refuse');
 });
 
-test('B5: an empty or malformed code list is judged like a bare ignore', async () => {
-  for (const codes of [[], [''], ['Bad Code'], ['a b']]) {
-    const probe = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes, top: false }]; });
-    refusedWith(await decide('clean', { closure: probe }), 'mypy-ignore-comments');
-  }
+test('B5: an empty code list is a bare ignore', async () => {
+  const probe = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: [] }]; });
+  refusedWith(await decide('clean', { closure: probe }), 'mypy-ignore-comments');
+});
+
+test('B10: a bare comment is skipped only when mypy also says it is bare', async () => {
+  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: null }]; });
+  const listed = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore[misc]" comment' })}
+`;
+  refusedWith(await decide('clean', { closure, run: done(listed, 1) }), 'mypy-ignore-comments');
+  const bare = `${row({ line: 1, column: -1, code: 'unused-ignore', message: 'Unused "type: ignore" comment' })}
+`;
+  assert.equal((await decide('clean', { closure, run: done(bare, 1) })).kind, 'evidence');
+});
+
+test('B12: the note mypy prints when it stops reporting errors is a refusal', async () => {
+  const note = done(`${row({ severity: 'note', code: null, message: '(Skipping most remaining errors due to unresolved imports or missing stubs; fix these first)' })}
+`, 1);
+  refusedWith(await decide('clean', { run: note }), 'mypy-errors-suppressed');
 });
 
 test('B6: an ignore that hides a SELECTED signal rule is examined like any other', async () => {
-  const ignored = (codes: string[] | null) => tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes, top: false }]; });
+  const ignored = (codes: string[] | null) => tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes, }]; });
   for (const code of ['import-not-found', 'unreachable']) {
     refusedWith(await decide('clean', { closure: ignored(null), codes: [code] }), 'mypy-ignore-comments');
     refusedWith(await decide('clean', { closure: ignored([code]), codes: [code] }), 'mypy-ignore-comments');
@@ -385,7 +399,7 @@ test('B6: an ignore that hides a SELECTED signal rule is examined like any other
 });
 
 test('I4: a code-listed ignore of a signal code defeats the unresolved-import and unreachable guards, so it refuses like a bare one', async () => {
-  const ignored = (codes: string[] | null) => tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes, top: false }]; });
+  const ignored = (codes: string[] | null) => tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes, }]; });
   refusedWith(await decide('clean', { closure: ignored(['import-not-found']) }), 'mypy-ignore-comments');
   refusedWith(await decide('clean', { closure: ignored(['unreachable']) }), 'mypy-ignore-comments');
   assert.equal((await decide('clean', { closure: ignored(['import-not-found']), allow: ['unresolved-imports'], run: done('', 0) })).kind, 'evidence');
@@ -394,7 +408,7 @@ test('I4: a code-listed ignore of a signal code defeats the unresolved-import an
 });
 
 test('every wording of an unused-ignore message mypy has is understood; anything else REFUSES', async () => {
-  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: null, top: false }]; });
+  const closure = tweakClosure('clean', c => { c.modules[0].ignores = [{ line: 1, codes: null, }]; });
   const says = (message: string) => done(`${row({ line: 1, column: -1, code: 'unused-ignore', message })}\n`, 1);
   assert.equal((await decide('clean', { closure, run: says('Unused "type: ignore" comment') })).kind, 'evidence');
   for (const odd of ['Unused "type: ignore" comment.', 'Unused "type: ignore[Assignment]" comment', 'unused "type: ignore" comment',

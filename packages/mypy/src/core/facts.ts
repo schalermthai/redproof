@@ -8,9 +8,14 @@ type LoadedFile = {
   /** Absolute. */
   readonly path: string;
   readonly stub: boolean;
-  readonly unreadable: string | null;
-  readonly ignores: readonly { readonly line: number; readonly codes: readonly string[] | null; readonly top: boolean }[];
-  readonly inline: readonly { readonly line: number; readonly text: string }[];
+  /** Why mypy's own parse of this file cannot be used to judge its ignores (the adapter refuses rather than re-parse the text). */
+  readonly unjudgeable: string | null;
+  /** What mypy itself recorded: line to the codes it parsed (null: a bare ignore). */
+  readonly ignores: readonly { readonly line: number; readonly codes: readonly string[] | null }[];
+  /** A `# type: ignore` before the first statement: mypy skips the whole module. */
+  readonly wholeFile: boolean;
+  /** Options this file changes for itself (a `# mypy:` comment), by name. */
+  readonly inlineOptions: readonly string[];
   readonly noTypeCheck: readonly number[];
 };
 
@@ -111,18 +116,14 @@ export function parseClosure(output: string): ClosureOutput {
           module: text(file.module, 'module name'),
           path: text(file.path, 'module path'),
           stub: file.stub === true,
-          unreadable: typeof file.unreadable === 'string' ? file.unreadable : null,
+          unjudgeable: typeof file.unjudgeable === 'string' ? file.unjudgeable : null,
           ignores: list(file.ignores, 'ignores').map(entry => {
             const ignore = object(entry, 'ignore');
-            const listed = ignore.codes === null ? null : list(ignore.codes, 'ignore codes').map(code => text(code, 'ignore code'));
-            // An empty or malformed list is judged like a bare ignore: it must never read as "hides nothing".
-            const codes = listed !== null && listed.length > 0 && listed.every(code => /^[a-z][a-z0-9-]*$/u.test(code)) ? listed : null;
-            return { line: Number(ignore.line), codes, top: ignore.top === true };
+            const codes = ignore.codes === null ? null : list(ignore.codes, 'ignore codes').map(code => text(code, 'ignore code'));
+            return { line: Number(ignore.line), codes: codes !== null && codes.length === 0 ? null : codes };
           }),
-          inline: list(file.inline, 'inline').map(entry => {
-            const comment = object(entry, 'inline comment');
-            return { line: Number(comment.line), text: text(comment.text, 'inline text') };
-          }),
+          wholeFile: file.wholeFile === true,
+          inlineOptions: list(file.inlineOptions, 'inlineOptions').map(name => text(name, 'option name')),
           noTypeCheck: list(file.noTypeCheck, 'noTypeCheck').map(Number),
         };
       }),
@@ -145,7 +146,7 @@ export function withinRoot(root: string, actual: string): boolean {
  */
 const HARMLESS = new Set([
   'cache_dir', 'cache_fine_grained', 'color_output', 'config_file', 'error_summary', 'fast_exit', 'fixed_format_cache',
-  'hide_error_codes', 'incremental', 'many_errors_threshold', 'num_workers', 'pretty', 'show_absolute_path',
+  'hide_error_codes', 'incremental', 'num_workers', 'pretty', 'show_absolute_path',
   'show_column_numbers', 'show_error_code_links', 'show_error_context', 'show_error_end', 'skip_cache_mtime_checks',
   'skip_version_check', 'sqlite_cache', 'sqlite_num_shards', 'files', 'namespace_packages',
   'explicit_package_bases', 'package_root', 'enable_incomplete_feature', 'enable_error_code', 'enabled_error_codes',
@@ -300,17 +301,19 @@ export function judgeCoverage(closure: Closure, allow: ReadonlySet<Allowance>, r
     return refused('mypy-files-unchecked',
       'mypy did not load some Python files under the named paths (a .py beside a .pyi, a hidden directory, a skipped folder), so nothing there was checked. Rename or move them, or allow skipped-files.', missing);
   }
-  const unreadable = closure.modules.filter(file => file.unreadable !== null).map(file => `${file.path}: ${file.unreadable}`);
-  if (unreadable.length) return refused('mypy-source-unreadable', 'A source file could not be read to look for ignore comments.', unreadable);
-  const comments = closure.modules.flatMap(file => file.inline.map(entry => `${file.path}:${entry.line}: # mypy: ${entry.text}`));
-  if (comments.length && !allow.has('inline-config')) {
-    return refused('mypy-inline-config', 'A source file configures mypy for itself with a `# mypy:` comment, which can hide findings.', comments);
+  const unjudgeable = closure.modules.filter(file => file.unjudgeable !== null).map(file => `${file.path}: ${file.unjudgeable}`);
+  if (unjudgeable.length) {
+    return refused('mypy-ignores-unjudgeable', 'mypy did not give its own record of a file\'s ignore comments, and this adapter will not guess by reading the text itself.', unjudgeable);
+  }
+  const inline = closure.modules.filter(file => file.inlineOptions.length).map(file => `${file.path}: ${file.inlineOptions.join(', ')}`);
+  if (inline.length && !allow.has('inline-config')) {
+    return refused('mypy-inline-config', 'A source file changes mypy options for itself (a `# mypy:` comment), which can hide findings.', inline);
   }
   const skipped = closure.modules.flatMap(file => file.noTypeCheck.map(line => `${file.path}:${line}`));
   if (skipped.length && !allow.has('no-type-check')) {
     return refused('mypy-no-type-check', 'A function or class is decorated with @no_type_check, so mypy skips its body without a word.', skipped);
   }
-  const wholeFile = closure.modules.flatMap(file => file.ignores.filter(ignore => ignore.top).map(ignore => `${file.path}:${ignore.line}`));
+  const wholeFile = closure.modules.filter(file => file.wholeFile).map(file => file.path);
   if (wholeFile.length && !allow.has('type-ignore')) {
     return refused('mypy-ignore-comments', 'A `# type: ignore` before the first statement makes mypy skip the whole file.', wholeFile);
   }
@@ -385,9 +388,13 @@ export function hidingIgnores(
       const said = unused.get(key(file.path, ignore.line));
       let used: readonly string[] | null = ignore.codes;
       if (said !== undefined) {
-        if (ignore.codes === null) continue; // a bare ignore that hid nothing
-        const unusedCodes = (said.listed ?? ignore.codes).filter(code => !said.narrowed.includes(code));
-        used = ignore.codes.filter(code => !unusedCodes.includes(code));
+        // A bare ignore may be skipped only when mypy says the same: a bare message for a bare comment.
+        if (ignore.codes === null) {
+          if (said.listed === null) continue;
+        } else {
+          const unusedCodes = (said.listed ?? ignore.codes).filter(code => !said.narrowed.includes(code));
+          used = ignore.codes.filter(code => !unusedCodes.includes(code));
+        }
       }
       const relevant = used === null || used.some(code => watched.some(chosen => relatedCodes(chosen, code)));
       if (relevant) hiding.push(`${file.path}:${ignore.line}: # type: ignore${ignore.codes ? `[${ignore.codes.join(',')}]` : ''}`);
