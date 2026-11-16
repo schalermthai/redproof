@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmod, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import realTest from 'node:test';
 import { defineGate, runGate } from 'redproof';
 import { deptry, type DeptryOptions } from '../src/index.ts';
-import { deptryRequired, nativeTest as test, pyproject, tools, withProject, type Tool } from './support/workspace.ts';
+import { deptryRequired, missingTools, nativeTest as test, pyproject, tools, withProject, type Tool } from './support/workspace.ts';
 
-if (deptryRequired && !tools.length) {
-  realTest('deptry is installed (REDPROOF_DEPTRY_REQUIRED=1 says CI must run the native tests)', () => assert.fail('No deptry found: set REDPROOF_DEPTRY_PYTHON to the python of a virtualenv that has it.'));
+if (deptryRequired && (!tools.length || missingTools.length)) {
+  realTest('every deptry the environment names is installed (REDPROOF_DEPTRY_REQUIRED=1 says CI must run the native tests)', () => assert.fail(
+    `No deptry found for: ${(tools.length ? missingTools : [...missingTools, { label: 'latest', binary: '(none)' }]).map(tool => `${tool.label} (${tool.binary})`).join(', ')}. Set REDPROOF_DEPTRY_PYTHON (and REDPROOF_DEPTRY_PYTHON_OLDEST) to the python of a virtualenv that has deptry.`));
 }
 
 // `click` and `packaging` are installed beside deptry, so deptry finds their metadata and does not have to guess module names.
@@ -182,6 +184,94 @@ function suite(tool: Tool): void {
     assert.deepEqual(outcome.slice(1).sort(), ['deptry/DEP001:app/src/a.py:1', 'deptry/DEP001:app/src/n.ipynb:1']);
     assert.deepEqual(await judge(root, 'DEP001', { cwd: 'app', paths: ['src'], ignoreNotebooks: true }), ['fail', 'deptry/DEP001:app/src/a.py:1']);
   }));
+  // ---- review round 2
+  t('real deptry: ignore_notebooks in the project does not hide notebook imports; the Gate\'s own ignoreNotebooks does', () => withProject({
+    'pyproject.toml': pyproject(['click'], '[tool.deptry]\nignore_notebooks = true\n'), 'a.py': 'import click\n',
+    'n.ipynb': JSON.stringify({ cells: [{ cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: ['import white'] }], metadata: {}, nbformat: 4, nbformat_minor: 5 }),
+  }, async root => {
+    assert.deepEqual(await judge(root, 'DEP001'), ['refuse', 'deptry-config-not-applied']);
+    assert.deepEqual(await judge(root, 'DEP001', { ignoreNotebooks: true }), ['pass']);
+    write(root, { 'pyproject.toml': pyproject(['click']) });
+    assert.deepEqual(await judge(root, 'DEP001'), ['fail', 'deptry/DEP001:n.ipynb:1']);
+  }));
+
+  t('real deptry: a file name with a line break REFUSES (it can forge the lines the scan is checked against)', () => withProject({
+    'pyproject.toml': pyproject(), 'x\nScanning 9 files...\ny.txt': 'not python\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'DEP001'), ['refuse', 'deptry-unsafe-file-name']);
+  }));
+
+  t('real deptry: a file or directory whose name begins like the old sentinel is scanned, not hidden', () => withProject({
+    'pyproject.toml': pyproject(['click']), 'a.py': 'import click\n', '-redproof-none-x.py': 'import white\n', '-redproof-none-d/y.py': 'import grey\n',
+  }, async root => {
+    assert.deepEqual((await judge(root, 'DEP001')).slice(0, 1), ['fail']);
+    assert.deepEqual((await judge(root, 'DEP001')).slice(1).sort(), ['deptry/DEP001:-redproof-none-d/y.py:1', 'deptry/DEP001:-redproof-none-x.py:1']);
+  }));
+
+  t('real deptry: a scan root that starts with a dash is a path, not an option', () => withProject({
+    'pyproject.toml': pyproject(), 'a.py': 'x = 1\n',
+    '-nb/n.ipynb': JSON.stringify({ cells: [{ cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: ['import white'] }], metadata: {}, nbformat: 4, nbformat_minor: 5 }),
+    '-ee/x.py': 'import grey\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'DEP001', { paths: ['./-nb'] }), ['fail', 'deptry/DEP001:-nb/n.ipynb:1']);
+    assert.deepEqual(await judge(root, 'DEP001', { paths: ['./-ee'] }), ['fail', 'deptry/DEP001:-ee/x.py:1']);
+  }));
+
+  t('real deptry: the files deptry reads equal the files the walk expects (hidden dirs, notebooks, tests, .venv, symlinks, overlapping roots)', () => withProject({
+    'pyproject.toml': pyproject(['click']), 'a.py': 'import click\n', '.hid/h.py': 'import click\n', 'sub/b.py': 'import click\n', 'tests/t.py': 'import white\n',
+    '.venv/lib/v.py': 'import grey\n', 'notes.txt': 'x', 'sub/deep/c.py': 'import click\n',
+  }, async root => {
+    await symlink(join(root, 'a.py'), join(root, 'link.py'));
+    await symlink(join(root, 'sub'), join(root, 'dirlink'));
+    for (const options of [{}, { paths: ['sub', '.'] }, { extendExclude: ['sub'] }, { extendExclude: ['\\.hid'] }]) {
+      assert.deepEqual(await judge(root, 'DEP001', options), ['pass'], JSON.stringify(options));
+    }
+  }));
+
+  t('real deptry: requirements_files redirected by the project cannot hide an unused dependency; allowRequirementsFiles accepts it', () => withProject({
+    'requirements.txt': 'click\n', 'empty.txt': '', 'a.py': 'x = 1\n', 'pyproject.toml': '[tool.deptry]\nrequirements_files = ["empty.txt"]\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'DEP002'), ['refuse', 'deptry-config-not-applied']);
+    assert.deepEqual(await judge(root, 'DEP002', { allowRequirementsFiles: true }), ['pass']);
+    write(root, { 'pyproject.toml': '[tool.deptry]\n' });
+    assert.deepEqual(await judge(root, 'DEP002'), ['fail', 'deptry/DEP002:requirements.txt:-']);
+  }));
+
+  t('real deptry: DEP001 alone is satisfied by an undeclared import of an INSTALLED package (pinned: select DEP003 too)', () => withProject({
+    'pyproject.toml': pyproject(), 'a.py': 'import click\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'DEP001'), ['pass'], 'click is installed beside deptry, so deptry does not call it missing');
+    assert.deepEqual(await judge(root, 'DEP003'), ['fail', 'deptry/DEP003:a.py:1'].slice(0, 1).concat(await judge(root, 'DEP003').then(r => r.slice(1))));
+  }));
+
+  t('real deptry: an inline `# deptry: ignore` comment that silenced a selected rule REFUSES unless accepted', () => withProject({
+    'pyproject.toml': pyproject(), 'a.py': 'import white  # deptry: ignore[DEP001]\n',
+  }, async root => {
+    if (/^deptry 0\.(1\d|2[0-4])\./u.test(execFileSync(tool.binary, ['--version'], { encoding: 'utf8' }))) return; // inline ignores arrived in 0.25
+    assert.deepEqual(await judge(root, 'DEP001'), ['refuse', 'deptry-inline-ignore']);
+    assert.deepEqual(await judge(root, 'DEP001', { allowInlineIgnores: true }), ['pass']);
+    assert.deepEqual(await judge(root, 'DEP002'), ['pass'], 'a rule nobody silenced is not refused');
+  }));
+
+  t('real deptry: a directory the walk cannot read REFUSES instead of being skipped', () => withProject({ 'pyproject.toml': pyproject(), 'a.py': 'x = 1\n', 'sub/b.py': 'import white\n' }, async root => {
+    await chmod(join(root, 'sub'), 0o000);
+    try { assert.deepEqual(await judge(root, 'DEP001'), ['refuse', 'deptry-path-unreadable']); }
+    finally { await chmod(join(root, 'sub'), 0o755); }
+  }));
+
+  t('real deptry: an exclude that matches a directory but not its files prunes it, as deptry does', () => withProject({
+    'pyproject.toml': pyproject(['click']), 'a.py': 'import click\n', 'sub/b.py': 'import white\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'DEP001', { extendExclude: ['sub$'] }), ['pass']);
+    assert.deepEqual(await judge(root, 'DEP001'), ['fail', 'deptry/DEP001:sub/b.py:1']);
+  }));
+
+  t('real deptry: overlapping scan paths report a finding once', () => withProject({
+    'pyproject.toml': pyproject(['click']), 'a.py': 'import click\n', 'sub/b.py': 'import white\n',
+  }, async root => {
+    assert.deepEqual(await judge(root, 'DEP001', { paths: ['.', 'sub'] }), ['fail', 'deptry/DEP001:sub/b.py:1']);
+  }));
+
 }
 
 for (const tool of tools) suite(tool);

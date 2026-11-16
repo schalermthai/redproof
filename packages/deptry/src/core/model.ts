@@ -8,7 +8,7 @@ export const isDeptryCode = (value: unknown): value is DeptryCode =>
   typeof value === 'string' && (DEPTRY_CODES as readonly string[]).includes(value);
 
 const SUMMARY: Readonly<Record<DeptryCode, string>> = {
-  DEP001: 'every imported module must be declared as a dependency',
+  DEP001: 'no imported module may be unknown, that is neither declared nor provided by an installed package (an undeclared import of an installed package is DEP003, so select both for "everything imported is declared")',
   DEP002: 'every declared dependency must be used',
   DEP003: 'no import may rely on a transitive dependency',
   DEP004: 'no development dependency may be imported by production code',
@@ -79,8 +79,13 @@ export function attribute<R extends RuleRef>(
   displayPath: (file: string) => string,
 ): Attribution<R> {
   const breaches: Breach<R>[] = [];
+  const seen = new Set<string>();
   for (const finding of findings) {
     if (!isDeptryCode(finding.code)) continue;
+    // Overlapping scan paths list a file twice; one finding is one breach.
+    const key = JSON.stringify([finding.code, finding.file, finding.line, finding.column, finding.module]);
+    if (seen.has(key)) continue;
+    seen.add(key);
     const rule = selected.get(finding.code);
     if (!rule) continue;
     breaches.push(breach(rule, {
@@ -110,12 +115,38 @@ export function deptryVersionSupported(version: readonly [number, number, number
 }
 
 const ANSI_ESCAPE = /\u001b\[[0-9;]*m/gu;
-const clean = (text: string): string => text.replace(ANSI_ESCAPE, '');
+const clean = (text: string): string => text.replace(ANSI_ESCAPE, '').replaceAll('\r\n', '\n');
 
-/** How many files deptry says it scanned (`Scanning 3 files...`); null when the line is absent. */
+/**
+ * How many files deptry says it scanned (`Scanning 3 files...`). Null unless the line appears exactly once: a file
+ * name with a line break in it can print a forged copy (deptry logs every file name it skips).
+ */
 export function parseScannedFiles(output: string): number | null {
-  const match = /^Scanning (\d+) files?\.\.\.$/mu.exec(clean(output));
-  return match ? Number(match[1]) : null;
+  const lines = [...clean(output).matchAll(/^Scanning (\d+) files?\.\.\.$/gmu)];
+  return lines.length === 1 ? Number(lines[0]![1]) : null;
+}
+
+/**
+ * The files deptry says it will read, from the block under `Python files to scan for imports:` (as paths relative to
+ * where it ran, `./` removed). Null unless the header appears exactly once and the block is closed by a blank line.
+ */
+export function parseFileList(output: string): readonly string[] | null {
+  const text = clean(output);
+  const header = 'Python files to scan for imports:\n';
+  const start = text.indexOf(header);
+  if (start < 0 || text.indexOf(header, start + header.length) >= 0) return null;
+  const files: string[] = [];
+  const lines = text.slice(start + header.length).split('\n');
+  for (const line of lines) {
+    if (line === '') return files;
+    files.push(line);
+  }
+  return null;
+}
+
+/** `deptry-inline-ignore`: violations that a `# deptry: ignore[...]` comment removed from the report (deptry 0.25+ prints one line each). */
+export function inlineIgnoredCodes(output: string): readonly string[] {
+  return [...clean(output).matchAll(/^Ignoring violation (DEP\d{3}) at .+ due to inline ignore comment\.$/gmu)].map(match => match[1]!);
 }
 
 /**
@@ -133,6 +164,23 @@ export const DEPTRY_DEFAULT_EXCLUDE: readonly string[] = ['venv', '\\.venv', '\\
 
 /** A value no module, package or path can have, passed where a project setting would otherwise apply: it silences nothing. */
 export const NOTHING = '-redproof-none-';
+
+/** An `--extend-exclude` regular expression that matches no path (deptry anchors patterns at the start of a relative path, so a made-up name would hide a real file of that name). */
+export const MATCHES_NOTHING = '$^';
+
+/** A scan root that starts with a dash would be read by deptry as an option. */
+export const scanRoot = (relative: string): string => (relative.startsWith('-') ? `./${relative}` : relative);
+
+/** Whether deptry's walker lists an entry: `*.py`, and `*.ipynb` unless notebooks are ignored; a file, or a symbolic link that leads to one. */
+export function isScannedEntry(name: string, kind: { readonly file: boolean; readonly symlinkToFile: boolean }, ignoreNotebooks: boolean): boolean {
+  return (name.endsWith('.py') || (!ignoreNotebooks && name.endsWith('.ipynb'))) && (kind.file || kind.symlinkToFile);
+}
+
+/** deptry's `--exclude` and `--extend-exclude` are one regular expression, anchored at the start of the path relative to where it ran. */
+export function excludedPath(patterns: readonly string[]): (relativePath: string) => boolean {
+  const regex = patterns.length ? new RegExp(`^(${patterns.join('|')})`, 'u') : null;
+  return path => regex !== null && regex.test(path);
+}
 
 /** Python's `repr` of a tuple of strings, for the strings this adapter can pass (no quotes, no control characters). */
 export function pythonTuple(items: readonly string[]): string {

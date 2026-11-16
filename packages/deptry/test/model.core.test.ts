@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   DEPTRY_CODES, DEPTRY_DEFAULT_EXCLUDE, assumedModuleNames, deptryVersionSupported, parseDeptryReport, parseDeptryVersion,
-  parseEchoBlock, parseScannedFiles, pythonTuple, skippedInput,
+  excludedPath, inlineIgnoredCodes, isScannedEntry, parseEchoBlock, parseFileList, parseScannedFiles, pythonTuple, skippedInput,
 } from '../src/core/model.ts';
 import { header, reports } from './support/reports.ts';
 
@@ -79,4 +79,32 @@ test('the configuration echo is read only from its own block, and a block that d
 test('the notices about uninstalled packages are listed', () => {
   assert.deepEqual(assumedModuleNames("Assuming the corresponding module name of package 'pyyaml' is 'pyyaml'. Install the package or configure a package_module_name_map entry to override this behaviour.\nScanning 1 file...\n"), ['pyyaml']);
   assert.deepEqual(assumedModuleNames('Scanning 1 file...'), []);
+});
+
+test('the file list is read from its block, once; the scan line and inline ignores likewise', () => {
+  assert.deepEqual(parseFileList(header(2)), ['a.py', 'b.py']);
+  assert.deepEqual(parseFileList(header(0)), []);
+  assert.equal(parseFileList('nothing'), null);
+  assert.equal(parseFileList(header(1) + header(1)), null, 'two lists: one may be forged');
+  assert.equal(parseFileList('Python files to scan for imports:\na.py'), null, 'a block that never closes');
+  assert.equal(parseScannedFiles(`${header(1)}Scanning 5 files...\n`), null, 'two scan lines');
+  assert.deepEqual(inlineIgnoredCodes('Ignoring violation DEP001 at a.py:2 due to inline ignore comment.\nIgnoring violation DEP003 at b.py:9 due to inline ignore comment.\n'), ['DEP001', 'DEP003']);
+  assert.deepEqual(inlineIgnoredCodes('Ignoring violation DEP001 elsewhere'), []);
+});
+
+test('deptry\'s exclude is one regular expression anchored at the start of the relative path; its types are .py and .ipynb', () => {
+  const excluded = excludedPath(['venv', '\\.venv', 'tests', '$^']);
+  assert.equal(excluded('tests/t.py'), true);
+  assert.equal(excluded('testsuite.py'), true, 'a prefix match, as in deptry');
+  assert.equal(excluded('src/tests/t.py'), false, 'anchored at the start');
+  assert.equal(excluded('-redproof-none-x.py'), false, 'the "matches nothing" pattern hides no real file');
+  assert.equal(excluded(''), true, 'only the empty path matches `$^`');
+  assert.equal(excludedPath([])('anything'), false);
+  const file = { file: true, symlinkToFile: false };
+  assert.equal(isScannedEntry('a.py', file, false), true);
+  assert.equal(isScannedEntry('n.ipynb', file, false), true);
+  assert.equal(isScannedEntry('n.ipynb', file, true), false);
+  assert.equal(isScannedEntry('a.pyi', file, false), false);
+  assert.equal(isScannedEntry('a.py', { file: false, symlinkToFile: true }, false), true);
+  assert.equal(isScannedEntry('a.py', { file: false, symlinkToFile: false }, false), false);
 });

@@ -36,6 +36,10 @@ export type DeptryOptions<M extends Selection = Selection> = {
   readonly allowPackageModuleNameMap?: boolean;
   /** Accept `optional_dependencies_dev_groups` and `non_dev_dependency_groups`: which declared packages count as development. */
   readonly allowDependencyGroups?: boolean;
+  /** Accept `requirements_files` and `requirements_files_dev` from the project: which files hold the declarations when there is no pyproject section. */
+  readonly allowRequirementsFiles?: boolean;
+  /** Accept `# deptry: ignore[...]` comments in source (deptry 0.25+ lists each one it honoured; by default a selected rule that was silenced this way REFUSES). */
+  readonly allowInlineIgnores?: boolean;
   /** The deptry executable. Defaults to `deptry` on PATH; point it at the project's virtualenv. */
   readonly command?: string;
   readonly timeoutMs?: number;
@@ -57,12 +61,14 @@ function validatePatterns(name: string, value: readonly string[] | undefined): v
     if (typeof pattern !== 'string' || !pattern.trim() || pattern.startsWith('-') || /['"\u0000-\u001f]/u.test(pattern)) {
       throw new Error(`deptry ${name} entries must be non-empty, contain no quote or control character and not start with a dash.`);
     }
+    try { new RegExp(pattern, 'u'); } catch { throw new Error(`deptry ${name} entry is not a valid regular expression: ${pattern}`); }
   }
 }
 
 export function validateDeptryOptions(options: DeptryOptions): void {
   rejectUnknownKeys(options, ['rules', 'paths', 'cwd', 'configFile', 'ignoreNotebooks', 'exclude', 'extendExclude',
     'allowPerRuleIgnores', 'allowKnownFirstParty', 'allowPackageModuleNameMap', 'allowDependencyGroups',
+    'allowRequirementsFiles', 'allowInlineIgnores',
     'command', 'timeoutMs', 'maxOutputBytes'], 'deptry adapter');
   const entries = Object.entries(options.rules ?? {});
   if (!entries.length) throw new Error('deptry requires at least one Redproof rule.');
@@ -81,7 +87,7 @@ export function validateDeptryOptions(options: DeptryOptions): void {
   if (options.cwd !== undefined) validatePath('cwd', options.cwd);
   if (options.configFile !== undefined) validatePath('configFile', options.configFile);
   for (const name of ['exclude', 'extendExclude'] as const) validatePatterns(name, options[name]);
-  for (const name of ['ignoreNotebooks', 'allowPerRuleIgnores', 'allowKnownFirstParty', 'allowPackageModuleNameMap', 'allowDependencyGroups'] as const) {
+  for (const name of ['ignoreNotebooks', 'allowPerRuleIgnores', 'allowKnownFirstParty', 'allowPackageModuleNameMap', 'allowDependencyGroups', 'allowRequirementsFiles', 'allowInlineIgnores'] as const) {
     if (options[name] !== undefined && typeof options[name] !== 'boolean') throw new Error(`deptry ${name} must be boolean.`);
   }
   if (options.command !== undefined && (typeof options.command !== 'string' || !options.command.trim())) {

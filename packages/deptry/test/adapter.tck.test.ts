@@ -12,7 +12,7 @@ const PROJECT = { 'pyproject.toml': '[project]\nname="d"\nversion="0.1"\ndepende
  */
 const checked = (reported: string, rule: 'DEP001' | 'DEP002' = 'DEP001'): Promise<EvidenceObservation> => withProject(PROJECT, async root => {
   const report = readFileSync(`${fixtures}${reported}`, 'utf8');
-  const command = await fakeDeptry(root, { report, stderr: header(2), exitCode: reported === 'clean.json' ? 0 : 1 });
+  const command = await fakeDeptry(root, { report, stderr: header(1), exitCode: reported === 'clean.json' ? 0 : 1 });
   const subject = deptry({ rules: { r: rule }, command, allowPerRuleIgnores: true });
   return { kind: 'checked', result: await subject.check.run({ root, rules: [`deptry/${rule}`] }) };
 });

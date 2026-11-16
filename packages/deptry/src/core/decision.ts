@@ -2,8 +2,8 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution, CompletedCommand } from 'redproof/command';
 import {
-  DEPTRY_DEFAULT_EXCLUDE, MINIMUM_DEPTRY_VERSION, NOTHING, assumedModuleNames, attribute, deptryVersionSupported,
-  parseDeptryReport, parseDeptryVersion, parseEchoBlock, parseScannedFiles, pythonTuple, skippedInput,
+  DEPTRY_DEFAULT_EXCLUDE, MATCHES_NOTHING, MINIMUM_DEPTRY_VERSION, NOTHING, assumedModuleNames, attribute, deptryVersionSupported,
+  inlineIgnoredCodes, parseDeptryReport, parseDeptryVersion, parseEchoBlock, parseFileList, parseScannedFiles, pythonTuple, scanRoot, skippedInput,
   type DeptryCode, type DeptryFinding,
 } from './model.ts';
 
@@ -41,11 +41,19 @@ export type DeptryPlan = {
   readonly allowKnownFirstParty?: boolean | undefined;
   readonly allowPackageModuleNameMap?: boolean | undefined;
   readonly allowDependencyGroups?: boolean | undefined;
+  readonly allowRequirementsFiles?: boolean | undefined;
+  readonly allowInlineIgnores?: boolean | undefined;
 };
+
+/** The scan roots as deptry is given them: relative to where it runs, never starting with a dash. */
+export const scanRoots = (plan: DeptryPlan): readonly string[] => plan.paths.map(scanRoot);
+
+/** Every pattern that removes a path from the walk, as deptry joins them. */
+export const excludePatterns = (plan: DeptryPlan): readonly string[] => { const { exclude, extend } = exclusions(plan); return [...exclude, ...extend]; };
 
 const exclusions = (plan: DeptryPlan): { readonly exclude: readonly string[]; readonly extend: readonly string[] } => ({
   exclude: plan.exclude ?? DEPTRY_DEFAULT_EXCLUDE,
-  extend: [...(plan.extendExclude ?? []), NOTHING],
+  extend: [...(plan.extendExclude ?? []), MATCHES_NOTHING],
 });
 
 /**
@@ -68,7 +76,7 @@ export function deptryArguments(plan: DeptryPlan): readonly string[] {
     ...extend.map(pattern => `--extend-exclude=${pattern}`),
     ...(plan.configFile ? [`--config=${plan.configFile}`] : []),
     ...(plan.ignoreNotebooks ? ['--ignore-notebooks'] : []),
-    ...plan.paths,
+    ...scanRoots(plan),
   ];
 }
 
@@ -87,6 +95,11 @@ export function expectedEcho(plan: DeptryPlan): readonly Expectation[] {
     need('exclude', pythonTuple(exclude)),
     need('extend_exclude', pythonTuple(extend)),
     need('using_default_exclude', 'False'),
+    // Project `ignore_notebooks` would hide every notebook import; the Gate's own `ignoreNotebooks` is the only way to turn them off.
+    need('ignore_notebooks', plan.ignoreNotebooks ? 'True' : 'False'),
+    // Which files hold the declarations, when there is no pyproject section (deptry ignores these keys otherwise).
+    need('using_default_requirements_files', plan.allowRequirementsFiles ? null : 'True'),
+    need('requirements_files_dev', plan.allowRequirementsFiles ? null : "('dev-requirements.txt', 'requirements-dev.txt')"),
     // Named differently or absent in some releases: when present they must be untouched.
     maybe('optional_dependencies_dev_groups', plan.allowDependencyGroups ? null : '()'),
     maybe('pep621_dev_dependency_groups', plan.allowDependencyGroups ? null : '()'),
@@ -128,6 +141,8 @@ export function evaluateScan<R extends RuleRef>(
   plan: DeptryPlan,
   selected: ReadonlyMap<DeptryCode, Rule<R>>,
   displayPath: (file: string) => string,
+  /** The files an independent walk expects deptry to read, as deptry prints them (relative to where it ran). */
+  expectedFiles: readonly string[],
 ): DeptryDecision<R> {
   const run = completedOrRefusal(scan.execution);
   if (run.kind === 'refuse') return run;
@@ -150,7 +165,7 @@ export function evaluateScan<R extends RuleRef>(
     }
     if (value !== null && got !== value) {
       return refusal('deptry-config-not-applied', `The project configuration still sets ${key}, which could silence a selected rule.`,
-        `${key}: ${got}\nexpected: ${value}\nSet the matching allow option to accept the project's own value.`);
+        `${key}: ${got}\nexpected: ${value}\n${key === 'ignore_notebooks' ? 'Set ignoreNotebooks on the Gate to leave notebooks out.' : 'Set the matching allow option to accept the project\'s own value.'}`);
     }
   }
 
@@ -161,9 +176,25 @@ export function evaluateScan<R extends RuleRef>(
   if (guessed.length) {
     return refusal('deptry-environment-incomplete', 'deptry could not find these declared packages installed and guessed their module names, so DEP001 to DEP004 may be wrong. Run the project\'s own deptry, or give the packages in package_module_name_map and set allowPackageModuleNameMap.', guessed.join('\n'));
   }
-  const inspected = parseScannedFiles(output);
-  if (inspected === null) return refusal('deptry-scan-unreadable', 'deptry did not say how many files it scanned.', detail);
-  if (inspected === 0) return refusal('deptry-nothing-inspected', 'deptry scanned no Python files, so a pass would mean nothing.', detail);
+  // One check ties what deptry read to what the Gate promised: the list deptry prints of the files it will scan is
+  // compared with an independent walk (same exclude patterns, same file types, no ignore files). The count line
+  // must say the same, and each of the three is accepted only once, so no file name can add a line of its own.
+  const count = parseScannedFiles(output);
+  const listed = parseFileList(output);
+  if (count === null || listed === null) {
+    return refusal('deptry-scan-unreadable', 'deptry did not report, exactly once each, the list of files it scans and how many.', detail);
+  }
+  if (count === 0 && listed.length === 0) return refusal('deptry-nothing-inspected', 'deptry scanned no Python files, so a pass would mean nothing.', detail);
+  if (count !== listed.length) return refusal('deptry-scan-mismatch', `deptry listed ${listed.length} files but says it scanned ${count}.`, detail);
+  const difference = fileListDifference(expectedFiles, listed);
+  if (difference.length) {
+    return refusal('deptry-scan-mismatch', 'The files deptry scanned are not the files the Gate promised (its exclude patterns, notebooks flag and paths): something removed or added files.', difference.join('\n'));
+  }
+  const inspected = listed.length;
+  const ignoredInline = plan.allowInlineIgnores ? [] : inlineIgnoredCodes(output).filter(code => selected.has(code as DeptryCode));
+  if (ignoredInline.length) {
+    return refusal('deptry-inline-ignore', '`# deptry: ignore` comments removed findings of a selected rule from the report. Remove the comments, or set allowInlineIgnores to accept them.', [...new Set(ignoredInline)].join(', '));
+  }
 
   let findings: readonly DeptryFinding[];
   try {
@@ -176,6 +207,19 @@ export function evaluateScan<R extends RuleRef>(
   return { kind: 'evidence', inspected, breaches: attribute(findings, selected, displayPath).breaches };
 }
 
+/** What differs between the expected and the listed files, as `missing: x` / `unexpected: y` lines (a file listed twice counts twice). */
+export function fileListDifference(expected: readonly string[], listed: readonly string[]): readonly string[] {
+  const counts = new Map<string, number>();
+  for (const file of expected) counts.set(file, (counts.get(file) ?? 0) + 1);
+  const unexpected: string[] = [];
+  for (const file of listed) {
+    const left = counts.get(file) ?? 0;
+    if (left > 0) counts.set(file, left - 1); else unexpected.push(file);
+  }
+  const missing = [...counts].flatMap(([file, n]) => Array.from({ length: n }, () => file));
+  return [...missing.map(file => `missing: ${file}`), ...unexpected.map(file => `unexpected: ${file}`)].slice(0, 20);
+}
+
 /** A finding's file as the Gate sees it: relative to the Gate root. `base` is the directory deptry ran in. */
 export function displayPath(root: string, base: string, file: string): string {
   const absolute = isAbsolute(file) ? file : `${base}${sep}${file}`;
@@ -183,13 +227,24 @@ export function displayPath(root: string, base: string, file: string): string {
   return withinRoot(root, absolute) && rel ? rel : file;
 }
 
+/** What the shell found when it walked the scan roots the way deptry will. */
+export type ScanCensus = {
+  /** The files deptry should list, as it prints them. */
+  readonly files: readonly string[];
+  /** Directories that could not be listed: deptry's walker drops them silently. */
+  readonly unreadable: readonly string[];
+  /** Entries (files or directories, excluded ones aside) whose name holds a line break and could forge a line of deptry's log. */
+  readonly unsafeNames: readonly string[];
+};
+
 /** How the shell runs deptry: the only effects the core calls. */
 export type DeptryRunner = {
   readonly version: () => Promise<CommandExecution>;
+  readonly census: () => Promise<ScanCensus>;
   readonly scan: (args: readonly string[]) => Promise<DeptryScan>;
 };
 
-/** The order of a check, in the core so it is testable without deptry: version, then one scan. */
+/** The order of a check, in the core so it is testable without deptry: version, the census of files, then one scan. */
 export async function decideDeptry<R extends RuleRef>(input: {
   readonly plan: DeptryPlan;
   readonly runner: DeptryRunner;
@@ -198,7 +253,14 @@ export async function decideDeptry<R extends RuleRef>(input: {
 }): Promise<DeptryDecision<R>> {
   const unsupported = checkVersion(await input.runner.version());
   if (unsupported) return unsupported;
-  return evaluateScan(await input.runner.scan(deptryArguments(input.plan)), input.plan, input.selected, input.displayPath);
+  const census = await input.runner.census();
+  if (census.unreadable.length) {
+    return refusal('deptry-path-unreadable', 'deptry\'s walker skips directories it cannot read without a word, so the code in them would never be analysed.', census.unreadable.join('\n'));
+  }
+  if (census.unsafeNames.length) {
+    return refusal('deptry-unsafe-file-name', 'A file or directory name holds a line break, which can forge a line of the log the verdict is read from.', JSON.stringify(census.unsafeNames));
+  }
+  return evaluateScan(await input.runner.scan(deptryArguments(input.plan)), input.plan, input.selected, input.displayPath, census.files);
 }
 
 /**

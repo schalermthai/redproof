@@ -14,17 +14,22 @@ const ECHO: ReadonlyArray<readonly [string, string]> = [
   ['root', "(PosixPath('.'),)"], ['config', 'pyproject.toml'], ['no_ansi', 'True'],
   ['per_rule_ignores', "{'DEP001': ('-redproof-none-',)}"], ['ignore', "('',)"],
   ['exclude', "('venv', '\\\\.venv', '\\\\.direnv', 'tests', '\\\\.git', 'setup\\\\.py')"],
-  ['extend_exclude', "('-redproof-none-',)"], ['using_default_exclude', 'False'],
+  ['extend_exclude', "('$^',)"], ['using_default_exclude', 'False'], ['ignore_notebooks', 'False'],
+  ['using_default_requirements_files', 'True'], ['requirements_files_dev', "('dev-requirements.txt', 'requirements-dev.txt')"],
   ['known_first_party', "('',)"], ['package_module_name_map', "{'redproof-none': ('-redproof-none-',)}"],
   ['optional_dependencies_dev_groups', '()'], ['non_dev_dependency_groups', '()'], ['experimental_namespace_package', 'False'],
 ];
 
+/** The names the fake runs use for `n` scanned files: `a.py`, `b.py`, ... (the projects the tests build hold `a.py`). */
+export const filesFor = (n: number): readonly string[] => Array.from({ length: n }, (_, i) => `${String.fromCharCode(97 + i)}.py`);
+
 /**
- * What deptry prints before its findings: the configuration echo, a blank line, the scan line. `changes` replaces the
- * value of a key (or removes the key when `undefined`), so a test can show deptry applying a project setting.
+ * What deptry prints before its findings: the configuration echo, a blank line, the list of files it will scan and
+ * the scan line. `changes` replaces the value of a key (or removes the key when `undefined`), so a test can show
+ * deptry applying a project setting; `files` replaces the listed files (the count line follows `scanned`).
  */
-export function header(scanned: number, changes: Readonly<Record<string, string | undefined>> = {}): string {
+export function header(scanned: number, changes: Readonly<Record<string, string | undefined>> = {}, files: readonly string[] = filesFor(scanned)): string {
   const lines = ECHO.filter(([key]) => !(key in changes && changes[key] === undefined))
     .map(([key, value]) => `${key}: ${key in changes ? changes[key] : value}`);
-  return `Running with the following configuration:\n${lines.join('\n')}\n\nScanning ${scanned} file${scanned === 1 ? '' : 's'}...\n`;
+  return `Running with the following configuration:\n${lines.join('\n')}\n\nPython files to scan for imports:\n${files.map(file => `${file}\n`).join('')}\nScanning ${scanned} file${scanned === 1 ? '' : 's'}...\n`;
 }

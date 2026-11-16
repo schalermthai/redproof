@@ -15,10 +15,15 @@ const tool = (label: string, python: string): Tool => ({ label, python, binary: 
  * The deptrys under test: REDPROOF_DEPTRY_PYTHON (the battle-test venv by default) and, when set,
  * REDPROOF_DEPTRY_PYTHON_OLDEST, the python of a virtualenv with the oldest supported deptry.
  */
-export const tools: readonly Tool[] = [
+const candidates: readonly Tool[] = [
   tool('latest', process.env.REDPROOF_DEPTRY_PYTHON ?? fileURLToPath(new URL('../../../../../23-deptry/.venv/bin/python', import.meta.url))),
   ...(process.env.REDPROOF_DEPTRY_PYTHON_OLDEST ? [tool('oldest', process.env.REDPROOF_DEPTRY_PYTHON_OLDEST)] : []),
-].filter(candidate => existsSync(candidate.binary));
+];
+export const tools: readonly Tool[] = candidates.filter(candidate => existsSync(candidate.binary));
+
+/** Tools whose environment variable is set but whose binary is not there: with REQUIRED set, that must be loud, not a quietly smaller suite. */
+export const missingTools: readonly Tool[] = candidates.filter(candidate => !existsSync(candidate.binary)
+  && (candidate.label === 'oldest' || process.env.REDPROOF_DEPTRY_PYTHON !== undefined));
 
 /** CI sets this beside the virtualenv: a missing deptry there must fail, not silently unregister the native tests. */
 export const deptryRequired: boolean = process.env.REDPROOF_DEPTRY_REQUIRED === '1';
