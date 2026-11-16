@@ -16,7 +16,7 @@ async function fakePython(root: string, fake: Fake): Promise<string> {
   await writeFile(path, `#!/bin/sh
 env > '${root}/env.txt'
 case "$3" in
-  '') touch '${root}/probed'; echo '${fake.config ?? '{"files":[],"omit":[],"exclude":[],"include":[]}'}'; exit ${fake.probeExit ?? 0} ;;
+  '') touch '${root}/probed'; echo '${fake.config ?? '{"files":[],"omit":[],"exclude":[],"include":[],"source":[],"plugins":[]}'}'; exit ${fake.probeExit ?? 0} ;;
   run) exit ${fake.runExit ?? 0} ;;
   json) prev=; for a in "$@"; do [ "$prev" = "-o" ] && out=$a; prev=$a; done
         pwd > '${root}/cwd.txt'; echo "$out" > '${root}/out.txt'
@@ -94,13 +94,13 @@ test('shell: cwd runs the tool in the subdirectory while paths and expectedFiles
 
 test('shell: a project config that omits files or adds exclusions REFUSES; an explicit rcfile accepts it', () => withWorkspace(async root => {
   await writeFile(join(root, 'x.py'), 'a = 1\nb = 2\n'); await writeFile(join(root, 'pyproject.toml'), '');
-  const omits = '{"files":["/w/pyproject.toml"],"omit":["src/bad.py"],"exclude":[],"include":[]}';
+  const omits = '{"files":["/w/pyproject.toml"],"omit":["src/bad.py"],"exclude":[],"include":[],"source":[],"plugins":[]}';
   const refusal = why(await run(root, { report: clean, config: omits }));
   assert.equal(refusal?.code, 'coverage-py-config-excludes');
   assert.match(refusal?.detail ?? '', /omits src\/bad\.py/); assert.match(refusal?.detail ?? '', /rcfile/);
-  assert.match(why(await run(root, { report: clean, config: '{"files":["x"],"omit":[],"exclude":["def g"],"include":[]}' }))?.detail ?? '', /exclusion patterns def g/);
-  assert.match(why(await run(root, { report: clean, config: '{"files":["x"],"omit":[],"exclude":[],"include":["a.py"]}' }))?.detail ?? '', /restricts the report to a\.py/);
-  assert.equal((await run(root, { report: clean, config: '{"files":["x"],"omit":[],"exclude":[],"include":[]}' })).verdict, 'pass'); // config present, nothing excluded
+  assert.match(why(await run(root, { report: clean, config: '{"files":["x"],"omit":[],"exclude":["def g"],"include":[],"source":[],"plugins":[]}' }))?.detail ?? '', /exclusion patterns def g/);
+  assert.match(why(await run(root, { report: clean, config: '{"files":["x"],"omit":[],"exclude":[],"include":["a.py"],"source":[],"plugins":[]}' }))?.detail ?? '', /restricts the report to a\.py/);
+  assert.equal((await run(root, { report: clean, config: '{"files":["x"],"omit":[],"exclude":[],"include":[],"source":[],"plugins":[]}' })).verdict, 'pass'); // config present, nothing excluded
   await writeFile(join(root, 'project.rc'), '');
   assert.equal((await run(root, { report: clean, config: omits }, { rcfile: 'project.rc' })).verdict, 'pass'); // explicit = acknowledged
 }));
@@ -137,4 +137,13 @@ test('shell: a report that measures zero statements REFUSES instead of passing e
   await writeFile(join(root, 'x.py'), '');
   const refusal = why(await run(root, { report: report({ 'x.py': { lines: [0, 0] } }) }));
   assert.equal(refusal?.code, 'coverage-py-evidence-unavailable'); assert.match(refusal?.detail ?? '', /zero statements/);
+}));
+test('shell: config source narrows only when the adapter source is unset; plugins refuse either way; an explicit rcfile accepts both', () => withWorkspace(async root => {
+  await writeFile(join(root, 'x.py'), 'a = 1\nb = 2\n'); await writeFile(join(root, 'project.rc'), '');
+  const base = '"files":["p"],"omit":[],"exclude":[],"include":[]';
+  const sources = `{${base},"source":["pkg.a"],"plugins":[]}`, plugins = `{${base},"source":[],"plugins":["redplug"]}`;
+  assert.match(why(await run(root, { report: clean, config: sources }, { source: undefined }))?.detail ?? '', /measures only pkg\.a/);
+  assert.equal((await run(root, { report: clean, config: sources }, { source: ['.'] })).verdict, 'pass');
+  assert.match(why(await run(root, { report: clean, config: plugins }, { source: ['.'] }))?.detail ?? '', /loads plugins redplug/);
+  assert.equal((await run(root, { report: clean, config: plugins }, { rcfile: 'project.rc' })).verdict, 'pass');
 }));

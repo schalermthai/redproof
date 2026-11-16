@@ -124,3 +124,34 @@ test('real coverage.py: a [report] include or [run] include that narrows the rep
   await writeFile(join(root, '.coveragerc'), '[report]\ninclude = a.py\n');
   assert.deepEqual(await ids(root, { lineCoverage: { minimum: 100 } }, { rcfile: '.coveragerc' }), ['pass']);
 }));
+test('real coverage.py: a program still imports its own siblings and PYTHONPATH modules when PYTHONPATH is set', real, () => withWorkspace(async root => {
+  await mkdir(join(root, 'pkg')); await mkdir(join(root, 'libs'));
+  await writeFile(join(root, 'pkg', '__init__.py'), ''); await writeFile(join(root, 'pkg', 'a.py'), 'def a():\n    return 1\n');
+  await writeFile(join(root, 'libs', 'pp.py'), 'X = 1\n');
+  await writeFile(join(root, 'run.py'), 'import pkg.a, pp\npkg.a.a()\n');
+  const before = process.env.PYTHONPATH; process.env.PYTHONPATH = join(root, 'libs');
+  try { assert.deepEqual(await ids(root, { lineCoverage: { minimum: 100 } }), ['pass']); }
+  finally { if (before === undefined) delete process.env.PYTHONPATH; else process.env.PYTHONPATH = before; }
+}));
+test('real coverage.py: config source_pkgs that narrows the report REFUSES unless the adapter sets source or the rcfile is explicit', real, () => withWorkspace(async root => {
+  await mkdir(join(root, 'pkg')); await writeFile(join(root, 'pkg', '__init__.py'), '');
+  await writeFile(join(root, 'pkg', 'a.py'), 'def a():\n    return 1\na()\n'); await writeFile(join(root, 'pkg', 'c.py'), 'def c():\n    return 2\n');
+  await writeFile(join(root, 'run.py'), 'import pkg.a, pkg.c\n');
+  const rules = { lineCoverage: { minimum: 100 } };
+  assert.deepEqual(await ids(root, rules), ['fail', 'coverage-py/line-coverage:line-coverage-below-minimum']); // control: c.py is not fully covered
+  await writeFile(join(root, '.coveragerc'), '[run]\nsource_pkgs = pkg.a\n');
+  const adapter = make(rules, { source: undefined });
+  const refused = await adapter.check.run({ root, rules: [adapter.rules.lineCoverage.id] });
+  assert.equal(refused.verdict, 'refuse'); if (refused.verdict === 'refuse') { assert.equal(refused.why.code, 'coverage-py-config-excludes'); assert.match(refused.why.detail ?? '', /measures only pkg\.a/); }
+  assert.deepEqual(await ids(root, rules, { source: ['.'] }), ['fail', 'coverage-py/line-coverage:line-coverage-below-minimum']); // explicit source: nothing hidden
+  assert.deepEqual(await ids(root, rules, { source: undefined, rcfile: '.coveragerc' }), ['pass']); // acknowledged narrowing
+}));
+test('real coverage.py: a plugin configurer that rewrites report:omit REFUSES (the probe cannot see its edits)', real, () => withWorkspace(async root => {
+  await fixture(root, BOTH); await writeFile(join(root, 'b.py'), 'def b():\n    return 2\n');
+  await writeFile(join(root, 'redplug.py'), 'import coverage\nclass Cfg(coverage.CoveragePlugin):\n    def configure(self, config):\n        config.set_option("report:omit", ["b.py"])\ndef coverage_init(reg, options):\n    reg.add_configurer(Cfg())\n');
+  await writeFile(join(root, '.coveragerc'), '[run]\nplugins = redplug\n');
+  const rules = { lineCoverage: { minimum: 100 } };
+  const adapter = make(rules);
+  const refused = await adapter.check.run({ root, rules: [adapter.rules.lineCoverage.id] });
+  assert.equal(refused.verdict, 'refuse'); if (refused.verdict === 'refuse') { assert.equal(refused.why.code, 'coverage-py-config-excludes'); assert.match(refused.why.detail ?? '', /loads plugins redplug/); }
+}));

@@ -2,8 +2,12 @@ import { runAdapterTck, type AdapterTckSpec, type EvidenceProbe } from '@redproo
 import { coveragePy } from '../src/index.ts';
 import { parseCoveragePy } from '../src/core/evidence.ts';
 import { coveragePyBreaches, type RuleName, type Selection } from '../src/core/rules.ts';
+import { readdirSync } from 'node:fs';
 import { report } from './support/report.ts';
 
+/** Every module in src/core: the purity guard must name each one (a test below fails when a new file is missing). */
+export const CORE = ['argv', 'config', 'decide', 'evidence', 'options', 'paths', 'refusals', 'rules', 'thresholds', 'trust'] as const;
+const CORE_FILES = CORE.map(name => `packages/coverage-py/src/core/${name}.ts`) as unknown as [string, ...string[]];
 const all = { lineCoverage: { minimum: 100 }, branchCoverage: { minimum: 100 }, perFileMinimum: { minimum: 100 }, noUncoveredFiles: {} };
 const create = () => coveragePy({ args: ['-m', 'pytest'], rules: all });
 const bad = report({ 'x.py': { lines: [0, 2], branches: [0, 2] } }), good = report({ 'x.py': { lines: [2, 0], branches: [2, 0] } });
@@ -41,9 +45,14 @@ runAdapterTck([{
   unavailable: [{ name: 'refuses unavailable working directory', code: 'coverage-py-evidence-unavailable', run: () => create().check.run({ root: '/redproof-nonexistent-coverage-root', rules: [] }) }],
   evidence: [probe('lineCoverage', 'line-coverage-below-minimum', { minimum: 100 }), probe('branchCoverage', 'branch-coverage-below-minimum', { minimum: 100 }),
     probe('perFileMinimum', 'file-below-minimum', { minimum: 100 }), probe('noUncoveredFiles', 'file-never-executed', {})],
-  purity: { kind: 'sources', files: ['packages/coverage-py/src/core/argv.ts', 'packages/coverage-py/src/core/decide.ts', 'packages/coverage-py/src/core/evidence.ts',
-      'packages/coverage-py/src/core/options.ts', 'packages/coverage-py/src/core/paths.ts', 'packages/coverage-py/src/core/refusals.ts',
-      'packages/coverage-py/src/core/rules.ts', 'packages/coverage-py/src/core/thresholds.ts', 'packages/coverage-py/src/core/trust.ts'],
+  purity: { kind: 'sources', files: CORE_FILES,
     allowedExternalImports: ['redproof', 'redproof/command', 'node:path'] },
   capabilities: { kind: 'not-applicable', reason: 'Only the full format-3 coverage.py JSON report is supported; the summary-only totals are cross-checked, not trusted.' },
 } satisfies AdapterTckSpec]);
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+test('purity guard lists every file in src/core, so a new core module cannot escape it', () => {
+  const onDisk = readdirSync(new URL('../src/core/', import.meta.url)).filter(name => name.endsWith('.ts')).map(name => name.slice(0, -3)).sort();
+  assert.deepEqual(onDisk, [...CORE].sort());
+});

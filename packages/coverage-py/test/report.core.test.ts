@@ -44,21 +44,30 @@ test('trustFiles judges raw shell facts: unresolved, errored, escaping, and fine
 });
 test('probeArgs asks coverage.py for config without cwd on sys.path so a local module cannot shadow it', () => {
   const [flag, script] = probeArgs();
-  assert.equal(flag, '-c'); assert.match(script ?? '', /sys\.path\.pop\(0\)/); assert.match(script ?? '', /config_file=True/); assert.match(script ?? '', /report:exclude_lines/);
+  assert.equal(flag, '-c'); assert.match(script ?? '', /sys\.path\[0\] = \"\/nonexistent-redproof\"/); assert.doesNotMatch(script ?? '', /sys\.path\.pop/);
+  assert.match(script ?? '', /run:source_pkgs/); assert.match(script ?? '', /run:plugins/); assert.match(script ?? '', /config_file=True/); assert.match(script ?? '', /report:exclude_lines/);
   assert.match(script ?? '', /report:include/); assert.match(script ?? '', /run:include/);
 });
+const probe = (extra: Record<string, unknown> = {}) => JSON.stringify({ files: ['p.toml'], omit: [], exclude: [], include: [], source: [], plugins: [], ...extra });
 test('parseProjectConfig reads the last JSON line and fails closed on anything else', () => {
-  assert.deepEqual(parseProjectConfig('warning\n{"files":["a"],"omit":["x"],"exclude":[],"include":["i"]}\n'), { files: ['a'], omit: ['x'], exclude: [], include: ['i'] });
-  for (const bad of ['', 'nope', '{"files":"a","omit":[],"exclude":[],"include":[]}', '{"files":[],"omit":[1],"exclude":[],"include":[]}', '{"files":[],"omit":[],"exclude":[]}', '{"files":[],"omit":[],"exclude":[],"include":"a.py"}', 'null']) assert.throws(() => parseProjectConfig(bad));
+  assert.deepEqual(parseProjectConfig(`warning\n${probe({ omit: ['x'], include: ['i'], source: ['pkg'], plugins: ['redplug'] })}\n`),
+    { files: ['p.toml'], omit: ['x'], exclude: [], include: ['i'], source: ['pkg'], plugins: ['redplug'] });
+  for (const bad of ['', 'nope', 'null', probe({ files: 'a' }), probe({ omit: [1] }), probe({ include: 'a.py' }), probe({ source: 'pkg' }), probe({ plugins: null }),
+    JSON.stringify({ files: [], omit: [], exclude: [], include: [] })]) assert.throws(() => parseProjectConfig(bad));
 });
-test('configExclusions refuses exclusions unless the rcfile is explicit', () => {
-  const clean = { files: ['p.toml'], omit: [], exclude: [], include: [] }, omits = { ...clean, omit: ['a.py'] }, excl = { ...clean, exclude: ['def g'] }, narrows = { ...clean, include: ['a.py'] };
-  assert.equal(configExclusions(clean, false), null);
-  assert.equal(configExclusions(omits, true), null);
-  assert.equal(configExclusions(omits, false)?.code, 'coverage-py-config-excludes');
-  assert.match(configExclusions(excl, false)?.detail ?? '', /exclusion patterns def g/);
-  assert.match(configExclusions(narrows, false)?.detail ?? '', /restricts the report to a\.py/);
-  assert.equal(configExclusions(narrows, true), null);
+test('configExclusions refuses anything that can shrink or rewrite the judged set unless acknowledged', () => {
+  const clean = parseProjectConfig(probe());
+  const omits = { ...clean, omit: ['a.py'] }, excl = { ...clean, exclude: ['def g'] }, narrows = { ...clean, include: ['a.py'] };
+  const sources = { ...clean, source: ['pkg.a'] }, plugins = { ...clean, plugins: ['redplug'] };
+  for (const sourceExplicit of [false, true]) assert.equal(configExclusions(clean, false, sourceExplicit), null);
+  assert.equal(configExclusions(omits, true, false), null); // explicit rcfile acknowledges everything
+  assert.equal(configExclusions(plugins, true, false), null);
+  assert.equal(configExclusions(omits, false, false)?.code, 'coverage-py-config-excludes');
+  assert.match(configExclusions(excl, false, false)?.detail ?? '', /exclusion patterns def g/);
+  assert.match(configExclusions(narrows, false, false)?.detail ?? '', /restricts the report to a\.py/);
+  assert.match(configExclusions(plugins, false, true)?.detail ?? '', /loads plugins redplug/); // plugins refuse even with an adapter source
+  assert.match(configExclusions(sources, false, false)?.detail ?? '', /measures only pkg\.a/);
+  assert.equal(configExclusions(sources, false, true), null); // coverage.py unions the adapter's --source with config source
 });
 test('confineRequired returns root-relative paths, or refuses on error, escape, or an unresolved file', () => {
   const ok = new Map<string, Resolved>([['a.py', { real: '/w/a.py' }], ['sub/b.py', { real: '/w/sub/b.py' }]]);

@@ -44,7 +44,7 @@ export async function collect<R extends RuleRef>(ctx: CheckContext<R>, config: C
         const probe = await executeCommand({ command: config.python, args: probeArgs(), ...limits });
         const probed = producerOutcome('config probe', probe);
         if (probed) return refuse(probed);
-        const exclusions = configExclusions(parseProjectConfig(probe.kind === 'completed' ? probe.stdout : ''), false);
+        const exclusions = configExclusions(parseProjectConfig(probe.kind === 'completed' ? probe.stdout : ''), false, config.source.length > 0);
         if (exclusions) return refuse(exclusions);
       }
       const ran = producerOutcome('run', await executeCommand({ command: config.python, args: runArgs(config, dataFile, rcfile), ...limits }));
