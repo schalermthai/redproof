@@ -131,21 +131,54 @@ try:
 except SystemExit as stop:
     emit({"kind": "stopped", "code": stop.code, "stdout": out.getvalue(), "stderr": err.getvalue()})
     sys.exit(0)
+options.preserve_asts = True
 try:
     result = build.build(sources, options, stdout=io.StringIO(), stderr=io.StringIO())
 except CompileError as error:
     emit({"kind": "blocked", "messages": [str(m) for m in list(error.messages)[:5]]})
     sys.exit(0)
 
-typeshed = os.path.join(os.path.dirname(build.__file__), "typeshed")
-def external(path):
-    absolute = os.path.abspath(path)
-    parts = absolute.split(os.sep)
-    return absolute.startswith(typeshed) or "site-packages" in parts or "dist-packages" in parts
-
 TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore\b(?:\[([^\]]*)\])?")
+CODE = re.compile(r"^[a-z][a-z0-9-]*$")
 def codes_of(found):
-    return None if found.group(1) is None else [c.strip() for c in found.group(1).split(",") if c.strip()]
+    # An empty or odd list ([], [ ], [,], [Bad Code]) is judged like a bare ignore: it must never read as "hides nothing".
+    if found.group(1) is None:
+        return None
+    codes = [c.strip() for c in found.group(1).split(",")]
+    return codes if codes and all(CODE.match(c) for c in codes) else None
+
+NO_TYPE_CHECK = ("typing.no_type_check", "typing_extensions.no_type_check")
+
+def resolved_no_type_check(tree):
+    """Decorators mypy RESOLVED to typing.no_type_check, however they were imported or re-exported. Walks the
+    statement containers by name because a compiled mypy's visitor classes cannot be subclassed from Python."""
+    from mypy.nodes import Decorator, Node, RefExpr, CallExpr
+    lines, seen = [], set()
+    def refers(expr):
+        if isinstance(expr, CallExpr):
+            expr = expr.callee
+        if not isinstance(expr, RefExpr):
+            return False
+        node = getattr(expr, "node", None)
+        return getattr(expr, "fullname", None) in NO_TYPE_CHECK or getattr(node, "fullname", None) in NO_TYPE_CHECK
+    def walk(node):
+        if isinstance(node, list):
+            for item in node:
+                walk(item)
+            return
+        if not isinstance(node, Node) or id(node) in seen:
+            return
+        seen.add(id(node))
+        if isinstance(node, Decorator):
+            decorators = getattr(node, "original_decorators", None) or node.decorators
+            if any(refers(d) for d in decorators):
+                lines.append(node.func.line)
+        for name in ("defs", "body", "else_body", "finally_body", "handlers", "bodies", "items", "impl", "func"):
+            child = getattr(node, name, None)
+            if child is not None:
+                walk(child)
+    walk(tree)
+    return lines
 
 def no_type_check_names(tree):
     names = {"no_type_check"}
@@ -172,7 +205,7 @@ def no_type_check_lines(text):
                     lines.append(decorator.lineno)
     return lines
 
-def scan(path):
+def scan(path, tree=None):
     try:
         with open(path, "rb") as handle:
             text = handle.read().decode("utf-8", errors="replace")
@@ -198,23 +231,24 @@ def scan(path):
         "unreadable": None,
         "ignores": ignores,
         "inline": [{"line": number, "text": body} for number, body in get_mypy_comments(text)],
-        "noTypeCheck": no_type_check_lines(text),
+        "noTypeCheck": sorted(set(no_type_check_lines(text)) | set(resolved_no_type_check(tree) if tree is not None else [])),
     }
 
+# What mypy reports errors for is mypy's own call (ignore_all is False), not a list of directory names kept here:
+# installed packages, typeshed and silent imports are ignore_all; everything else, dist-packages included, is checked.
 modules = []
-for name, loaded in sorted(result.files.items()):
-    path = loaded.path
-    if not path or not os.path.isfile(path) or external(path):
+for name, state in sorted(result.graph.items()):
+    path = state.path
+    if not path or state.ignore_all or not os.path.isfile(path):
         continue
-    modules.append({"module": name, "path": os.path.abspath(path), "stub": bool(loaded.is_stub), **scan(path)})
+    modules.append({"module": name, "path": os.path.abspath(path), "stub": bool(getattr(state.tree, "is_stub", False)), **scan(path, state.tree)})
 
-# Directories no one means to check. Everything else under a named directory is promised, whatever mypy's own rules say.
-SKIP = {".git", ".hg", ".svn", "__pycache__", "node_modules", "site-packages", "dist-packages", ".mypy_cache", ".tox", ".nox", ".ruff_cache", ".pytest_cache"}
+# Every Python file under a named directory is promised: no skip list, so what mypy's own discovery leaves out is found, not assumed.
 promised = []
 for item in named:
     if os.path.isdir(item):
         for directory, children, files in os.walk(item):
-            children[:] = sorted(c for c in children if c not in SKIP and not os.path.exists(os.path.join(directory, c, "pyvenv.cfg")))
+            children.sort()
             for file in sorted(files):
                 if file.endswith((".py", ".pyi")):
                     promised.append(os.path.abspath(os.path.join(directory, file)))

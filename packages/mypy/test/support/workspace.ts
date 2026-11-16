@@ -13,12 +13,19 @@ export const readFixture = (name: string): Promise<string> => readFile(join(fixt
 /**
  * The mypy under test: `REDPROOF_MYPY_PYTHON` names a Python that can `import mypy`, else the released
  * mypy in the battle-test venv `26-mypy/.venv-2.4.1`. No mypy, no native tests: they are not registered,
- * because the repo gate bans skipped tests. CI installs a released mypy and points the variable at it.
+ * because the repo gate bans skipped tests. CI installs a released mypy, points the variable at it and sets
+ * REDPROOF_MYPY_REQUIRED=1, which turns "not found" into a failure.
  */
 export const python: string = process.env.REDPROOF_MYPY_PYTHON
   ?? fileURLToPath(new URL('../../../../../26-mypy/.venv-2.4.1/bin/python', import.meta.url));
 export const hasMypy: boolean = existsSync(python)
   && spawnSync(python, ['-I', '-c', 'import mypy.main'], { stdio: 'ignore' }).status === 0;
+
+// CI sets REDPROOF_MYPY_REQUIRED=1: there the native suite is the only thing that runs real mypy, so a missing or mistyped
+// interpreter must fail loudly instead of leaving the tests unregistered and the run green.
+if (process.env.REDPROOF_MYPY_REQUIRED === '1' && !hasMypy) {
+  throw new Error(`REDPROOF_MYPY_REQUIRED=1 but no mypy can be imported by ${python}. Set REDPROOF_MYPY_PYTHON to a Python that has mypy.`);
+}
 export const nativeTest = (test: typeof import('node:test').test): typeof test =>
   hasMypy ? test : (Object.assign(() => undefined, test) as never);
 

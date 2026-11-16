@@ -104,9 +104,10 @@ Every selected code is also enabled with `--enable-error-code`, which the option
 1. A short Python probe (`python -I`) calls mypy's own option parser, twice: once as the project is configured, once with no
    configuration. The difference is exactly what the project's configuration changes.
 2. The adapter judges those facts (below). A second probe then builds the program the way mypy will and lists **everything mypy
-   loaded**, not only the files named. For each loaded project file it reads what no option shows: `# mypy:` comments,
-   `# type: ignore` comments and `@no_type_check`. It also walks the named paths itself, without mypy's discovery rules, to list every
-   Python file the Gate promised.
+   loaded**, not only the files named. For every file mypy reports errors for (mypy's own `ignore_all` flag, not a list of
+   directory names kept here) it reads what no option shows: `# mypy:` comments, `# type: ignore` comments, and
+   `@no_type_check`, found by how mypy *resolved* the decorator (a re-export is caught) as well as by name. It also walks the
+   named paths itself, with **no skip list**, to list every Python file the Gate promised.
 3. **The one comparison:** every promised file must have been loaded, and every loaded file must be free of ways to hide findings.
    Whatever mypy did not check, or checked with its eyes shut, is a refusal.
 4. `python -I -m mypy --output json` runs with the same arguments, the configuration file pinned to the one that was judged, and a
@@ -134,8 +135,9 @@ the tree and a stale cache cannot answer), and `--enable-error-code` for every s
 | `mypy-setting-hides-findings` | `ignore_errors`, `follow_imports = skip/silent`, `ignore_missing_imports`, `exclude`, `always_true/false`, `plugins`, or a `[mypy-x]` section that disables a selected code |
 | `mypy-setting-unvetted` | a setting not on the adapter's list of settings that cannot hide a finding or change the tree (a section turning `check_untyped_defs` off, `strict_optional = False`, `junit_xml`, `*_report`, `install_types`, anything new) |
 | `mypy-inline-config` | a `# mypy:` comment in a source file |
-| `mypy-ignore-comments` | a `# type: ignore` before the first statement (whole file), or one that suppressed an error a selected rule could report; a list such as `[assignment, call-arg]` is judged code by code |
-| `mypy-files-unchecked` | a Python file under a named path that mypy never loaded: a `.py` beside a `.pyi`, a hidden directory, anything mypy's own discovery skips (`node_modules`, `site-packages`, `__pycache__`, VCS and tool-cache folders are not promised) |
+| `mypy-ignore-comments` | a `# type: ignore` before the first statement (whole file), or one that suppressed an error a selected rule could report; a list such as `[assignment, call-arg]` is judged code by code, and `[]` or a malformed list counts as a bare ignore. An ignore of `import-not-found`, `import-untyped` or `unreachable` counts too unless you allow `unresolved-imports` / `unreachable-code` |
+| `mypy-files-unchecked` | a Python file under a named path that mypy never loaded: a `.py` beside a `.pyi`, a hidden directory, `node_modules`, `site-packages`, anything mypy's own discovery skips. Name the source folders in `paths`, or allow `skipped-files` |
+| `mypy-closure-mismatch`, `mypy-unrecognised-message` | the build that listed what mypy loaded lacks a file mypy said it would check, or an unused-ignore message is in a wording this adapter does not know (every wording of mypy 1.11 to 2.5 is matched by an anchored grammar; anything else refuses) |
 | `mypy-no-type-check` | a function or class decorated with `@no_type_check` (also `typing.no_type_check` and an alias), whose body mypy skips without a word |
 | `mypy-unreachable-code` | mypy found code it considers unreachable (`--warn-unreachable`); select `unreachable` to make it a rule, or allow it |
 | `mypy-imports-unresolved` | an import mypy typed as `Any`; the result would depend on which stubs the host has |
@@ -157,6 +159,12 @@ Without `configFile` or `isolated`, mypy finds its own configuration, and that f
 ## Blind spots
 
 What the one comparison cannot see. Each of these can still give a PASS that says less than it seems:
+
+- **Unannotated code passes type rules vacuously.** Bodies are checked (`--check-untyped-defs`), but parameters without annotations are `Any`, so `arg-type`,
+  `return-value`, `attr-defined` and friends have nothing to compare there. `no-untyped-def` is the rule that says so.
+- A `# type: ignore[unused-ignore]` makes a stale ignore invisible to the `unused-ignore` rule; that is mypy's own semantics.
+- A source file reached through a symlink that leaves the Gate root is still checked (and scanned); the verdict then follows the host.
+- Each of the three Python processes (option probe, build probe, the run) gets the full `timeoutMs`.
 
 - Code behind a condition mypy evaluates as false: `sys.platform` and `sys.version_info` branches for the pinned version and platform (your choice,
   made explicit by `pythonVersion` and `platform`), `if not TYPE_CHECKING:`, and dead code after `assert False` or a `NoReturn` call. `--warn-unreachable`

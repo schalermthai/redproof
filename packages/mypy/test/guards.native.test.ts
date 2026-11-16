@@ -23,7 +23,7 @@ function outcome(result: Awaited<ReturnType<typeof run>>): Outcome {
 }
 
 /** Things a Gate must never PASS: each one, with real mypy, that rule alone. `expected` is what the Gate must say. */
-const matrix: ReadonlyArray<readonly [string, Files, Partial<MypyOptions>, Outcome]> = [
+const matrix: ReadonlyArray<readonly [string, Files, Partial<MypyOptions>, Outcome, string?]> = [
   ['control: the violation is found', { 'a.py': BAD }, {}, 'fail'],
   ['control: a clean tree passes', { 'a.py': 'x: int = 1\n' }, {}, 'pass'],
   // Anything that can hide a finding
@@ -74,12 +74,30 @@ const matrix: ReadonlyArray<readonly [string, Files, Partial<MypyOptions>, Outco
   ['@typing.no_type_check on a method', { 'a.py': 'import typing\nclass C:\n    @typing.no_type_check\n    def m(self) -> None:\n        x: int = "a"\n' }, {}, 'mypy-no-type-check'],
   ['@no_type_check imported under another name', { 'a.py': 'from typing import no_type_check as skip\n@skip\ndef f() -> None:\n    x: int = "a"\n' }, {}, 'mypy-no-type-check'],
   ['a hidden directory holding Python beside a checked file', { 'a.py': 'x: int = 1\n', '.hidden/h.py': BAD }, { paths: ['.'] }, 'mypy-files-unchecked'],
-  ['node_modules is skipped by mypy and not promised by the Gate', { 'a.py': 'x: int = 1\n', 'node_modules/n/n.py': BAD }, { paths: ['.'] }, 'pass'],
+  ['node_modules holding Python under a named path is skipped by mypy, so it is unchecked', { 'a.py': 'x: int = 1\n', 'node_modules/n/n.py': BAD }, { paths: ['.'] }, 'mypy-files-unchecked'],
+  ['site-packages holding Python under a named path is skipped by mypy, so it is unchecked', { 'a.py': 'x: int = 1\n', 'site-packages/s.py': BAD }, { paths: ['.'] }, 'mypy-files-unchecked'],
   ['a type: ignore in a file reached only through an import', { 'src/a.py': 'from lib import util\nx: int = util.v\n', 'lib/__init__.py': '', 'lib/util.py': 'v: int = "a"  # type: ignore\n' }, { paths: ['src'] }, 'mypy-ignore-comments'],
   ['a mypy comment in a file reached only through an import', { 'src/a.py': 'from lib import util\nx: int = util.v\n', 'lib/__init__.py': '', 'lib/util.py': '# mypy: ignore-errors\nv: int = "a"\n' }, { paths: ['src'] }, 'mypy-inline-config'],
   ['code mypy considers unreachable is never checked', { 'a.py': 'def f() -> int:\n    return 1\n    y: int = "a"\n' }, {}, 'mypy-unreachable-code'],
   ['unreachable code, once the Gate accepts that', { 'a.py': 'def f() -> int:\n    return 1\n    y: int = "a"\n' }, { allow: ['unreachable-code'] }, 'pass'],
   ['a platform branch the Gate pinned away is its own choice, not a refusal', { 'a.py': 'import sys\nif sys.platform == "win32":\n    z: int = "c"\n' }, {}, 'pass'],
+  // Review round 2
+  ['B4: ignore[assignment] hides method-assign (mypy only says: use the narrower code)', { 'a.py': 'class A:\n    def f(self) -> None: ...\n    def g(self) -> None:\n        self.f = lambda: None  # type: ignore[assignment]\n' }, {}, 'mypy-ignore-comments', 'method-assign'],
+  ['B4: ignore[misc] hides overload-overlap', { 'a.py': 'from typing import overload\n@overload\ndef f(x: int) -> int: ...  # type: ignore[misc]\n@overload\ndef f(x: object) -> str: ...\ndef f(x: object) -> object:\n    return x\n' }, {}, 'mypy-ignore-comments', 'overload-overlap'],
+  ['B4: ignore[import] hides import-not-found', { 'a.py': 'import nope_zz  # type: ignore[import]\n' }, {}, 'mypy-ignore-comments', 'import-not-found'],
+  ['B5: ignore[] hides an error on current mypy', { 'a.py': 'x: int = "a"  # type: ignore[]\n' }, {}, 'fail|mypy-ignore-comments'],
+  ['B5: ignore[ ] with a space', { 'a.py': 'x: int = "a"  # type: ignore[ ]\n' }, {}, 'fail|mypy-ignore-comments'],
+  ['B6: a bare ignore on the unresolved import of a selected import-not-found rule', { 'a.py': 'import nope_zz  # type: ignore\n' }, {}, 'mypy-ignore-comments', 'import-not-found'],
+  ['B6: ignore[import-not-found] on a selected import-not-found rule', { 'a.py': 'import nope_zz  # type: ignore[import-not-found]\n' }, {}, 'mypy-ignore-comments', 'import-not-found'],
+  ['B6: an ignore on the dead statement of a selected unreachable rule', { 'a.py': 'def f() -> int:\n    return 1\n    y = 1  # type: ignore\n' }, {}, 'mypy-ignore-comments', 'unreachable'],
+  ['I4: ignore[import-not-found] defeats the unresolved-import guard of another rule', { 'a.py': 'import nope_zz  # type: ignore[import-not-found]\n' }, {}, 'mypy-ignore-comments'],
+  ['I4: ignore[unreachable] defeats the unreachable guard of another rule', { 'a.py': 'def f() -> int:\n    return 1\n    y = 1  # type: ignore[unreachable]\n' }, {}, 'mypy-ignore-comments'],
+  ['B7: a type: ignore in dist-packages, which mypy checks', { 'a.py': 'x: int = 1\n', 'dist-packages/d.py': 'x: int = "a"  # type: ignore\n' }, { paths: ['.'] }, 'mypy-ignore-comments'],
+  ['B7: # mypy: ignore-errors in dist-packages', { 'a.py': 'x: int = 1\n', 'dist-packages/d.py': '# mypy: ignore-errors\nx: int = "a"\n' }, { paths: ['.'] }, 'mypy-inline-config'],
+  ['B8: a .py beside a .pyi in a folder holding pyvenv.cfg', { 'a.py': 'x: int = 1\n', 'pkg/pyvenv.cfg': '', 'pkg/m.py': BAD, 'pkg/m.pyi': 'x: int\n' }, { paths: ['.'] }, 'mypy-files-unchecked'],
+  ['B3b: a re-exported no_type_check decorator', { 'u.py': 'from typing import no_type_check as skip\n', 'a.py': 'from u import skip\n@skip\ndef f() -> None:\n    x: int = "a"\n' }, { paths: ['.'] }, 'mypy-no-type-check'],
+  ['B3b: no_type_check reached as an attribute of an own module', { 'u.py': 'from typing import no_type_check as skip\n', 'a.py': 'import u\n@u.skip\ndef f() -> None:\n    x: int = "a"\n' }, { paths: ['.'] }, 'mypy-no-type-check'],
+  ['S5: warn_unused_configs is not vetted', { 'a.py': BAD, 'mypy.ini': '[mypy]\nwarn_unused_configs = True\n[mypy-zzz]\ndisallow_any_generics = True\n' }, {}, 'mypy-setting-unvetted'],
   // Missing or unusable input
   ['a missing path', { 'a.py': BAD }, { paths: ['absent.py'] }, 'mypy-path-missing'],
   ['a missing cwd', { 'a.py': BAD }, { cwd: 'nowhere' }, 'mypy-path-missing'],
@@ -87,9 +105,13 @@ const matrix: ReadonlyArray<readonly [string, Files, Partial<MypyOptions>, Outco
   ['a broken configuration file', { 'a.py': BAD, 'mypy.ini': '[mypy\n' }, {}, 'mypy-config-warning'],
   ['an interpreter that does not exist', { 'a.py': BAD }, { python: '/nonexistent/python' }, 'command-unavailable'],
 ];
-for (const [name, files, options, expected] of matrix) {
+for (const [name, files, options, expected, rule] of matrix) {
   native(`real mypy: ${name} -> ${expected}`, async () => {
-    await withFiles(files, async root => assert.equal(outcome(await run(root, options)), expected));
+    await withFiles(files, async root => {
+      const got = outcome(await run(root, options, rule));
+      // `a|b`: either is a correct answer for this mypy version; what is never correct is `pass`.
+      assert.ok(expected.split('|').includes(got), `${got} is not ${expected}`);
+    });
   });
 }
 

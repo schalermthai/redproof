@@ -1,6 +1,6 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { Allowance } from './options.ts';
-import { ignoreCodes, parseMypyVersion, relatedCodes, signalCodes } from './model.ts';
+import { ignoreCodes, parseMypyVersion, relatedCodes, unresolvedImportCodes } from './model.ts';
 
 /** One file mypy loaded, with what no option shows about it. */
 type LoadedFile = {
@@ -114,7 +114,9 @@ export function parseClosure(output: string): ClosureOutput {
           unreadable: typeof file.unreadable === 'string' ? file.unreadable : null,
           ignores: list(file.ignores, 'ignores').map(entry => {
             const ignore = object(entry, 'ignore');
-            const codes = ignore.codes === null ? null : list(ignore.codes, 'ignore codes').map(code => text(code, 'ignore code'));
+            const listed = ignore.codes === null ? null : list(ignore.codes, 'ignore codes').map(code => text(code, 'ignore code'));
+            // An empty or malformed list is judged like a bare ignore: it must never read as "hides nothing".
+            const codes = listed !== null && listed.length > 0 && listed.every(code => /^[a-z][a-z0-9-]*$/u.test(code)) ? listed : null;
             return { line: Number(ignore.line), codes, top: ignore.top === true };
           }),
           inline: list(file.inline, 'inline').map(entry => {
@@ -145,7 +147,7 @@ const HARMLESS = new Set([
   'cache_dir', 'cache_fine_grained', 'color_output', 'config_file', 'error_summary', 'fast_exit', 'fixed_format_cache',
   'hide_error_codes', 'incremental', 'many_errors_threshold', 'num_workers', 'pretty', 'show_absolute_path',
   'show_column_numbers', 'show_error_code_links', 'show_error_context', 'show_error_end', 'skip_cache_mtime_checks',
-  'skip_version_check', 'sqlite_cache', 'sqlite_num_shards', 'warn_unused_configs', 'files', 'namespace_packages',
+  'skip_version_check', 'sqlite_cache', 'sqlite_num_shards', 'files', 'namespace_packages',
   'explicit_package_bases', 'package_root', 'enable_incomplete_feature', 'enable_error_code', 'enabled_error_codes',
   'native_parser', 'cache_map', 'fast_module_lookup',
 ]);
@@ -287,8 +289,12 @@ export function judgeFacts(input: PolicyInput): Problem | undefined {
  * `@no_type_check` function. Imported files are held to the same comment rules as named ones, because mypy reports
  * their errors too.
  */
-export function judgeCoverage(closure: Closure, allow: ReadonlySet<Allowance>, root: string): Problem | undefined {
+export function judgeCoverage(closure: Closure, allow: ReadonlySet<Allowance>, root: string, named: readonly string[] = []): Problem | undefined {
   const loaded = new Set(closure.modules.map(file => file.path));
+  const unloaded = named.filter(path => !loaded.has(path)).map(path => relative(root, path) || path);
+  if (unloaded.length) {
+    return refused('mypy-closure-mismatch', 'mypy said it would check a file, but the build that listed what it loaded does not contain it.', unloaded);
+  }
   const missing = closure.promised.filter(path => !loaded.has(path)).map(path => relative(root, path) || path);
   if (missing.length && !allow.has('skipped-files')) {
     return refused('mypy-files-unchecked',
@@ -311,43 +317,78 @@ export function judgeCoverage(closure: Closure, allow: ReadonlySet<Allowance>, r
   return undefined;
 }
 
-/** The codes one `unused-ignore` finding says were unused: all of them (null) or only the listed ones. */
-const UNUSED_IGNORE = /^Unused "type: ignore(?:\[([^\]]*)\])?" comment/u;
+/**
+ * What mypy says about one `# type: ignore` comment that did not do its whole job. Every wording mypy has, in every
+ * supported version (errors.py `generate_unused_ignore_errors`):
+ *   Unused "type: ignore" comment
+ *   Unused "type: ignore[a, b]" comment
+ *   either of the above, then one or more:  , use narrower [x, y] instead of [z] code
+ * The narrower suffix means the comment WAS used: its code `z` suppressed a sub-code. Anything else is not understood,
+ * and a message this adapter does not understand is a REFUSE, never a guess.
+ */
+const CODE_LIST = '[a-z][a-z0-9-]*(?:, [a-z][a-z0-9-]*)*';
+const UNUSED_IGNORE = new RegExp(`^Unused "type: ignore(?:\\[(${CODE_LIST})\\])?" comment((?:, use narrower \\[${CODE_LIST}\\] instead of \\[[a-z][a-z0-9-]*\\] code)*)$`, 'u');
+const NARROWER = /, use narrower \[[^\]]*\] instead of \[([a-z][a-z0-9-]*)\] code/gu;
 
-/** Keyed by file and line. Null means the whole comment was unused; a message in any other shape is not recorded at all. */
+export type UnusedIgnore = {
+  /** The codes the message lists as unused; null when it lists none (a bare message: every code of the comment). */
+  readonly listed: readonly string[] | null;
+  /** Codes whose comment suppressed a sub-code: used, though mypy would like a narrower code. */
+  readonly narrowed: readonly string[];
+};
+
+export type UnusedIgnores = { readonly byLine: ReadonlyMap<string, UnusedIgnore>; readonly unrecognised: readonly string[] };
+
 export function unusedIgnores(
   findings: readonly { readonly file: string; readonly line: number | null; readonly message: string }[],
   key: (path: string, line: number) => string,
-): ReadonlyMap<string, readonly string[] | null> {
-  const unused = new Map<string, readonly string[] | null>();
+): UnusedIgnores {
+  const byLine = new Map<string, UnusedIgnore>();
+  const unrecognised: string[] = [];
   for (const finding of findings) {
     const parsed = UNUSED_IGNORE.exec(finding.message);
-    if (!parsed || finding.line === null) continue;
-    unused.set(key(finding.file, finding.line), parsed[1] === undefined ? null : parsed[1].split(',').map(code => code.trim()).filter(Boolean));
+    if (!parsed || finding.line === null) {
+      unrecognised.push(`${finding.file}:${finding.line ?? '?'}: ${finding.message}`);
+      continue;
+    }
+    byLine.set(key(finding.file, finding.line), {
+      listed: parsed[1] === undefined ? null : parsed[1].split(', '),
+      narrowed: [...(parsed[2] ?? '').matchAll(NARROWER)].map(match => match[1]!),
+    });
   }
-  return unused;
+  return { byLine, unrecognised };
 }
 
 /**
- * After the run: `# type: ignore` comments that suppressed something relevant. `--warn-unused-ignores` is forced,
- * so a code on an ignore that hid nothing came back in an `unused-ignore` finding; the codes left over each hid a
- * real error, and if that error could have been one of the selected rules the verdict would be a lie. A comment
- * that lists several codes is judged code by code: one unused code says nothing about the others.
+ * After the run: `# type: ignore` comments that suppressed something relevant. `--warn-unused-ignores` is forced, so
+ * the codes of an ignore that hid nothing come back in an `unused-ignore` finding; the codes left over each hid a real
+ * error, and if that error could have been one of the selected rules the verdict would be a lie. A list is judged code by
+ * code. Every selected rule is watched, the signal codes (an unresolved import, unreachable code) too unless the Gate
+ * accepted them, because hiding those hollows out every other rule. Only the codes about ignore comments are exempt.
  */
 export function hidingIgnores(
   closure: Closure,
   selected: readonly string[],
-  unused: ReadonlyMap<string, readonly string[] | null>,
+  unused: ReadonlyMap<string, UnusedIgnore>,
   key: (path: string, line: number) => string,
+  allow: ReadonlySet<Allowance> = new Set(),
 ): readonly string[] {
-  const watched = selected.filter(code => !ignoreCodes.includes(code) && !signalCodes.includes(code));
-  if (!watched.length) return [];
+  const watched = [
+    ...selected.filter(code => !ignoreCodes.includes(code)),
+    ...(allow.has('unresolved-imports') ? [] : unresolvedImportCodes),
+    ...(allow.has('unreachable-code') ? [] : ['unreachable']),
+  ];
+  if (!selected.some(code => !ignoreCodes.includes(code))) return [];
   const hiding: string[] = [];
   for (const file of closure.modules) {
     for (const ignore of file.ignores) {
       const said = unused.get(key(file.path, ignore.line));
-      if (said === null) continue; // the whole comment hid nothing
-      const used = ignore.codes === null ? null : ignore.codes.filter(code => !said?.includes(code));
+      let used: readonly string[] | null = ignore.codes;
+      if (said !== undefined) {
+        if (ignore.codes === null) continue; // a bare ignore that hid nothing
+        const unusedCodes = (said.listed ?? ignore.codes).filter(code => !said.narrowed.includes(code));
+        used = ignore.codes.filter(code => !unusedCodes.includes(code));
+      }
       const relevant = used === null || used.some(code => watched.some(chosen => relatedCodes(chosen, code)));
       if (relevant) hiding.push(`${file.path}:${ignore.line}: # type: ignore${ignore.codes ? `[${ignore.codes.join(',')}]` : ''}`);
     }

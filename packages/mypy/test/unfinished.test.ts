@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mypy } from '../src/index.ts';
+import { spawnSync } from 'node:child_process';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { closureOf, readFixture, scriptedPython, withFiles } from './support/workspace.ts';
@@ -71,4 +72,14 @@ process.exit(0);
       if (result.verdict === 'refuse') assert.equal(result.why.code, 'command-signaled');
     });
   }
+});
+
+test('REDPROOF_MYPY_REQUIRED turns a missing mypy into a failure, and without it the native tests simply do not register', () => {
+  const load = (env: Record<string, string>) => spawnSync(process.execPath,
+    ['--disable-warning=ExperimentalWarning', '--experimental-strip-types', '--input-type=module', '-e', `import ${JSON.stringify(new URL('./support/workspace.ts', import.meta.url).href)}`],
+    { env: { ...process.env, REDPROOF_MYPY_PYTHON: '/nonexistent/python', ...env }, encoding: 'utf8' });
+  const required = load({ REDPROOF_MYPY_REQUIRED: '1' });
+  assert.notEqual(required.status, 0);
+  assert.match(required.stderr, /REDPROOF_MYPY_REQUIRED=1/u);
+  assert.equal(load({ REDPROOF_MYPY_REQUIRED: '0' }).status, 0);
 });

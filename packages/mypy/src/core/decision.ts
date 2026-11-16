@@ -265,7 +265,7 @@ function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, 
       nameless.map(f => `${f.file}:${f.line ?? '?'}: ${f.message}`).join('\n'));
   }
 
-  const uncovered = judgeCoverage(closure, input.allow, input.root);
+  const uncovered = judgeCoverage(closure, input.allow, input.root, facts.sources.map(source => resolve(input.cwd, source.path)));
   if (uncovered) return problem(uncovered);
 
   const display = (file: string): string => displayPath(input.root, resolve(input.cwd, file));
@@ -292,9 +292,13 @@ function evaluate<R extends RuleRef>(execution: CompletedCommand, facts: Facts, 
   }
   const key = (file: string, line: number | null): string => `${resolve(input.cwd, file)}:${line ?? '?'}`;
   const unused = unusedIgnores(errors.filter(f => f.code === 'unused-ignore'), (file, line) => key(file, line));
+  if (unused.unrecognised.length) {
+    return refusal('mypy-unrecognised-message', 'mypy reported an unused ignore in a wording this adapter does not know, so it cannot tell which comments hid an error.',
+      unused.unrecognised.join('\n'));
+  }
   const hiding = input.allow.has('type-ignore')
     ? []
-    : hidingIgnores(closure, [...input.selected.keys()], unused, (file, line) => key(file, line));
+    : hidingIgnores(closure, [...input.selected.keys()], unused.byLine, (file, line) => key(file, line), input.allow);
   if (hiding.length) {
     return refusal('mypy-ignore-comments',
       'A `# type: ignore` comment suppressed an error that a selected rule could have reported. Remove it, or allow type-ignore.',
