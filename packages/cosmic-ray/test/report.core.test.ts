@@ -30,8 +30,9 @@ test('a test run past the timeout is told apart from a kill by its output', () =
 });
 
 test('a worker exception is invalid, not killed', () => {
-  assert.equal(count('worker-exception', 'invalid'), 1);
+  assert.equal(count('worker-exception', 'invalid'), 11);
   assert.match(mutants('worker-exception')[0]?.reason ?? '', /worker outcome exception/u);
+  assert.equal(count('no-test', 'invalid'), 11);
 });
 
 test('malformed dumps are errors, never an empty success', () => {

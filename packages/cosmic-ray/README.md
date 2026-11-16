@@ -7,7 +7,7 @@ just run your guardrails. It proves they can fail.
 
 ## Install
 
-Requires Node.js 24 or later, and a Python with cosmic-ray 8.3.15 or later (older formats are refused).
+Requires Node.js 24 or later and a Python with cosmic-ray installed. The adapter's end-to-end tests run against cosmic-ray 8.9.0 in CI; the dump format and the init/exec/dump flow were also checked by hand on 8.3.15, 8.4.6 and 8.8.0. The flat 8.1.0 dump is refused.
 
 ```bash
 npm install --save-dev @redproof/cosmic-ray redproof
@@ -35,14 +35,17 @@ const adapter = cosmicRay({
 export default defineGate({ id: 'python-test-strength', adapter });
 ```
 
-Each Check runs, in a private session directory: `cosmic_ray.cli baseline`, `init`, `exec`, `dump`.
+Each Check copies the Gate root into a temporary sandbox and runs `cosmic_ray.cli baseline`, `init`, `dump`, `exec`, `dump` there.
+cosmic-ray rewrites source files in place, and killing it (a timeout, an abort) leaves them mutated, so it must never run on the real tree: your files stay byte-identical on every exit path.
+The copy skips `.git`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.hypothesis` and `*.egg-info`, and symlinks `.venv`, `venv`, `env`, `node_modules`, `.tox` and `.nox` instead of copying them, so a relative test command such as `.venv/bin/python -m pytest` still works. The copy costs one pass over the project's files; over `maxCopyBytes` (default 512 MiB) the run REFUSES `cosmic-ray-copy-too-large`.
+A module path that is absolute or leaves the working directory REFUSES before `exec` (`cosmic-ray-module-path-escapes`), because it would be mutated outside the sandbox.
 
 ## Rules
 
 | Rule | Breach |
 | --- | --- |
 | `cosmic-ray/mutants-detected` | one `mutant-survived` per survivor, at `file:line:column`, with the operator and changed line |
-| `cosmic-ray/mutation-score` | `mutation-score-below-minimum` when killed / (killed + survived) is under `minimum` |
+| `cosmic-ray/mutation-score` | `mutation-score-below-minimum` when killed / (killed + survived) is under `minimum` (greater than 0: a minimum of 0 could never go red, so it is rejected) |
 
 ## It refuses instead of passing
 
@@ -51,14 +54,25 @@ cosmic-ray's own exit codes and `cr-rate` look healthy in all of these. The adap
 | Situation | Refusal code |
 | --- | --- |
 | tests fail on unmutated code (every mutant would look killed) | `cosmic-ray-baseline-failed` |
+| the Python has no cosmic-ray, or the config cannot be loaded (exit 78) | `cosmic-ray-not-installed`, `cosmic-ray-config-invalid` |
 | `init`, `exec` or `dump` exit non-zero (killed process, bad config, no module) | `cosmic-ray-producer-unsuccessful` |
 | process timeout, signal, or output limit | `command-timeout`, `command-signaled`, `command-output-limit` |
-| a job has no result, a mutant timed out, a worker failed, a test could not start, or a job was skipped | `cosmic-ray-incomplete` |
+| a job has no result, a worker failed, a test could not start, or a job was skipped (and, with `timeouts: 'refuse'`, a mutant timed out) | `cosmic-ray-incomplete` |
+| more than half of the mutants timed out | `cosmic-ray-timeouts-excessive` |
 | zero mutants (module excluded, nothing to mutate) | `cosmic-ray-no-mutants` |
 | a dump that is not the 8.3+ format | `cosmic-ray-report-invalid` |
 | a mutated module outside the Gate root | `cosmic-ray-module-outside-root` |
 
-A mutant that hits cosmic-ray's `timeout` is not counted as detected (Stryker's behaviour): cosmic-ray records it as killed with the output `timeout`, so it is told apart by that output.
+## Timeouts
+
+cosmic-ray records a mutant whose tests ran past its `timeout` as `killed` with the output `timeout`; the adapter tells them apart by that output.
+`timeouts: 'detected'` (the default) counts such a mutant as detected, like the Stryker adapter: an infinite-loop mutant (`i += 1` becoming `i += 0`) is the textbook way a mutation is caught, and refusing it would make a perfect suite unpassable.
+`timeouts: 'refuse'` refuses any run with a timed-out mutant, for projects that want every mutant to fail on an assertion.
+Either way, if more than half of the mutants time out the run REFUSES (`cosmic-ray-timeouts-excessive`): a `timeout` that is too short makes every mutant look killed. The guard looks at the share rather than comparing `timeout` with the baseline's duration, because the adapter does not parse your TOML. When a score is breached, the timed-out mutants are listed in the breach detail; a passing result carries no detail.
+
+## Dump size
+
+`dump` prints every test output of every mutant through stdout, about 1-2 KiB per mutant on a small project, so the default `maxOutputBytes` of 64 MiB holds tens of thousands of mutants. A bigger dump REFUSES `command-output-limit` (never a pass); raise `maxOutputBytes`.
 
 ## Blind spots
 

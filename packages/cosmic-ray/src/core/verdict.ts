@@ -19,6 +19,8 @@ export type CosmicRayRun<R extends string> = {
   readonly root: string;
   readonly cwd: string;
   readonly mutants: readonly CosmicRayMutant[];
+  /** Whether a timed-out mutant counts as killed (`detected`) or refuses the run. */
+  readonly timeouts: 'detected' | 'refuse';
   readonly policies: CosmicRayPolicies<R>;
 };
 
@@ -29,8 +31,8 @@ export type CosmicRayMetrics = {
   readonly score: number | null;
 };
 
-export function cosmicRayMetrics(mutants: readonly CosmicRayMutant[]): CosmicRayMetrics {
-  const killed = mutants.filter(mutant => mutant.status === 'killed').length;
+export function cosmicRayMetrics(mutants: readonly CosmicRayMutant[], timeoutsDetected = false): CosmicRayMetrics {
+  const killed = mutants.filter(mutant => mutant.status === 'killed' || (timeoutsDetected && mutant.status === 'timeout')).length;
   const survived = mutants.filter(mutant => mutant.status === 'survived').length;
   const valid = killed + survived;
   return { killed, survived, score: valid === 0 ? null : (killed / valid) * 100 };
@@ -42,7 +44,7 @@ function describe(mutant: CosmicRayMutant): string {
 
 /** Judge one completed cosmic-ray session. Anything short of a clean kill-or-survive verdict for every job refuses. */
 export function decideCosmicRayRun<R extends string>(run: CosmicRayRun<R>): CheckResult<R> {
-  const { scan, root, cwd, mutants, policies } = run;
+  const { scan, root, cwd, mutants, timeouts, policies } = run;
 
   if (mutants.length === 0) {
     return result.refuse(scan, {
@@ -52,8 +54,9 @@ export function decideCosmicRayRun<R extends string>(run: CosmicRayRun<R>): Chec
     });
   }
 
-  const unfinished = mutants.filter(mutant => mutant.status === 'pending'
-    || mutant.status === 'timeout' || mutant.status === 'invalid');
+  const timedOut = mutants.filter(mutant => mutant.status === 'timeout');
+  const unfinished = mutants.filter(mutant => mutant.status === 'pending' || mutant.status === 'invalid'
+    || (timeouts === 'refuse' && mutant.status === 'timeout'));
   if (unfinished.length > 0) {
     const shown = unfinished.slice(0, 5).map(mutant => `${mutant.status}: ${describe(mutant)}`);
     return result.refuse(scan, {
@@ -64,7 +67,17 @@ export function decideCosmicRayRun<R extends string>(run: CosmicRayRun<R>): Chec
     });
   }
 
-  const metrics = cosmicRayMetrics(mutants);
+  // A cosmic-ray `timeout` that is too short makes every mutant time out and look killed.
+  if (timedOut.length * 2 > mutants.length) {
+    return result.refuse(scan, {
+      code: 'cosmic-ray-timeouts-excessive',
+      message: 'More than half of the mutants timed out, so the cosmic-ray `timeout` is probably too short and the result is not trustworthy.',
+      location: null,
+      detail: `${timedOut.length} of ${mutants.length} mutant(s) timed out.\n${timedOut.slice(0, 5).map(describe).join('\n')}`,
+    });
+  }
+
+  const metrics = cosmicRayMetrics(mutants, timeouts === 'detected');
   const breaches: Breach<R>[] = [];
 
   if (policies.mutantsDetected) {
@@ -98,7 +111,7 @@ export function decideCosmicRayRun<R extends string>(run: CosmicRayRun<R>): Chec
         expected: `>= ${mutationScore.minimum.toFixed(2)}%`,
         actual: `${metrics.score.toFixed(2)}%`,
       },
-      detail: `${metrics.killed} killed, ${metrics.survived} survived.`,
+      detail: `${metrics.killed} killed${timedOut.length > 0 && timeouts === 'detected' ? ` (including ${timedOut.length} timed out: ${timedOut.slice(0, 5).map(describe).join('; ')})` : ''}, ${metrics.survived} survived.`,
     }));
   }
 

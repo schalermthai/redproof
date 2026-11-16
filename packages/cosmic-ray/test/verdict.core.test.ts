@@ -8,8 +8,8 @@ const detected = defineRule({ id: 'cosmic-ray/mutants-detected', description: 'd
 const score = defineRule({ id: 'cosmic-ray/mutation-score', description: 's' });
 const scan = { source: 'cosmic-ray', startedAt: '', finishedAt: '', inspected: null };
 
-function decide(name: FixtureName, policies: Parameters<typeof decideCosmicRayRun>[0]['policies']) {
-  return decideCosmicRayRun({ scan, root: '/p', cwd: '/p', mutants: mutants(name), policies });
+function decide(name: FixtureName, policies: Parameters<typeof decideCosmicRayRun>[0]['policies'], timeouts: 'detected' | 'refuse' = 'refuse') {
+  return decideCosmicRayRun({ scan, root: '/p', cwd: '/p', mutants: mutants(name), timeouts, policies });
 }
 
 test('every mutant killed passes both rules', () => {
@@ -41,7 +41,7 @@ test('a score rule alone does not report each survivor', () => {
   assert.equal(verdict.verdict === 'fail' && verdict.breaches.length, 1);
 });
 
-for (const name of ['pending', 'timeout', 'worker-exception', 'incompetent', 'skipped', 'partial'] as const) {
+for (const name of ['pending', 'worker-exception', 'no-test', 'incompetent', 'skipped', 'partial'] as const) {
   test(`${name} mutants refuse instead of passing`, () => {
     const verdict = decide(name, { mutantsDetected: detected, mutationScore: { rule: score, minimum: 0 } });
     assert.equal(verdict.verdict, 'refuse');
@@ -50,11 +50,42 @@ for (const name of ['pending', 'timeout', 'worker-exception', 'incompetent', 'sk
 }
 
 test('zero mutants refuse', () => {
-  const verdict = decideCosmicRayRun({ scan, root: '/p', cwd: '/p', mutants: [], policies: { mutantsDetected: detected } });
+  const verdict = decideCosmicRayRun({ scan, root: '/p', cwd: '/p', mutants: [], timeouts: 'refuse', policies: { mutantsDetected: detected } });
   assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-no-mutants');
 });
 
 test('a partly finished session (exec killed) refuses even when the finished jobs were all kills', () => {
   const verdict = decide('partial', { mutationScore: { rule: score, minimum: 0 } });
+  assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-incomplete');
+});
+
+test('timeouts: refuse refuses a run with any timed-out mutant', () => {
+  const verdict = decide('one-timeout', { mutantsDetected: detected }, 'refuse');
+  assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-incomplete');
+});
+
+test('timeouts: detected counts an infinite-loop mutant as a kill (a healthy suite passes both rules)', () => {
+  const policies = { mutantsDetected: detected, mutationScore: { rule: score, minimum: 100 } };
+  assert.equal(decide('one-timeout', policies, 'detected').verdict, 'pass');
+});
+
+test('timeouts: detected still lists a timed-out mutant when the score is breached', () => {
+  const verdict = decide('timeout-and-survivors', { mutationScore: { rule: score, minimum: 100 } }, 'detected');
+  assert.equal(verdict.verdict, 'fail');
+  if (verdict.verdict !== 'fail') return;
+  assert.match(verdict.breaches[0]?.detail ?? '', /including 1 timed out: mod\.py:2/u);
+  // 1 killed + 1 timeout of 4 judged is 50%; leaving the timeout out of the score would read 1 of 3 (33.33%).
+  assert.equal(verdict.breaches[0]?.comparison?.actual, '50.00%');
+});
+
+test('more than half of the mutants timing out refuses even when timeouts are detected', () => {
+  for (const name of ['timeout', 'many-timeouts'] as const) {
+    const verdict = decide(name, { mutationScore: { rule: score, minimum: 1 } }, 'detected');
+    assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-timeouts-excessive', name);
+  }
+});
+
+test('timeouts: refuse also refuses the all-timeout run', () => {
+  const verdict = decide('timeout', { mutantsDetected: detected }, 'refuse');
   assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-incomplete');
 });

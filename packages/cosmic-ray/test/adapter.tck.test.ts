@@ -13,7 +13,7 @@ function evidence(name: FixtureName, selected: 'mutantsDetected' | 'mutationScor
     : selected === 'mutationScore'
       ? { mutationScore: { rule: adapter.rules.mutationScore, minimum } }
       : {};
-  return { kind: 'checked', result: decideCosmicRayRun({ scan, root: '/p', cwd: '/p', mutants: mutants(name), policies }) };
+  return { kind: 'checked', result: decideCosmicRayRun({ scan, root: '/p', cwd: '/p', mutants: mutants(name), timeouts: 'detected', policies }) };
 }
 
 const spec = {
@@ -34,7 +34,15 @@ const spec = {
     invalidValues: [{
       name: 'rejects an invalid mutation-score threshold',
       run: () => cosmicRay({ rules: { mutationScore: { minimum: 101 } } }),
-      message: /minimum must be between 0 and 100/u,
+      message: /minimum must be greater than 0 and at most 100/u,
+    }, {
+      name: 'rejects a zero mutation-score threshold, which could never go red',
+      run: () => cosmicRay({ rules: { mutationScore: { minimum: 0 } } }),
+      message: /greater than 0/u,
+    }, {
+      name: 'rejects an unknown timeouts policy',
+      run: () => cosmicRay({ timeouts: 'maybe', rules: { mutantsDetected: true } } as never),
+      message: /timeouts must be 'detected' or 'refuse'/u,
     }, {
       name: 'rejects an unknown rule',
       run: () => cosmicRay({ rules: { magic: true } } as never),
@@ -77,6 +85,7 @@ const spec = {
   purity: {
     kind: 'sources',
     files: [
+      'packages/cosmic-ray/src/core/copy.ts',
       'packages/cosmic-ray/src/core/options.ts',
       'packages/cosmic-ray/src/core/report.ts',
       'packages/cosmic-ray/src/core/verdict.ts',
