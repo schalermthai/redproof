@@ -122,7 +122,7 @@ const owners: Readonly<Record<string, TachRuleKind | null>> = {
   ModuleForbiddenExternalDependency: null,
 };
 
-export const ownerOf = (variant: string): TachRuleKind | null | undefined => owners[variant];
+const ownerOf = (variant: string): TachRuleKind | null | undefined => owners[variant];
 
 const f = (d: Diagnostic, key: string): string => d.fields[key] ?? '?';
 

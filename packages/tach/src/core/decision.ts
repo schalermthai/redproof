@@ -2,7 +2,7 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { breach, result, type Breach, type CheckResult, type Rule, type RuleRef, type Scan } from 'redproof';
 import type { CommandExecution } from 'redproof/command';
 import {
-  MINIMUM_TACH_VERSION, attribute, parseTachReport, parseTachVersion, tachVersionSupported, ruleDefinitions,
+  MINIMUM_TACH_VERSION, attribute, parseTachReport, parseTachVersion, tachVersionSupported,
   type TachReport, type TachRuleKind,
 } from './model.ts';
 
@@ -30,7 +30,7 @@ export function withinRoot(root: string, actual: string): boolean {
 }
 
 /** `tach check` with every check on. Narrowing flags (`--dependencies`, `--interfaces`, `-e`) would let a rule pass unchecked, so none is passed. */
-export const tachCheckArguments: readonly string[] = ['check', '--output', 'json'];
+const tachCheckArguments: readonly string[] = ['check', '--output', 'json'];
 
 const output = (execution: { readonly stdout: string; readonly stderr: string }): string =>
   [execution.stderr.trim(), execution.stdout.trim()].filter(Boolean).join('\n');
@@ -135,5 +135,3 @@ export function checkResult<R extends RuleRef>(decision: TachDecision<R>, timest
   }
   return result.fromBreaches(scan, decision.breaches);
 }
-
-export { ruleDefinitions };
