@@ -1,10 +1,12 @@
 import { isAbsolute, normalize } from 'node:path';
+import type { CosmicRayMutant } from './report.ts';
 
 /** What the sandbox copy does with a directory entry, decided by name only. */
 export type CopyDisposition = 'copy' | 'skip' | 'link';
 
 const SKIPPED = new Set(['.git', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.hypothesis']);
-const LINKED = new Set(['.venv', 'venv', 'env', 'node_modules', '.tox', '.nox']);
+// `env` is deliberately not here: it is a common name for a real source package, and a link would let a mutation write through to it.
+const LINKED = new Set(['.venv', 'venv', 'node_modules', '.tox', '.nox']);
 
 /**
  * cosmic-ray mutates source files in place, and killing it (a timeout, an abort) leaves them mutated.
@@ -21,4 +23,15 @@ export function escapesCopy(modulePath: string): boolean {
   if (isAbsolute(modulePath) || /^[A-Za-z]:/u.test(modulePath)) return true;
   const normalized = normalize(modulePath).replaceAll('\\', '/');
   return normalized === '..' || normalized.startsWith('../');
+}
+
+/** The first planned mutant whose module path would be mutated outside the sandbox, by its spelling alone. */
+export function firstEscapingModule(mutants: readonly CosmicRayMutant[]): CosmicRayMutant | undefined {
+  return mutants.find(mutant => escapesCopy(mutant.modulePath));
+}
+
+/** True when `candidate` (already resolved through links) lies inside `root` (also resolved). Both are absolute. */
+export function isInsideDirectory(root: string, candidate: string): boolean {
+  const base = root.endsWith('/') ? root : `${root}/`;
+  return candidate === root || candidate.startsWith(base);
 }

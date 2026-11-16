@@ -37,15 +37,19 @@ export default defineGate({ id: 'python-test-strength', adapter });
 
 Each Check copies the Gate root into a temporary sandbox and runs `cosmic_ray.cli baseline`, `init`, `dump`, `exec`, `dump` there.
 cosmic-ray rewrites source files in place, and killing it (a timeout, an abort) leaves them mutated, so it must never run on the real tree: your files stay byte-identical on every exit path.
-The copy skips `.git`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.hypothesis` and `*.egg-info`, and symlinks `.venv`, `venv`, `env`, `node_modules`, `.tox` and `.nox` instead of copying them, so a relative test command such as `.venv/bin/python -m pytest` still works. The copy costs one pass over the project's files; over `maxCopyBytes` (default 512 MiB) the run REFUSES `cosmic-ray-copy-too-large`.
-A module path that is absolute or leaves the working directory REFUSES before `exec` (`cosmic-ray-module-path-escapes`), because it would be mutated outside the sandbox.
+The copy skips `.git`, `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.hypothesis` and `*.egg-info`, and symlinks `.venv`, `venv`, `node_modules`, `.tox` and `.nox` instead of copying them (`env` is copied: it is a common name for a real source package), so a relative test command such as `.venv/bin/python -m pytest` still works. The copy costs one pass over the project's files; over `maxCopyBytes` (default 512 MiB) the run REFUSES `cosmic-ray-copy-too-large`.
+Nothing in the copy may lead back to your tree: a symlink that stays inside the project is rebuilt inside the sandbox, one that leaves it is copied by value, a dangling one is dropped. After `init`, every module path is resolved through the sandbox's links; one that is absolute, leaves the working directory, resolves outside the sandbox (for example through a linked `.venv`) or does not exist there REFUSES before `exec` (`cosmic-ray-module-path-escapes`).
+Real-tool tests check the real tree is byte-identical after PASS, FAIL, REFUSE and a timeout kill, with an absolute symlinked source directory, a source package called `env`, and a module path through a linked environment.
+
+`timeoutMs` is one deadline for the whole run: each step gets what is left, and an exhausted deadline REFUSES `command-timeout`.
+The sandbox is removed on every path. Error precedence: the check's own outcome wins. A cleanup failure demotes a PASS to REFUSE `cosmic-ray-cleanup-unavailable`; a REFUSE keeps its code and gains the leftover path in its detail; a FAIL keeps its breaches. If the host process itself is killed, the sandbox (up to `maxCopyBytes`) stays in the system temp directory.
 
 ## Rules
 
 | Rule | Breach |
 | --- | --- |
 | `cosmic-ray/mutants-detected` | one `mutant-survived` per survivor, at `file:line:column`, with the operator and changed line |
-| `cosmic-ray/mutation-score` | `mutation-score-below-minimum` when killed / (killed + survived) is under `minimum` (greater than 0: a minimum of 0 could never go red, so it is rejected) |
+| `cosmic-ray/mutation-score` | `mutation-score-below-minimum` when killed / (killed + survived) is under `minimum`, compared in integers so exact boundaries (29 of 50 at 58%) do not breach (greater than 0: a minimum of 0 could never go red, so it is rejected) |
 
 ## It refuses instead of passing
 

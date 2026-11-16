@@ -12,12 +12,13 @@ import {
   type CosmicRayRuleCatalog,
   type CosmicRayRuleOptions,
 } from '../core/options.ts';
-import { runCosmicRayCheck, type RunCommand } from './run.ts';
+import { runCosmicRayCheck, type RunCommand, type RunEffects } from './run.ts';
 
 /** Internal composition seam: the command runner can be replaced to exercise decisions without Python. */
 export function createCosmicRayAdapter<const O extends CosmicRayAdapterOptions<CosmicRayRuleOptions>>(
   options: O,
   runCommand: RunCommand,
+  effects?: RunEffects,
 ): Adapter<CosmicRayRuleCatalog<O['rules']>> {
   const config = parseCosmicRayOptions(options);
   const rules = defineRules(config.catalog as CosmicRayRuleCatalog<O['rules']>);
@@ -35,7 +36,7 @@ export function createCosmicRayAdapter<const O extends CosmicRayAdapterOptions<C
         ...(named.mutationScore && config.rules.mutationScore
           ? { mutationScore: { rule: named.mutationScore, minimum: config.rules.mutationScore.minimum } }
           : {}),
-      }, runCommand),
+      }, runCommand, effects),
     },
   });
 }

@@ -23,7 +23,7 @@ export type CosmicRayAdapterOptions<O extends CosmicRayRuleOptions> = {
   readonly python?: string;
   /** Relative to the Gate root and confined inside it. Defaults to the root. */
   readonly cwd?: string;
-  /** Whole-run limit. Default 30 minutes. */
+  /** Limit for the whole run (all steps share one deadline; a step gets what is left). Default 30 minutes. */
   readonly timeoutMs?: number;
   /**
    * Capture limit for the dump, which carries every test output (about 1-2 KiB per mutant on a small project, so the

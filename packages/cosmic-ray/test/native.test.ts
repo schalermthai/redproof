@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineGate, runGate } from 'redproof';
@@ -147,4 +147,72 @@ nativeTest('real cosmic-ray: a python without cosmic-ray is named, not blamed on
   if (bare === undefined) return;
   const verdict = await runGate(defineGate({ id: 'mutation', adapter: cosmicRay({ python: bare, rules: DETECTED }) as never }), root);
   assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-not-installed');
+}));
+
+/** Every file below `dir` (not following links) as path -> bytes, so two snapshots can be compared byte for byte. */
+async function snapshot(dir: string, base = dir): Promise<Record<string, string>> {
+  const files: Record<string, string> = {};
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) Object.assign(files, await snapshot(path, base));
+    else if (entry.isFile()) files[path.slice(base.length)] = await readFile(path, 'utf8');
+  }
+  return files;
+}
+
+const SLEEPY = (importLine: string) => `import time\n${importLine}\n\ndef test_add():\n    time.sleep(1.5)\n    assert add(2, 3) == 5\n`;
+
+async function withOutside<T>(fn: (root: string, outside: string) => Promise<T>): Promise<T> {
+  return withWorkspace(root => withWorkspace(outside => fn(root, outside)));
+}
+
+nativeTest('real cosmic-ray: the real tree is byte-identical after PASS, FAIL, REFUSE and a killed run', () => withWorkspace(async root => {
+  await project(root, STRONG);
+  let before = await snapshot(root);
+  assert.deepEqual(await outcome(root, DETECTED), ['pass']);
+  assert.deepEqual(await snapshot(root), before);
+  await project(root, WEAK);
+  before = await snapshot(root);
+  assert.equal((await outcome(root, DETECTED))[0], 'fail');
+  assert.deepEqual(await snapshot(root), before);
+  await project(root, BROKEN);
+  before = await snapshot(root);
+  assert.equal((await outcome(root, DETECTED))[0], 'refuse');
+  assert.deepEqual(await snapshot(root), before);
+  await project(root, SLEEPY('from mod import add'), 20);
+  before = await snapshot(root);
+  assert.deepEqual(await outcome(root, DETECTED, { timeoutMs: 7000 }), ['refuse', 'command-timeout']);
+  assert.deepEqual(await snapshot(root), before);
+}));
+
+nativeTest('real cosmic-ray: an absolute symlink to a source directory cannot be mutated through the sandbox', () => withOutside(async (root, outside) => {
+  await writeFile(join(outside, 'mod.py'), MODULE);
+  await symlink(outside, join(root, 'vendor'), 'dir');
+  await project(root, SLEEPY('from vendor.mod import add'), 20);
+  await writeFile(join(root, 'cosmic-ray.toml'), (await readFile(join(root, 'cosmic-ray.toml'), 'utf8')).replace('module-path = "mod.py"', 'module-path = "vendor/mod.py"'));
+  const before = { root: await snapshot(root), outside: await snapshot(outside) };
+  // killed while a mutant is written into the source it runs on
+  await outcome(root, DETECTED, { timeoutMs: 7000 });
+  assert.deepEqual(await snapshot(outside), before.outside);
+  assert.deepEqual(await snapshot(root), before.root);
+}));
+
+nativeTest('real cosmic-ray: a source package that happens to be called env cannot be mutated through the sandbox', () => withWorkspace(async root => {
+  await mkdir(join(root, 'env'));
+  await writeFile(join(root, 'env', 'mod.py'), MODULE);
+  await project(root, SLEEPY('from env.mod import add'), 20);
+  await writeFile(join(root, 'cosmic-ray.toml'), (await readFile(join(root, 'cosmic-ray.toml'), 'utf8')).replace('module-path = "mod.py"', 'module-path = "env/mod.py"'));
+  const before = await snapshot(root);
+  await outcome(root, DETECTED, { timeoutMs: 7000 });
+  assert.deepEqual(await snapshot(root), before);
+}));
+
+nativeTest('real cosmic-ray: a module path that goes through a linked environment REFUSES before exec and the target stays untouched', () => withOutside(async (root, outside) => {
+  await writeFile(join(outside, 'mod.py'), MODULE);
+  await symlink(outside, join(root, '.venv'), 'dir');
+  await project(root, STRONG);
+  await writeFile(join(root, 'cosmic-ray.toml'), (await readFile(join(root, 'cosmic-ray.toml'), 'utf8')).replace('module-path = "mod.py"', 'module-path = ".venv/mod.py"'));
+  const before = await snapshot(outside);
+  assert.deepEqual(await outcome(root, DETECTED), ['refuse', 'cosmic-ray-module-path-escapes']);
+  assert.deepEqual(await snapshot(outside), before);
 }));

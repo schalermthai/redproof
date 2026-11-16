@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep, isAbsolute } from 'node:path';
 import { result, type CheckContext, type CheckResult, type Scan } from 'redproof';
 import { executeCommand, type CommandExecution, type CommandExecutionOptions, type CompletedCommand } from 'redproof/command';
-import { escapesCopy } from '../core/copy.ts';
+import { firstEscapingModule, isInsideDirectory } from '../core/copy.ts';
+import { classifyStepFailure, type CosmicRayStep, type StepFailure } from '../core/failure.ts';
 import { copyProject } from './sandbox.ts';
 import { cosmicRayArgs, type CosmicRayConfig } from '../core/options.ts';
 import { parseCosmicRayDump } from '../core/report.ts';
@@ -11,27 +12,21 @@ import { decideCosmicRayRun, type CosmicRayPolicies } from '../core/verdict.ts';
 
 export type RunCommand = (options: CommandExecutionOptions) => Promise<CommandExecution>;
 
+/** The effects other than commands that a run needs; replaceable so the cleanup policy can be exercised. */
+export type RunEffects = {
+  readonly remove: (path: string) => Promise<void>;
+  readonly now: () => number;
+};
+
+const realEffects: RunEffects = {
+  remove: path => rm(path, { recursive: true, force: true }),
+  now: () => Date.now(),
+};
+
 export const runCosmicRayCommand: RunCommand = executeCommand;
 
 function scan(startedAt: string, inspected: number | null): Scan {
   return { source: 'cosmic-ray', startedAt, finishedAt: new Date().toISOString(), inspected };
-}
-
-type Failure = { readonly code: string; readonly message: string; readonly detail?: string | undefined };
-
-/** Name what went wrong with a step that exited non-zero, without blaming the tests for a tool or config problem. */
-function failure(step: string, execution: CompletedCommand): Failure {
-  const output = `exit code: ${execution.exitCode}\n${execution.stderr}\n${execution.stdout}`.trim();
-  if (/No module named '?cosmic_ray/u.test(output)) {
-    return { code: 'cosmic-ray-not-installed', message: 'The Python interpreter has no cosmic-ray installed.', detail: output };
-  }
-  if (execution.exitCode === 78) {
-    return { code: 'cosmic-ray-config-invalid', message: 'cosmic-ray could not load its configuration.', detail: output };
-  }
-  if (step === 'baseline' && execution.exitCode === 1 && /Baseline failed/u.test(output)) {
-    return { code: 'cosmic-ray-baseline-failed', message: 'The test suite fails on unmutated code, so every mutant would look killed.', detail: output };
-  }
-  return { code: 'cosmic-ray-producer-unsuccessful', message: `cosmic-ray ${step} did not complete successfully.`, detail: output };
 }
 
 function inside(root: string, candidate: string): boolean {
@@ -45,6 +40,7 @@ export async function runCosmicRayCheck<R extends string>(
   config: CosmicRayConfig,
   policies: CosmicRayPolicies<R>,
   runCommand: RunCommand,
+  effects: RunEffects = realEffects,
 ): Promise<CheckResult<R>> {
   const startedAt = new Date().toISOString();
   const refuse = (code: string, message: string, detail?: string, inspected: number | null = null) =>
@@ -68,17 +64,24 @@ export async function runCosmicRayCheck<R extends string>(
       }
       const sandboxCwd = join(sandbox, relative(root, cwd));
       const session = join(temp, 'session.sqlite');
-      const limits = { cwd: sandboxCwd, timeoutMs: config.timeoutMs, maxOutputBytes: config.maxOutputBytes };
+      // One deadline for the whole run: each step gets what is left of timeoutMs.
+      const deadline = effects.now() + config.timeoutMs;
 
-      const run = async (step: 'baseline' | 'init' | 'exec' | 'dump'): Promise<CommandExecution | Failure> => {
+      const run = async (step: CosmicRayStep): Promise<CommandExecution | StepFailure> => {
+        const remaining = deadline - effects.now();
+        if (remaining <= 0) {
+          return { code: 'command-timeout', message: `The cosmic-ray run used up its timeoutMs of ${config.timeoutMs} before ${step}.` };
+        }
         const execution = await runCommand({
           command: config.python,
           args: cosmicRayArgs(step, config.config, session),
           label: `cosmic-ray ${step}`,
-          ...limits,
+          cwd: sandboxCwd,
+          timeoutMs: remaining,
+          maxOutputBytes: config.maxOutputBytes,
         });
         if (execution.kind === 'refused') return { code: execution.code, message: execution.message, detail: execution.detail };
-        return execution.exitCode === 0 ? execution : failure(step, execution);
+        return execution.exitCode === 0 ? execution : classifyStepFailure(step, execution.exitCode, execution.stdout, execution.stderr);
       };
 
       for (const step of ['baseline', 'init'] as const) {
@@ -92,9 +95,17 @@ export async function runCosmicRayCheck<R extends string>(
       if (items instanceof Error) {
         return refuse('cosmic-ray-report-invalid', 'The cosmic-ray dump could not be read.', items.message);
       }
-      const escaping = items.find(item => escapesCopy(item.modulePath));
+      const escaping = firstEscapingModule(items);
       if (escaping) {
         return refuse('cosmic-ray-module-path-escapes', 'A module path is absolute or outside the working directory, so it would be mutated outside the sandbox.', escaping.modulePath);
+      }
+      // The spelling can look innocent while a link leads out of the copy (a linked environment, a link that survived the copy).
+      const sandboxReal = await realpath(sandbox);
+      for (const item of items) {
+        const resolved = await realpath(join(sandboxCwd, item.modulePath)).catch(() => null);
+        if (resolved === null || !isInsideDirectory(sandboxReal, resolved)) {
+          return refuse('cosmic-ray-module-path-escapes', 'A module path resolves outside the sandbox through a link, or does not exist there, so it would be mutated outside the sandbox.', item.modulePath);
+        }
       }
       const executed = await run('exec');
       if ('code' in executed) return refuse(executed.code, executed.message, executed.detail);
@@ -113,14 +124,18 @@ export async function runCosmicRayCheck<R extends string>(
     }
   })();
 
-  if (temp) {
-    try {
-      await rm(temp, { recursive: true, force: true });
-    } catch (error) {
-      if (outcome.verdict === 'pass') {
-        return refuse('cosmic-ray-cleanup-unavailable', 'Could not clean up the private cosmic-ray session.', String(error));
-      }
+  if (!temp) return outcome;
+  // Error precedence: the check's own outcome wins. A cleanup failure demotes only a PASS (never a pass that left 500 MiB behind);
+  // a REFUSE keeps its code and gains the leaked path in its detail; a FAIL keeps its breaches unchanged.
+  try {
+    await effects.remove(temp);
+    return outcome;
+  } catch (error) {
+    const leaked = `Could not remove ${temp}: ${error instanceof Error ? error.message : String(error)}`;
+    if (outcome.verdict === 'pass') return refuse('cosmic-ray-cleanup-unavailable', 'Could not clean up the sandbox copy.', leaked);
+    if (outcome.verdict === 'refuse') {
+      return result.refuse(outcome.scan, { ...outcome.why, detail: [outcome.why.detail, leaked].filter(Boolean).join('\n') });
     }
+    return outcome;
   }
-  return outcome;
 }

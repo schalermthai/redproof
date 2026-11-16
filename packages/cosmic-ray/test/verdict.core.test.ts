@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defineRule } from 'redproof';
-import { decideCosmicRayRun, cosmicRayMetrics } from '../src/core/verdict.ts';
+import { decideCosmicRayRun, cosmicRayMetrics, scoreBelowMinimum } from '../src/core/verdict.ts';
 import { mutants, type FixtureName } from './support/fixtures.ts';
 
 const detected = defineRule({ id: 'cosmic-ray/mutants-detected', description: 'd' });
@@ -88,4 +88,21 @@ test('more than half of the mutants timing out refuses even when timeouts are de
 test('timeouts: refuse also refuses the all-timeout run', () => {
   const verdict = decide('timeout', { mutantsDetected: detected }, 'refuse');
   assert.equal(verdict.verdict === 'refuse' && verdict.why.code, 'cosmic-ray-incomplete');
+});
+
+test('the score law is decided in integers: 29 of 50 meets a minimum of 58', () => {
+  assert.ok((29 / 50) * 100 < 58, 'in floats this reads 57.99999999999999 and would breach');
+  assert.equal(scoreBelowMinimum(29, 50, 58), false);
+  assert.equal(scoreBelowMinimum(29, 50, 58.000001), true);
+  assert.equal(scoreBelowMinimum(28, 50, 58), true);
+});
+
+test('for every small run and whole minimum, the score law equals exact integer arithmetic', () => {
+  for (let valid = 1; valid <= 200; valid += 1) {
+    for (let killed = 0; killed <= valid; killed += 1) {
+      for (const minimum of [1, 25, 33, 50, 57, 58, 66, 87, 90, 99, 100]) {
+        assert.equal(scoreBelowMinimum(killed, valid, minimum), killed * 100 < minimum * valid, `${killed}/${valid} at ${minimum}`);
+      }
+    }
+  }
 });

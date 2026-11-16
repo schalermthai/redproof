@@ -31,6 +31,14 @@ export type CosmicRayMetrics = {
   readonly score: number | null;
 };
 
+/**
+ * `killed / valid * 100 < minimum`, decided in integers: in floats 29/50 at minimum 58 reads 57.99999999999999 and breaches.
+ * The minimum is taken to six decimals, which keeps every product below 2^53 for any realistic mutant count.
+ */
+export function scoreBelowMinimum(killed: number, valid: number, minimum: number): boolean {
+  return killed * 100 * 1_000_000 < Math.round(minimum * 1_000_000) * valid;
+}
+
 export function cosmicRayMetrics(mutants: readonly CosmicRayMutant[], timeoutsDetected = false): CosmicRayMetrics {
   const killed = mutants.filter(mutant => mutant.status === 'killed' || (timeoutsDetected && mutant.status === 'timeout')).length;
   const survived = mutants.filter(mutant => mutant.status === 'survived').length;
@@ -102,7 +110,7 @@ export function decideCosmicRayRun<R extends string>(run: CosmicRayRun<R>): Chec
   }
 
   const { mutationScore } = policies;
-  if (mutationScore && metrics.score !== null && metrics.score < mutationScore.minimum) {
+  if (mutationScore && metrics.score !== null && scoreBelowMinimum(metrics.killed, metrics.killed + metrics.survived, mutationScore.minimum)) {
     breaches.push(breach(mutationScore.rule, {
       code: 'mutation-score-below-minimum',
       message: 'Mutation score is below the required minimum.',
