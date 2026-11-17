@@ -16,6 +16,7 @@ const dependencies = dependencyCruiser({
     'packages/ruff/src',
     'packages/coverage-py/src',
     'packages/deptry/src',
+    'packages/vulture/src',
     'tests',
     'packages/*/test',
   ],
@@ -96,6 +97,16 @@ export const proofs = defineProofs(gate, [
   ),
   proof.red(
     rules.coreNoEffectImports,
+    'keeps effect imports out of the vulture Adapter core',
+    mutate.appendText('packages/vulture/src/core/model.ts', "\nimport 'node:fs/promises';\n"),
+  ),
+  proof.red(
+    rules.coreNoAmbientInputs,
+    'keeps ambient process state out of the vulture Adapter core',
+    mutate.appendText('packages/vulture/src/core/model.ts', '\nvoid process.cwd();\n'),
+  ),
+  proof.red(
+    rules.coreNoEffectImports,
     'keeps effect imports out of an Adapter core',
     mutate.appendText('packages/testing/src/core/paths.ts', "\nimport 'node:fs/promises';\n"),
   ),
@@ -148,6 +159,11 @@ export const proofs = defineProofs(gate, [
     rules.adaptersPublicCoreApiOnly,
     'keeps the deptry adapter inside the scan and public API boundary',
     mutate.appendText('packages/deptry/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps the vulture adapter inside the scan and public API boundary',
+    mutate.appendText('packages/vulture/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.adaptersNoCrossAdapterImports,
