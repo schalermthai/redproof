@@ -17,6 +17,8 @@ const PACKAGE_DIRS = [
   'packages/ruff',
   'packages/mypy',
   'packages/coverage-py',
+  'packages/deptry',
+  'packages/vulture',
 ] as const;
 
 const INTERNAL_DEPENDENCIES = new Set([

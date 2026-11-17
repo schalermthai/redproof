@@ -1,0 +1,82 @@
+# @redproof/vulture
+
+Redproof adapter for [vulture](https://github.com/jendrikseipp/vulture): find dead Python code. Node-only: the adapter runs `vulture` as a subprocess and parses its text report (`file:line: unused X 'name' (NN% confidence)`), because vulture has no structured output.
+
+```ts
+import { defineGate } from 'redproof';
+import { vulture } from '@redproof/vulture';
+
+export default defineGate({
+  id: 'python-dead-code',
+  adapter: vulture({
+    command: '.venv/bin/vulture',
+    paths: ['src', 'whitelist.py'],
+    minConfidence: 80,
+    rules: { imports: 'unused-import', unreachable: 'unreachable-code' },
+  }),
+});
+```
+
+## Rules
+
+Each entry of `rules` maps your alias to one finding kind and becomes the Redproof rule `vulture/<kind>`. A finding of a selected kind at or above `minConfidence` fails that rule.
+
+| Rule | vulture reports | Usual confidence |
+|---|---|---|
+| `vulture/unused-import` | an import never used | 90 |
+| `vulture/unused-function` | a function never called | 60 |
+| `vulture/unused-class` | a class never used | 60 |
+| `vulture/unused-method` | a method never called | 60 |
+| `vulture/unused-variable` | a variable (or argument) never read | 60 (arguments 100) |
+| `vulture/unused-attribute` | an attribute never read | 60 |
+| `vulture/unused-property` | a property never read | 60 |
+| `vulture/unreachable-code` | code after `return`/`raise`/..., an unsatisfiable `if`/`while`/ternary condition, an unreachable `else` | 100 |
+
+An unknown kind, or the same kind twice, throws when the adapter is constructed.
+
+## Options
+
+| Option | Meaning |
+|---|---|
+| `rules` | alias to kind, at least one |
+| `paths` | files and directories, relative to `cwd` (default `.`). Put whitelist modules here: names they mention count as used |
+| `cwd` | working directory relative to the Gate root |
+| `minConfidence` | integer 0 to 100, default 60 (everything vulture reports). Always passed to vulture |
+| `exclude`, `ignoreNames`, `ignoreDecorators` | vulture's `--exclude`, `--ignore-names`, `--ignore-decorators` patterns (no commas, no leading dash, well-formed text, at most 4096 characters). `exclude` is matched against the ABSOLUTE path of each file, and a word without wildcards means `*word*`: `exclude: ['work']` empties a run in a checkout under `/home/runner/work/...` (REFUSE `vulture-nothing-inspected`, never a pass) while the same commit runs fine elsewhere, so anchor patterns (`'*/build/*'`) |
+| `configFile` | opt in to a `[tool.vulture]` file relative to the Gate root. Its `exclude` can remove files the adapter cannot see, so with it the result reports `inspected: null` instead of a count |
+| `allowTestPathAncestors` | accept a Gate root that has a `test*` directory (`test`, `tests`, `testing`, `testbed`, ...) among its ancestors (see the refusal below) |
+| `command`, `timeoutMs`, `maxOutputBytes` | the executable, a time limit (default 60 s), an output cap (default 10 MiB). A relative `command` such as `.venv/bin/vulture` is resolved against `cwd`, so with `cwd: 'sub'` it REFUSES `command-unavailable`: give an absolute path then |
+
+By default `--config` points at an empty file, so a project's own `exclude`, `ignore_names`, `ignore_decorators`, `paths` or `min_confidence` cannot hide a finding; the Gate's options are the whole configuration. With `configFile` the file's `exclude` can remove files the adapter cannot see, so a pass is only as strong as that file.
+
+## When the check REFUSES instead of passing
+
+| Code | Cause |
+|---|---|
+| `vulture-input-unread` | vulture wrote anything to stderr: a syntax error, bad encoding, a missing path, a crash. The run goes out with `PYTHONWARNINGS=ignore`, so no Python warning is expected there, and nothing is classified by its shape (a file name or source text can imitate any shape). Checked on every exit code, because exit 3 (findings) hides a syntax error elsewhere |
+| `vulture-input-invalid` | exit 1 with nothing explaining it |
+| `vulture-path-unreadable` | a directory below the paths cannot be listed. `Path.rglob` skips it without a word, so the code in it would never be analysed |
+| `vulture-unsafe-file-name` | a Python file name holds a line break (CR, LF, U+2028 or U+2029), which can forge a line of the report |
+| `vulture-root-in-test-directory` | the Gate root has an ancestor directory whose name starts with `test` (`test`, `tests`, `testing`, `testbed`, `test-runner`, ...; vulture's own rule is the pattern `*/test*.py`, and `*` crosses `/`). vulture then treats every file as a test file and counts `test_*` functions and `*Test*` classes as used, so the same commit would get a different verdict in a checkout elsewhere (a CI workspace under `/tests/` or `/testbed/`). `allowTestPathAncestors` accepts it |
+| `vulture-path-outside-root` | a path, or a `.py` symbolic link found below one, leads outside the Gate root. vulture reads the target and judges "test file" by the target's own path, so a link to `../tests/x.py` would hide its `test_*` names |
+| `vulture-nothing-inspected` | no Python file would be read (empty directory, only non-`.py` files, everything excluded) |
+| `vulture-report-unrecognised` | a stdout line is not exactly one of the shapes vulture prints (format drift, a traceback). The line is read from the right: the last `:<line>: <message> (N% confidence)` wins, and a name inside the quotes cannot hold a space or a quote, so a hostile file name cannot swallow or re-label a real finding. An unparseable line refuses every rule, because its kind is unknown: it may belong to the one you selected. A finding that parses but is of a kind you did not select is simply not yours |
+| `vulture-report-inconsistent` | exit 0 with findings, or exit 3 without |
+| `vulture-usage-error`, `vulture-unsuccessful` | exit 2, or any exit other than 0, 1, 3 (137, 139, ...) |
+| `vulture-version-unknown` / `vulture-version-unsupported` | not vulture, or older than 2.12 (the first with `--config`). The native tests were run against 2.12, 2.13, 2.14, 2.15 and 2.16 on 2026-11-16; CI runs 2.12 and 2.16 |
+| `vulture-path-*` | a named path or config file is missing or outside the Gate root |
+| `command-*` | the executable is missing, timed out, was killed, or its output passed the cap |
+
+## Blind spots
+
+- **vulture's bundled whitelists hide names, not only imports.** vulture ships whitelists for `argparse`, `ast`, `collections`, `ctypes`, `enum`, `logging`, `pint`, `socketserver`, `ssl`, `string`, `sys`, `threading` and `unittest` (154 names in all, among them `run`, `emit`, `filter`, `format`, `parse`, `debug`, `name`, `setUp`, `tearDown`, `visit_*`). It scans a whitelist whenever ANY file imports its module, used or not, and every name it mentions counts as used for the whole run. So an unused `import sys` is invisible, and so is a dead `def run()` as soon as some file has `import threading`: the same dead code passes or fails depending on an unrelated import. `exclude: ['whitelists/*_whitelist.py']` removes them from the run and reveals the hidden findings (it matches only vulture's own whitelist files, not a file of yours at `whitelists/x_whitelist.py`); a test pins the behaviour so a change in vulture shows up.
+- **`__init__.py` imports and `from x import *` are never reported.** vulture skips unused imports in `__init__.py` (they are re-exports) and in star imports, so `vulture/unused-import` cannot see either; a test pins both.
+- `# noqa` and `# noqa: V10x` comments suppress findings (vulture offers no way to turn them off).
+- vulture treats test files specially (`test_*` functions, `*Test*` classes) and cannot see dynamic use: that is what whitelist modules and `ignoreNames` are for. A file whose own name looks like a test (`test*.py`, `*_test.py`) is judged the same way everywhere; the path of the checkout is not (see `vulture-root-in-test-directory`).
+- `unreachable-code` merges every reachability message (`unreachable code after`, `unsatisfiable ... condition`, `unreachable ... block`, `redundant if-condition`, `unreachable 'else' expression`); the text report does not name the category. A test reads the installed vulture's own message strings, so a message added in a new release breaks the suite instead of a user's Gate.
+- Default `paths` is `.`: a `.venv` or `node_modules` inside it is scanned too (vulture's walk includes hidden directories). Put them in `exclude`; an oversized report REFUSES at `maxOutputBytes`.
+- A `.py` file that is a FIFO or another special file makes vulture block until `timeoutMs`, then REFUSE `command-timeout` (slow, never a pass).
+- A reversed range in `exclude` (`[b-a]`) is valid from Python 3.10 on, where the adapter follows CPython 3.12; on Python 3.8 and 3.9 vulture itself crashes on it, and the Gate REFUSES `vulture-input-unread`.
+- Symbolic links to directories are not entered (as in `Path.rglob`): code reached only through one is never read, and nothing says so.
+- The file count behind `vulture-nothing-inspected` mirrors vulture's directory walk and its `--exclude` (`fnmatch`, a line-for-line port, compared with Python's own `fnmatch` on seeded bracket-heavy fuzz, on fuzz with non-BMP characters (`?` and `[...]` match one code point, as in Python) and with real vulture runs). It is a guard against empty runs, not a list of what was read.
+- Windows is untested: `fnmatch` folds case and separators there and the matcher mirrors that by reading the code; CI is Linux only.

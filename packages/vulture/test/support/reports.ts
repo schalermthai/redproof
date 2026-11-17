@@ -1,0 +1,6 @@
+// Real vulture 2.16 output captured by the battle test (24-vulture/battle), as plain strings so functional-core tests need no filesystem.
+export const reports = {
+  dirty: "a.py:1: unused import 'os' (90% confidence)\na.py:3: unused import 'OD' (90% confidence)\na.py:10: unused function 'unused_func' (60% confidence)\na.py:10: unused variable 'unused_arg' (100% confidence)\na.py:11: unused variable 'local_unused' (60% confidence)\na.py:13: unreachable code after 'return' (100% confidence)\na.py:16: unused class 'UnusedClass' (60% confidence)\na.py:17: unused variable 'attr' (60% confidence)\na.py:19: unused method 'method' (60% confidence)\na.py:20: unused attribute 'field' (60% confidence)\na.py:22: unused property 'prop' (60% confidence)\na.py:27: unsatisfiable 'if' condition (100% confidence)\na.py:28: unused variable 'x' (60% confidence)\na.py:30: unsatisfiable 'while' condition (100% confidence)\na.py:33: unused function 'f' (60% confidence)\na.py:35: unused variable 'y' (60% confidence)\na.py:35: unreachable code after 'raise' (100% confidence)\n",
+  syntaxError: "/p/bad.py:1: invalid syntax at \"def broken(:\"\n",
+  syntaxWarning: "/p/w.py:2: SyntaxWarning: \"\\d\" is an invalid escape sequence. Such sequences will not work in the future. Did you mean \"\\\\d\"? A raw string is also an option.\n  re.compile(\"\\d\")\n",
+} as const;
