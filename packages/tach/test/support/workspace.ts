@@ -11,12 +11,14 @@ export const readFixture = (name: string): Promise<string> => readFile(join(fixt
 /**
  * The tach under test: `REDPROOF_TACH_PYTHON` names the Python of a venv that has tach (its `tach` script sits
  * beside it), else the battle-test venv in `22-tach/`. No tach, no native tests: they are not registered, because
- * the repo gate bans skipped tests.
+ * the repo gate bans skipped tests; `REDPROOF_TACH_REQUIRED=1` (CI) turns that into a failing test.
  */
 const python = process.env.REDPROOF_TACH_PYTHON
   ?? fileURLToPath(new URL('../../../../../22-tach/.venv/bin/python', import.meta.url));
 export const tachBinary = join(dirname(python), 'tach');
 export const hasTach = existsSync(tachBinary);
+/** CI sets this beside the virtualenv: a missing tach there must fail, not silently unregister the native tests. */
+export const tachRequired: boolean = /^(1|true|yes)$/iu.test(process.env.REDPROOF_TACH_REQUIRED ?? '');
 export const nativeTest = (test: typeof import('node:test').test): typeof test =>
   hasTach ? test : (Object.assign(() => undefined, test) as never);
 

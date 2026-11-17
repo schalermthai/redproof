@@ -96,7 +96,7 @@ tach prints a clean report for a rule whose configuration is missing or turned o
 
 `allowIgnoredSources` accepts the ignore-file, nested-repository and symlink cases knowingly; `allowExcludedSources` accepts an exclude. Neither covers overlapping roots.
 
-**One kind per import.** tach reports one kind of finding per import, in this order: layer, then forbidden, then deprecated and undeclared (`checks/internal_dependency.rs`). A Gate that selects `undeclared-dependency` alone therefore PASSES an import tach labels forbidden or layer, even if it is also undeclared. The shared adapter contract (a Gate ignores kinds it did not select) rules out refusing it, and telling the cases apart needs tach's own `depends_on` matching. To rule such imports out, select the higher kinds too. `tests/exposure.native.test.ts` pins this.
+**One kind per import.** tach reports one kind of finding per import, in this order: layer, then forbidden, then deprecated and undeclared (`checks/internal_dependency.rs`). A Gate that selects `undeclared-dependency` alone therefore PASSES an import tach labels forbidden or layer, even if it is also undeclared. The shared adapter contract (a Gate ignores kinds it did not select) rules out refusing it, and telling the cases apart needs tach's own `depends_on` matching. To rule such imports out, select the higher kinds too. `packages/tach/test/exposure.native.test.ts` pins this.
 
 **Source roots** outside the Gate root, by `..`, an absolute path or a symlink, REFUSE (`tach-path-outside-root`).
 
@@ -110,4 +110,4 @@ These cannot be told from the JSON or from the configuration, so they are docume
 - Files outside `source_roots`, notebooks, and a module `layer` that no `layers` entry defines (tach raises nothing).
 - `UnnecessarilyIgnoredDependency` exists in tach's diagnostic enum but tach 0.35.3 never constructs it (it is only formatted), so it cannot be produced; if a newer tach prints it, it is an unknown variant and REFUSES.
 
-Evidence for each: `22-tach/REDPROOF_TACH_BATTLE_TEST.md`. Verified against tach 0.35.3.
+Each is covered by a test in `packages/tach/test/` that runs the real tach. Verified against tach 0.35.3.

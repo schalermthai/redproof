@@ -5,7 +5,12 @@ import { dirname, join } from 'node:path';
 import { defineGate, runGate } from 'redproof';
 import { tach, type TachRuleKind } from '../src/index.ts';
 import { projects, type ProjectName } from './support/projects.ts';
-import { nativeTest, tachBinary, withFiles, withProject } from './support/workspace.ts';
+import { hasTach, nativeTest, tachBinary, tachRequired, withFiles, withProject } from './support/workspace.ts';
+
+if (tachRequired && !hasTach) {
+  test('the tach the environment names is installed (REDPROOF_TACH_REQUIRED=1 says CI must run the native tests)', () => assert.fail(
+    `No tach found at ${tachBinary}. Set REDPROOF_TACH_PYTHON to the python of a virtualenv that has tach.`));
+}
 
 // Real tach, through the Gate a user would write, one rule selected alone each time.
 const t = nativeTest(test);
