@@ -150,7 +150,7 @@ const HARMLESS = new Set([
   'show_column_numbers', 'show_error_code_links', 'show_error_context', 'show_error_end', 'skip_cache_mtime_checks',
   'skip_version_check', 'sqlite_cache', 'sqlite_num_shards', 'files', 'namespace_packages',
   'explicit_package_bases', 'package_root', 'enable_incomplete_feature', 'enable_error_code', 'enabled_error_codes',
-  'native_parser', 'cache_map', 'fast_module_lookup',
+  'native_parser', 'cache_map', 'fast_module_lookup', 'warn_unused_configs',
 ]);
 const ONLY_TRUE = new Set([
   'check_untyped_defs', 'disallow_any_decorated', 'disallow_any_explicit', 'disallow_any_expr', 'disallow_any_generics',

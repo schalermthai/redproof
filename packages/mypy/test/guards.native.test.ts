@@ -97,7 +97,8 @@ const matrix: ReadonlyArray<readonly [string, Files, Partial<MypyOptions>, Outco
   ['B8: a .py beside a .pyi in a folder holding pyvenv.cfg', { 'a.py': 'x: int = 1\n', 'pkg/pyvenv.cfg': '', 'pkg/m.py': BAD, 'pkg/m.pyi': 'x: int\n' }, { paths: ['.'] }, 'mypy-files-unchecked'],
   ['B3b: a re-exported no_type_check decorator', { 'u.py': 'from typing import no_type_check as skip\n', 'a.py': 'from u import skip\n@skip\ndef f() -> None:\n    x: int = "a"\n' }, { paths: ['.'] }, 'mypy-no-type-check'],
   ['B3b: no_type_check reached as an attribute of an own module', { 'u.py': 'from typing import no_type_check as skip\n', 'a.py': 'import u\n@u.skip\ndef f() -> None:\n    x: int = "a"\n' }, { paths: ['.'] }, 'mypy-no-type-check'],
-  ['S5: warn_unused_configs is not vetted', { 'a.py': BAD, 'mypy.ini': '[mypy]\nwarn_unused_configs = True\n[mypy-zzz]\ndisallow_any_generics = True\n' }, {}, 'mypy-setting-unvetted'],
+  ['I1: strict = true reaches a verdict on every version (it expands to warn_unused_configs on 1.11)', { 'a.py': 'x: int = 1\n', 'pyproject.toml': '[tool.mypy]\nstrict = true\n' }, {}, 'pass'],
+  ['I1: warn_unused_configs only talks; the unused-section warning it adds still refuses, as stderr or as an unplaceable note', { 'a.py': BAD, 'mypy.ini': '[mypy]\nwarn_unused_configs = True\n[mypy-zzz]\ndisallow_any_generics = True\n' }, {}, 'mypy-config-warning|mypy-unexpected-stderr|mypy-report-unavailable'],
   // Review round 3
   ['an empty module and a comment-only module are not whole-file ignores', { 'a.py': 'x: int = 1\n', 'pkg/__init__.py': '', 'pkg/notes.py': '# only a comment\n\n# and another\n' }, { paths: ['.'] }, 'pass'],
   ['B9: a lone CR before the used ignore does not move it onto the unused one', { 'a.py': Buffer.from('y = 1  # type: ignore\rx: int = "a"  # type: ignore\n') }, {}, 'mypy-ignore-comments'],

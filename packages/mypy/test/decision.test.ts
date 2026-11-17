@@ -233,7 +233,7 @@ test('a global disable of the selected code does not hide it: the command line e
 
 test('settings that only tighten, or only change how mypy talks, are accepted', async () => {
   const probe = tweak('clean', f => {
-    Object.assign(f.changed, { disallow_untyped_defs: true, warn_unreachable: true, strict_equality: true, implicit_reexport: false, show_column_numbers: true, pretty: true });
+    Object.assign(f.changed, { disallow_untyped_defs: true, warn_unreachable: true, strict_equality: true, implicit_reexport: false, show_column_numbers: true, pretty: true, warn_unused_configs: true });
     f.sections = { 'pkg.*': { disallow_any_generics: true } };
   });
   assert.equal((await decide('clean', { probe })).kind, 'evidence');

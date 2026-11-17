@@ -135,7 +135,7 @@ the tree and a stale cache cannot answer), and `--enable-error-code` for every s
 | `mypy-setting-hides-findings` | `ignore_errors`, `follow_imports = skip/silent`, `ignore_missing_imports`, `exclude`, `always_true/false`, `plugins`, or a `[mypy-x]` section that disables a selected code |
 | `mypy-setting-unvetted` | a setting not on the adapter's list of settings that cannot hide a finding or change the tree (a section turning `check_untyped_defs` off, `strict_optional = False`, `junit_xml`, `*_report`, `install_types`, anything new) |
 | `mypy-inline-config` | a `# mypy:` comment in a source file |
-| `mypy-ignore-comments` | a `# type: ignore` before the first statement (whole file), or one that suppressed an error a selected rule could report; a list such as `[assignment, call-arg]` is judged code by code, and `[]` or a malformed list counts as a bare ignore. An ignore of `import-not-found`, `import-untyped` or `unreachable` counts too unless you allow `unresolved-imports` / `unreachable-code` |
+| `mypy-ignore-comments` | a `# type: ignore` before the first statement (whole file), or one that suppressed an error a selected rule could report; a list such as `[assignment, call-arg]` is judged code by code by mypy's own parse of the comment, so `[]` is whatever mypy makes of it (it hides errors on 2.4.1 and dev, not on 1.11.0) and the verdict follows. An ignore of `import-not-found`, `import-untyped` or `unreachable` counts too unless you allow `unresolved-imports` / `unreachable-code` |
 | `mypy-files-unchecked` | a Python file under a named path that mypy never loaded: a `.py` beside a `.pyi`, a hidden directory, `node_modules`, `site-packages`, anything mypy's own discovery skips. Name the source folders in `paths`, or allow `skipped-files` |
 | `mypy-closure-mismatch`, `mypy-unrecognised-message` | the build that listed what mypy loaded lacks a file mypy said it would check, or an unused-ignore message is in a wording this adapter does not know (every wording of mypy 1.11 to 2.5 is matched by an anchored grammar; anything else refuses) |
 | `mypy-no-type-check` | a function or class decorated with `@no_type_check` (also `typing.no_type_check` and an alias), whose body mypy skips without a word |
@@ -167,8 +167,8 @@ What the one comparison cannot see. Each of these can still give a PASS that say
 - Each of the three Python processes (option probe, build probe, the run) gets the full `timeoutMs`.
 
 - Code behind a condition mypy evaluates as false: `sys.platform` and `sys.version_info` branches for the pinned version and platform (your choice,
-  made explicit by `pythonVersion` and `platform`), `if not TYPE_CHECKING:`, and dead code after `assert False` or a `NoReturn` call. `--warn-unreachable`
-  does not report these.
+  made explicit by `pythonVersion` and `platform`), and the `else` of `if TYPE_CHECKING:`. mypy skips these silently and `--warn-unreachable` does not report them, so the Gate passes with the code unchecked.
+  Dead code after `assert False`, `sys.exit()` or a `NoReturn` call is different: mypy reports it, and the Gate REFUSES with `mypy-unreachable-code`.
 - The verdict depends on the packages and stubs installed for `python`. Missing ones surface as `import-not-found` / `import-untyped`, which refuse, but a
   different version of a library can still change a finding.
 - Files from installed packages and typeshed are not scanned for ignore comments (mypy does not report their errors).
