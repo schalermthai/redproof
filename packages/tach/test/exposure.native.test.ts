@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
+import { basename, delimiter, dirname, join } from 'node:path';
 import { defineGate, runGate } from 'redproof';
 import { tach, type TachRuleKind } from '../src/index.ts';
 import { nativeTest, tachBinary, withFiles } from './support/workspace.ts';
@@ -99,13 +99,22 @@ t('B4: a .gitignore ABOVE the repository root hides files from tach and not from
 t('B5: git that cannot open a repository (dubious ownership) is not "no repository": REFUSE unknown; allowIgnoredSources accepts', () => withFiles(LEGACY, async root => {
   git(root, 'init', '-q');
   await write(root, '.git/info/exclude', 'legacy/\n');
-  const before = process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
-  process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = '1';
+  // A git that answers the way git does for a foreign-owned repository (exit 128), whatever the real git build honours:
+  // GIT_TEST_ASSUME_DIFFERENT_OWNER is not portable, so the answer is put in front of the real git on PATH.
+  const shim = join(root, '..', `${basename(root)}-shim`);
+  await mkdir(shim, { recursive: true });
+  const real = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  // Only the probe for the repository fails; every other call goes to the real git, so a guard that stops asking is visible.
+  await writeFile(join(shim, 'git'), `#!/bin/sh\ncase "$*" in *--show-toplevel*) echo "fatal: detected dubious ownership in repository at '${root}'" >&2; exit 128;; esac\nexec '${real}' "$@"\n`);
+  await chmod(join(shim, 'git'), 0o755);
+  const before = process.env.PATH;
+  process.env.PATH = `${shim}${delimiter}${before ?? ''}`;
   try {
     assert.deepEqual(await verdict(root, RULE), UNKNOWN);
     assert.deepEqual(await verdict(root, RULE, { allowIgnoredSources: true }).then(v => v[0]), 'pass');
   } finally {
-    if (before === undefined) delete process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER; else process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = before;
+    process.env.PATH = before;
+    await rm(shim, { recursive: true, force: true });
   }
   assert.deepEqual(await verdict(root, RULE), SOURCES, 'with normal git the same .git/info/exclude is listed');
 }));
