@@ -273,7 +273,7 @@ await writeFile(resolve(root, 'a.py'), 'x = BAD\\n');
 // probe (-c) with the facts mypy would give, and the check (-m mypy) with a finding while a.py still holds BAD.
 const facts = { kind: 'facts', mypyVersion: '2.4.1', hostVersion: [3, 13], hostPlatform: 'linux', configFile: null, stdout: '', stderr: '',
   sources: [{ path: 'a.py', module: 'a' }], changed: {}, sections: {}, files: [{ path: 'a.py', unreadable: null, ignores: [], inline: [] }] };
-const closure = { kind: 'closure', mypyVersion: '2.4.1', modules: [{ module: 'a', path: resolve(root, 'a.py'), stub: false, unreadable: null, ignores: [], inline: [], noTypeCheck: [] }], promised: [resolve(root, 'a.py')] };
+const closure = { kind: 'closure', mypyVersion: '2.4.1', modules: [{ module: 'a', path: resolve(root, 'a.py'), stub: false, unjudgeable: null, ignores: [], wholeFile: false, inlineOptions: [], noTypeCheck: [] }], promised: [resolve(root, 'a.py')] };
 const standIn = resolve(root, 'python-stand-in.mjs');
 await writeFile(standIn, [
   '#!/usr/bin/env node',
