@@ -13,7 +13,8 @@
  *   REDPROOF-UNSTARTED       the test command could not be started: not a kill
  *   timeout                  cosmic-ray's own timeout convention, kept as is; only when the runner itself was still running
  *
- * After every run the whole process group of the test command is killed, so a child the mutant left behind cannot outlive it.
+ * Each test command's process group is also listed in a "pgids" folder (named by REDPROOF_PGIDS) while it runs, so the adapter can
+ * kill it if cosmic-ray itself is killed by the run deadline. After every run the whole process group of the test command is killed, so a child the mutant left behind cannot outlive it.
  * A held pipe is never read as a timeout: a runner that exited keeps its exit code even when a child kept the pipe open.
  *
  * stderr is merged into stdout. During `baseline`, anything but a pass is reported as a failure, so a baseline that could not
@@ -34,6 +35,27 @@ def _kill_group(proc):
     except (AttributeError, OSError):
         pass
 
+# Each running test command registers its process group in $REDPROOF_PGIDS/<pid>, so that if cosmic-ray itself is killed
+# (the adapter's deadline) the adapter can kill the groups that are still registered. Finished runs remove their entry.
+_GROUPS = os.environ.get('REDPROOF_PGIDS', '')
+
+def _register(proc):
+    if not _GROUPS:
+        return
+    try:
+        os.makedirs(_GROUPS, exist_ok=True)
+        open(os.path.join(_GROUPS, str(proc.pid)), 'w').close()
+    except OSError:
+        pass
+
+def _unregister(proc):
+    if not _GROUPS:
+        return
+    try:
+        os.remove(os.path.join(_GROUPS, str(proc.pid)))
+    except OSError:
+        pass
+
 def _not_a_kill(marker, text):
     # A baseline that did not pass must fail the baseline; a mutant that was not judged must stay unjudged.
     return (TestOutcome.KILLED if _BASELINE else TestOutcome.INCOMPETENT, marker + '\\n' + text)
@@ -43,6 +65,7 @@ def _run_tests(command, timeout):
     env['PYTHONDONTWRITEBYTECODE'] = '1'
     try:
         proc = subprocess.Popen(shlex.split(command), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+        _register(proc)
         timed_out = False
         try:
             out, _ = proc.communicate(timeout=timeout)
@@ -53,6 +76,7 @@ def _run_tests(command, timeout):
             _kill_group(proc)
             out, _ = proc.communicate()
         _kill_group(proc)
+        _unregister(proc)
         if timed_out:
             return (TestOutcome.KILLED, 'timeout')
         text = out.decode('utf-8', 'replace')

@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep, isAbsolute } from 'node:path';
 import { result, type CheckContext, type CheckResult, type Scan } from 'redproof';
@@ -22,6 +22,19 @@ const realEffects: RunEffects = {
   remove: path => rm(path, { recursive: true, force: true }),
   now: () => Date.now(),
 };
+
+/**
+ * After cosmic-ray was killed (deadline, abort) the test command it started is orphaned and runs on in a deleted sandbox. The driver
+ * lists the process group of every test command that is still running; kill those groups before the sandbox goes.
+ */
+async function killLeftoverTestProcesses(temp: string): Promise<void> {
+  const names = await readdir(join(temp, 'pgids')).catch(() => [] as string[]);
+  for (const name of names) {
+    const pid = Number(name);
+    if (!Number.isInteger(pid) || pid <= 1) continue;
+    try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ }
+  }
+}
 
 export const runCosmicRayCommand: RunCommand = executeCommand;
 
@@ -82,6 +95,7 @@ export async function runCosmicRayCheck<R extends string>(
           cwd: sandboxCwd,
           timeoutMs: remaining,
           maxOutputBytes: config.maxOutputBytes,
+          env: { REDPROOF_PGIDS: join(temp as string, 'pgids') },
         });
         if (execution.kind === 'refused') return { code: execution.code, message: execution.message, detail: execution.detail };
         return execution.exitCode === 0 ? execution : classifyStepFailure(step, execution.exitCode, execution.stdout, execution.stderr);
@@ -134,6 +148,7 @@ export async function runCosmicRayCheck<R extends string>(
   // Error precedence: the check's own outcome wins. A cleanup failure demotes only a PASS (never a pass that left 500 MiB behind);
   // a REFUSE keeps its code and gains the leaked path in its detail; a FAIL keeps its breaches unchanged.
   try {
+    await killLeftoverTestProcesses(temp);
     await effects.remove(temp);
     return outcome;
   } catch (error) {

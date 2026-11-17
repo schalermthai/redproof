@@ -94,6 +94,17 @@ nativeTest('real cosmic-ray: one infinite-loop mutant is detected by default and
   assert.deepEqual(await outcome(root, { mutationScore: { minimum: 100 } }, { timeouts: 'refuse' }), ['refuse', 'cosmic-ray-incomplete']);
 }));
 
+nativeTest('real cosmic-ray: after the run deadline kills cosmic-ray, the test process it started is killed too', () => withWorkspace(async root => {
+  const pidFile = join(root, 'pid.txt');
+  await project(root, `import os, time\nfrom mod import add\n\ndef test_add():\n    open(${JSON.stringify(pidFile)}, 'w').write(str(os.getpid()))\n    time.sleep(120)\n    assert add(2, 3) == 5\n`, 300);
+  assert.deepEqual(await outcome(root, DETECTED, { timeoutMs: 6000 }), ['refuse', 'command-timeout']);
+  const pid = Number(await readFile(pidFile, 'utf8'));
+  assert.ok(pid > 1, 'the test started');
+  const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  for (let waited = 0; alive() && waited < 3000; waited += 100) await new Promise(done => setTimeout(done, 100));
+  assert.equal(alive(), false, `test process ${pid} is still running after the deadline`);
+}));
+
 nativeTest('real cosmic-ray: a killed run leaves the project byte-identical and the next run starts from the original code', () => withWorkspace(async root => {
   await project(root, 'import time\nfrom mod import add\n\ndef test_add():\n    time.sleep(1.5)\n    assert add(2, 3) == 5\n', 20);
   const files = ['mod.py', 'test_mod.py', 'cosmic-ray.toml'];
