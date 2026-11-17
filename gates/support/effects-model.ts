@@ -47,6 +47,8 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/coverage-py/src/shell/collect.ts',
   'packages/tach/src/shell/check.ts',
   'packages/tach/src/shell/ignored.ts',
+  'packages/deptry/src/shell/check.ts',
+  'packages/vulture/src/shell/check.ts',
   'packages/testing/src/shell/command-runner.ts',
   'packages/testing/src/shell/vitest-runner.ts',
 ]);

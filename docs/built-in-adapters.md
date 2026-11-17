@@ -16,6 +16,8 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
 | Python module boundaries, layers, and interfaces hold | [`@redproof/tach`](#tach) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
+| A Python project declares exactly the dependencies it imports | [`@redproof/deptry`](#deptry) |
+| A Python project has no dead code | [`@redproof/vulture`](#vulture) |
 | A command succeeds based on its exit code | [Command Checks](./commands.md) |
 | Something not covered here | [Custom Adapter](./custom-adapter.md) |
 
@@ -616,6 +618,49 @@ Your Ruff configuration decides the scope, so `exclude`, `per-file-ignores` and 
 A missing Ruff, an unknown rule code, a broken configuration, an unreadable or unparseable file, a missing path, an empty file list, or a Ruff older than 0.4.10 is REFUSE, not PASS.
 
 See the [Ruff package](../packages/ruff/README.md) for every REFUSE code and what the configuration can hide.
+## deptry
+
+Select the deptry checks you adopt for a Python project:
+
+```ts
+import { deptry } from '@redproof/deptry';
+import { defineGate } from 'redproof';
+
+const adapter = deptry({
+  command: '.venv/bin/deptry',
+  rules: { missing: 'DEP001', unused: 'DEP002', transitive: 'DEP003' },
+});
+
+export default defineGate({ id: 'python-dependencies', adapter });
+```
+
+Each code (`DEP001` to `DEP005`) is its own Rule `deptry/<code>`. Run deptry from the project's virtualenv: it reads installed package metadata, and a declared package that is not installed makes the check REFUSE, because deptry then guesses its module name. The project's own `[tool.deptry]` settings that could hide a finding (`ignore`, `per_rule_ignores`, `known_first_party`, `package_module_name_map`, `exclude`, `extend_exclude`) are overridden on the command line and the settings deptry echoes are checked, so a project setting never silences a selected rule; `allowPerRuleIgnores`, `allowKnownFirstParty` and `allowPackageModuleNameMap` accept the project's own value. deptry also exits 0 after skipping a file it cannot parse or scanning no files, and exits 1 on a crash as well as on findings, so the adapter REFUSES in those cases. The check also compares the list of files deptry says it scanned with an independent walk and REFUSES on any difference, on a file name that holds a line break, on an unreadable directory, and on `# deptry: ignore` comments that silenced a selected rule (`allowInlineIgnores` accepts them). `DEP001` alone is satisfied by an undeclared import of an installed package; select `DEP003` too.
+
+See the [deptry package](../packages/deptry/README.md) for every refusal and blind spot.
+
+## vulture
+
+Select the kinds of dead Python code you want absent:
+
+```ts
+import { vulture } from '@redproof/vulture';
+import { defineGate } from 'redproof';
+
+const adapter = vulture({
+  command: '.venv/bin/vulture',
+  paths: ['src'],
+  minConfidence: 80,
+  rules: { imports: 'unused-import', unreachable: 'unreachable-code' },
+});
+
+export default defineGate({ id: 'python-dead-code', adapter });
+```
+
+Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) decides which findings count. vulture only prints text, so the adapter parses `file:line: unused X 'name' (NN% confidence)` and REFUSES on any line it does not understand. A project's own `[tool.vulture]` is not read unless you pass `configFile`, because its `exclude` could hide findings. vulture exits 0 after skipping a file it cannot parse and prints that only on stderr, even when it also exits 3 for findings elsewhere, so the adapter reads stderr on every exit (the run goes out with `PYTHONWARNINGS=ignore`, so any stderr line means input was not read) and REFUSES when a file was not read, when no Python file would be read, and when the run did not finish.
+
+It also REFUSES when a directory cannot be read, when the Gate root sits under a directory whose name starts with `test` (vulture would then count `test_*` functions as used, so the verdict would depend on the checkout path; `allowTestPathAncestors` accepts it), when a Python file is a symbolic link that leads outside the Gate root, and when a file name holds a line break. vulture also ships whitelists for a few standard-library modules (`sys`, `logging`, `threading`, `unittest`, ...): once any file imports one, the names in it count as used everywhere, so an unused `import sys` and dead functions called `run`, `emit` or `setUp` are invisible. `exclude: ['whitelists/*_whitelist.py']` reveals them (see the package README).
+
+See the [vulture package](../packages/vulture/README.md) for every refusal and blind spot.
 
 ## tach
 
