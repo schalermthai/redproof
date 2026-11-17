@@ -15,6 +15,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
+| A Python project declares exactly the dependencies it imports | [`@redproof/deptry`](#deptry) |
 | A command succeeds based on its exit code | [Command Checks](./commands.md) |
 | Something not covered here | [Custom Adapter](./custom-adapter.md) |
 
@@ -615,6 +616,25 @@ Your Ruff configuration decides the scope, so `exclude`, `per-file-ignores` and 
 A missing Ruff, an unknown rule code, a broken configuration, an unreadable or unparseable file, a missing path, an empty file list, or a Ruff older than 0.4.10 is REFUSE, not PASS.
 
 See the [Ruff package](../packages/ruff/README.md) for every REFUSE code and what the configuration can hide.
+## deptry
+
+Select the deptry checks you adopt for a Python project:
+
+```ts
+import { deptry } from '@redproof/deptry';
+import { defineGate } from 'redproof';
+
+const adapter = deptry({
+  command: '.venv/bin/deptry',
+  rules: { missing: 'DEP001', unused: 'DEP002', transitive: 'DEP003' },
+});
+
+export default defineGate({ id: 'python-dependencies', adapter });
+```
+
+Each code (`DEP001` to `DEP005`) is its own Rule `deptry/<code>`. Run deptry from the project's virtualenv: it reads installed package metadata, and a declared package that is not installed makes the check REFUSE, because deptry then guesses its module name. The project's own `[tool.deptry]` settings that could hide a finding (`ignore`, `per_rule_ignores`, `known_first_party`, `package_module_name_map`, `exclude`, `extend_exclude`) are overridden on the command line and the settings deptry echoes are checked, so a project setting never silences a selected rule; `allowPerRuleIgnores`, `allowKnownFirstParty` and `allowPackageModuleNameMap` accept the project's own value. deptry also exits 0 after skipping a file it cannot parse or scanning no files, and exits 1 on a crash as well as on findings, so the adapter REFUSES in those cases. The check also compares the list of files deptry says it scanned with an independent walk and REFUSES on any difference, on a file name that holds a line break, on an unreadable directory, and on `# deptry: ignore` comments that silenced a selected rule (`allowInlineIgnores` accepts them). `DEP001` alone is satisfied by an undeclared import of an installed package; select `DEP003` too.
+
+See the [deptry package](../packages/deptry/README.md) for every refusal and blind spot.
 
 ## Coverage
 

@@ -45,6 +45,7 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/istanbul/src/shell/collect.ts',
   'packages/istanbul/src/shell/nyc.ts',
   'packages/coverage-py/src/shell/collect.ts',
+  'packages/deptry/src/shell/check.ts',
   'packages/testing/src/shell/command-runner.ts',
   'packages/testing/src/shell/vitest-runner.ts',
 ]);
