@@ -1,0 +1,14 @@
+[
+    {
+        "error": {
+            "code": "DEP003",
+            "message": "'click' imported but it is a transitive dependency"
+        },
+        "module": "click",
+        "location": {
+            "file": "src/m.py",
+            "line": 1,
+            "column": 8
+        }
+    }
+]

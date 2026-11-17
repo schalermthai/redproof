@@ -50,6 +50,22 @@ jobs:
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
 
+      # The @redproof/deptry native tests run the real tool, the newest pinned release and the oldest supported
+      # one. They are only registered when an interpreter is found, so REDPROOF_DEPTRY_REQUIRED makes a missing one fail.
+      - name: Install Python for the native adapter tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Point the native tests at deptry
+        run: |
+          python -m venv "$RUNNER_TEMP/deptry-venv"
+          "$RUNNER_TEMP/deptry-venv/bin/python" -m pip install deptry==0.25.1
+          python -m venv "$RUNNER_TEMP/deptry-oldest-venv"
+          "$RUNNER_TEMP/deptry-oldest-venv/bin/python" -m pip install deptry==0.21.2
+          echo "REDPROOF_DEPTRY_PYTHON=$RUNNER_TEMP/deptry-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_DEPTRY_PYTHON_OLDEST=$RUNNER_TEMP/deptry-oldest-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_DEPTRY_REQUIRED=1" >> "$GITHUB_ENV"
       # The @redproof/vulture native tests run the real tool, the newest pinned release and the oldest supported
       # one. They are only registered when an interpreter is found, so REDPROOF_VULTURE_REQUIRED makes a missing one fail.
       - name: Install Python for the native adapter tests
@@ -128,6 +144,24 @@ jobs:
           "$RUNNER_TEMP/coverage-venv/bin/python" -m pip install coverage==7.17.3
           echo "REDPROOF_COVERAGE_PY_PYTHON=$RUNNER_TEMP/coverage-venv/bin/python" >> "$GITHUB_ENV"
 
+      # The @redproof/deptry native tests run the real tool, the newest pinned release and the oldest supported
+      # one. They are only registered when an interpreter is found, so REDPROOF_DEPTRY_REQUIRED makes a missing one fail.
+      - name: Install Python for the native adapter tests
+        if: matrix.gate == 'test-health'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Point the native tests at deptry
+        if: matrix.gate == 'test-health'
+        run: |
+          python -m venv "$RUNNER_TEMP/deptry-venv"
+          "$RUNNER_TEMP/deptry-venv/bin/python" -m pip install deptry==0.25.1
+          python -m venv "$RUNNER_TEMP/deptry-oldest-venv"
+          "$RUNNER_TEMP/deptry-oldest-venv/bin/python" -m pip install deptry==0.21.2
+          echo "REDPROOF_DEPTRY_PYTHON=$RUNNER_TEMP/deptry-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_DEPTRY_PYTHON_OLDEST=$RUNNER_TEMP/deptry-oldest-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_DEPTRY_REQUIRED=1" >> "$GITHUB_ENV"
       # The @redproof/vulture native tests run the real tool, the newest pinned release and the oldest supported
       # one. They are only registered when an interpreter is found, so REDPROOF_VULTURE_REQUIRED makes a missing one fail.
       - name: Install Python for the native adapter tests
