@@ -14,6 +14,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Mutation-testing requirements hold | [`@redproof/stryker`](#stryker) |
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
+| Python module boundaries, layers, and interfaces hold | [`@redproof/tach`](#tach) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
 | A Python project declares exactly the dependencies it imports | [`@redproof/deptry`](#deptry) |
 | A Python project has no dead code | [`@redproof/vulture`](#vulture) |
@@ -660,6 +661,25 @@ Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) dec
 It also REFUSES when a directory cannot be read, when the Gate root sits under a directory whose name starts with `test` (vulture would then count `test_*` functions as used, so the verdict would depend on the checkout path; `allowTestPathAncestors` accepts it), when a Python file is a symbolic link that leads outside the Gate root, and when a file name holds a line break. vulture also ships whitelists for a few standard-library modules (`sys`, `logging`, `threading`, `unittest`, ...): once any file imports one, the names in it count as used everywhere, so an unused `import sys` and dead functions called `run`, `emit` or `setUp` are invisible. `exclude: ['whitelists/*_whitelist.py']` reveals them (see the package README).
 
 See the [vulture package](../packages/vulture/README.md) for every refusal and blind spot.
+
+## tach
+
+`tach()` runs `tach check --output json` on a Python project and fails on the kinds of finding you select:
+
+```ts
+import { tach } from '@redproof/tach';
+import { defineGate } from 'redproof';
+
+const adapter = tach({
+  rules: { undeclared: 'undeclared-dependency', layers: 'layer-violation', interfaces: 'interface-violation' },
+});
+
+export default defineGate({ id: 'python-boundaries', adapter });
+```
+
+`tach.toml` must be in the working directory. A skipped file, a project with nothing to inspect, a crash, a timeout, a tach newer than the verified minor, or an unknown diagnostic is REFUSE, not PASS. So is a selected rule whose configuration is missing or off (for example `circular-dependency` without `forbid_circular_dependencies = true`, or `interface-violation` with no `[[interfaces]]`), and anything that could make tach skip Python files: an `exclude` beyond plain environment and cache names (`allowExcludedSources`), a `.gitignore`, `.ignore` or `.git/info/exclude` match, a nested repository, a symbolic link (`allowIgnoredSources`), or source roots that overlap (no opt-out, because tach's own result is then random). `allowInactiveRules` accepts a selected rule with nothing configured to enforce. `tach.toml` is read with a real TOML parser, and one that is not valid TOML REFUSES. A Gate that selects `undeclared-dependency` alone does not see an import tach labels forbidden or layer, because tach reports one kind per import. Unused module dependencies are not available: tach prints them only as text. Project settings such as `# tach-ignore` and `TYPE_CHECKING` imports still decide what tach reports.
+
+See the [tach package](../packages/tach/README.md) for every rule and the blind spots.
 
 ## Coverage
 

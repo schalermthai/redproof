@@ -1,0 +1,19 @@
+[
+  {
+    "Located": {
+      "file_path": "src/a/__init__.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "PrivateDependency": {
+            "dependency": "b.thing",
+            "definition_module": "b",
+            "usage_module": "a"
+          }
+        }
+      }
+    }
+  }
+]

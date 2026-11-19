@@ -24,6 +24,7 @@ const PACKAGES = [
   { name: '@redproof/istanbul', tarballPrefix: 'redproof-istanbul-', probe: 'istanbul' },
   { name: '@redproof/ruff', tarballPrefix: 'redproof-ruff-', probe: 'ruff' },
   { name: '@redproof/coverage-py', tarballPrefix: 'redproof-coverage-py-', probe: 'coveragePy' },
+  { name: '@redproof/tach', tarballPrefix: 'redproof-tach-', probe: 'tach' },
   { name: '@redproof/deptry', tarballPrefix: 'redproof-deptry-', probe: 'deptry' },
   { name: '@redproof/vulture', tarballPrefix: 'redproof-vulture-', probe: 'vulture' },
 ] as const;
@@ -348,6 +349,9 @@ assert.equal(missing.verdict, 'refuse', JSON.stringify(missing));
     + "import { coveragePy } from '@redproof/coverage-py';\n"
     + "export const pyCoverage = coveragePy({ args: ['-m', 'pytest'], rules: { lineCoverage: { minimum: 90 }, perFileMinimum: { minimum: 60, metric: 'branches' } } });\n"
     + "export const pyCoverageId: 'coverage-py/line-coverage' = pyCoverage.rules.lineCoverage.id;\n"
+    + "import { tach } from '@redproof/tach';\n"
+    + "export const boundaries = tach({ rules: { layers: 'layer-violation', cycles: 'circular-dependency' } });\n"
+    + "export const boundaryId: 'tach/layer-violation' = boundaries.rules.layers.id;\n"
     + "import { deptry } from '@redproof/deptry';\n"
     + "export const pyDeps = deptry({ command: 'deptry', rules: { missing: 'DEP001', unused: 'DEP002' }, allowPerRuleIgnores: true });\n"
     + "export const pyDepsId: 'deptry/DEP001' = pyDeps.rules.missing.id;\n"

@@ -1,0 +1,21 @@
+[
+  {
+    "Located": {
+      "file_path": "src/a/__init__.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "LayerViolation": {
+            "dependency": "b.thing",
+            "usage_module": "a",
+            "usage_layer": "low",
+            "definition_module": "b",
+            "definition_layer": "high"
+          }
+        }
+      }
+    }
+  }
+]

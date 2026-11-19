@@ -1,0 +1,14 @@
+[
+  {
+    "Global": {
+      "severity": "Error",
+      "details": {
+        "Configuration": {
+          "SkippedFileSyntaxError": {
+            "file_path": "a/bad.py"
+          }
+        }
+      }
+    }
+  }
+]

@@ -83,6 +83,13 @@ jobs:
           echo "REDPROOF_VULTURE_PYTHON_OLDEST=$RUNNER_TEMP/vulture-oldest-venv/bin/python" >> "$GITHUB_ENV"
           echo "REDPROOF_VULTURE_REQUIRED=1" >> "$GITHUB_ENV"
 
+      - name: Point the native tests at tach
+        run: |
+          python -m venv "$RUNNER_TEMP/tach-venv"
+          "$RUNNER_TEMP/tach-venv/bin/python" -m pip install tach==0.35.3
+          echo "REDPROOF_TACH_PYTHON=$RUNNER_TEMP/tach-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_TACH_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Run quality and integration checks
         run: npm run check:quality
 
@@ -110,7 +117,7 @@ jobs:
     name: Redproof proofs (${{ matrix.gate }})
     needs: discover
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -180,6 +187,14 @@ jobs:
           echo "REDPROOF_VULTURE_PYTHON=$RUNNER_TEMP/vulture-venv/bin/python" >> "$GITHUB_ENV"
           echo "REDPROOF_VULTURE_PYTHON_OLDEST=$RUNNER_TEMP/vulture-oldest-venv/bin/python" >> "$GITHUB_ENV"
           echo "REDPROOF_VULTURE_REQUIRED=1" >> "$GITHUB_ENV"
+
+      - name: Point the native tests at tach
+        if: matrix.gate == 'test-health'
+        run: |
+          python -m venv "$RUNNER_TEMP/tach-venv"
+          "$RUNNER_TEMP/tach-venv/bin/python" -m pip install tach==0.35.3
+          echo "REDPROOF_TACH_PYTHON=$RUNNER_TEMP/tach-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_TACH_REQUIRED=1" >> "$GITHUB_ENV"
 
       - name: Build the proof runtime
         run: npm run build

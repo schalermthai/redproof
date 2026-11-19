@@ -1,0 +1,327 @@
+[
+  {
+    "Located": {
+      "file_path": "other_src_root/module4/service.py",
+      "line_number": 18,
+      "original_line_number": 18,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "UndeclaredDependency": {
+            "dependency": "globbed.other.module.something",
+            "usage_module": "module4",
+            "definition_module": "globbed.other.module"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "other_src_root/module4/service.py",
+      "line_number": 1,
+      "original_line_number": null,
+      "severity": "Warning",
+      "details": {
+        "Code": {
+          "MissingIgnoreDirectiveReason": []
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "other_src_root/module4/service.py",
+      "line_number": 6,
+      "original_line_number": null,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "UnusedIgnoreDirective": []
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "other_src_root/module4/service.py",
+      "line_number": 12,
+      "original_line_number": null,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "UnusedIgnoreDirective": []
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "other_src_root/module5/__init__.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "PrivateDependency": {
+            "dependency": "module1.api.something",
+            "definition_module": "module1.api",
+            "usage_module": "module5"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "other_src_root/module1/api.py",
+      "line_number": 1,
+      "original_line_number": null,
+      "severity": "Warning",
+      "details": {
+        "Code": {
+          "MissingIgnoreDirectiveReason": []
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "other_src_root/module1/api.py",
+      "line_number": 1,
+      "original_line_number": null,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "UnusedIgnoreDirective": []
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module1/__init__.py",
+      "line_number": 5,
+      "original_line_number": 5,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "PrivateDependency": {
+            "dependency": "module3.anything",
+            "definition_module": "module3",
+            "usage_module": "module1"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module2/service.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "UndeclaredDependency": {
+            "dependency": "outer_module",
+            "usage_module": "module2",
+            "definition_module": "outer_module"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module3/__init__.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "LayerViolation": {
+            "dependency": "module1",
+            "usage_module": "module3",
+            "usage_layer": "low",
+            "definition_module": "module1",
+            "definition_layer": "mid"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module3/submodule1/__init__.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "ForbiddenDependency": {
+            "dependency": "module3.submodule2.something",
+            "usage_module": "module3.submodule1",
+            "definition_module": "module3.submodule2"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/main.py",
+      "line_number": 1,
+      "original_line_number": null,
+      "severity": "Warning",
+      "details": {
+        "Code": {
+          "MissingIgnoreDirectiveReason": []
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/main.py",
+      "line_number": 1,
+      "original_line_number": null,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "UnusedIgnoreDirective": []
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/globbed/other/module.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "LayerViolation": {
+            "dependency": "module2.something",
+            "usage_module": "globbed.other.module",
+            "usage_layer": "hightest",
+            "definition_module": "module2",
+            "definition_layer": "high"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module1/controller.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "LayerViolation": {
+            "dependency": "module5.something",
+            "usage_module": "module1.controller",
+            "usage_layer": "hightest",
+            "definition_module": "module5",
+            "definition_layer": "mid"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module1/controller.py",
+      "line_number": 5,
+      "original_line_number": null,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "LayerViolation": {
+            "dependency": "module3.content",
+            "usage_module": "module1.controller",
+            "usage_layer": "hightest",
+            "definition_module": "module3",
+            "definition_layer": "low"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module1/controller.py",
+      "line_number": 6,
+      "original_line_number": null,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "LayerViolation": {
+            "dependency": "module3.anything",
+            "usage_module": "module1.controller",
+            "usage_layer": "hightest",
+            "definition_module": "module3",
+            "definition_layer": "low"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module1/controller.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "PrivateDependency": {
+            "dependency": "module5.something",
+            "definition_module": "module5",
+            "usage_module": "module1.controller"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module1/controller.py",
+      "line_number": 6,
+      "original_line_number": null,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "PrivateDependency": {
+            "dependency": "module3.anything",
+            "definition_module": "module3",
+            "usage_module": "module1.controller"
+          }
+        }
+      }
+    }
+  },
+  {
+    "Located": {
+      "file_path": "real_src/module2/__init__.py",
+      "line_number": 8,
+      "original_line_number": 8,
+      "severity": "Error",
+      "details": {
+        "Code": {
+          "ClosedLayerViolation": {
+            "dependency": "module3.submodule3.lowest_open.something_else",
+            "usage_module": "module2",
+            "usage_layer": "high",
+            "definition_module": "module3.submodule3.lowest_open",
+            "definition_layer": "lowest-open",
+            "closed_layer": "closed"
+          }
+        }
+      }
+    }
+  }
+]

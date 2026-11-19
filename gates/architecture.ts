@@ -15,6 +15,7 @@ const dependencies = dependencyCruiser({
     'packages/istanbul/src',
     'packages/ruff/src',
     'packages/coverage-py/src',
+    'packages/tach/src',
     'packages/deptry/src',
     'packages/vulture/src',
     'tests',
@@ -154,6 +155,11 @@ export const proofs = defineProofs(gate, [
     rules.adaptersPublicCoreApiOnly,
     'keeps the coverage.py adapter inside the scan and public API boundary',
     mutate.appendText('packages/coverage-py/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps the tach adapter inside the scan and public API boundary',
+    mutate.appendText('packages/tach/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.adaptersPublicCoreApiOnly,

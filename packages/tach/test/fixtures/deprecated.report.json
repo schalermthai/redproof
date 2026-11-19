@@ -1,0 +1,19 @@
+[
+  {
+    "Located": {
+      "file_path": "src/a/__init__.py",
+      "line_number": 1,
+      "original_line_number": 1,
+      "severity": "Warning",
+      "details": {
+        "Code": {
+          "DeprecatedDependency": {
+            "dependency": "b.thing",
+            "usage_module": "a",
+            "definition_module": "b"
+          }
+        }
+      }
+    }
+  }
+]
