@@ -1,6 +1,6 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { Allowance } from './options.ts';
-import { coversCode, ignoreCodes, parseMypyVersion, relatedCodes, unresolvedImportCodes } from './model.ts';
+import { coversCode, ignoreCodes, ignoreMayHide, parseMypyVersion, relatedCodes, unresolvedImportCodes } from './model.ts';
 
 /** One file mypy loaded, with what no option shows about it. */
 type LoadedFile = {
@@ -158,7 +158,7 @@ const ONLY_TRUE = new Set([
   'disallow_untyped_decorators', 'disallow_untyped_defs', 'extra_checks', 'strict_equality', 'strict_equality_for_none',
   'strict_concatenate', 'strict_bytes', 'strict_optional', 'warn_incomplete_stub', 'warn_no_return',
   'warn_redundant_casts', 'warn_return_any', 'warn_unreachable', 'warn_unused_ignores', 'local_partial_types',
-  'follow_untyped_imports', 'disable_bytearray_promotion', 'disable_memoryview_promotion', 'pos_only_special_methods',
+  'disable_bytearray_promotion', 'disable_memoryview_promotion', 'pos_only_special_methods',
 ]);
 const ONLY_FALSE = new Set(['implicit_reexport']);
 
@@ -252,6 +252,7 @@ export function judgeFacts(input: PolicyInput): Problem | undefined {
       else if (value !== 'normal') unvetted.push(show(place));
       continue;
     }
+    if (name === 'follow_untyped_imports') { if (value === true) hide('follow-imports', place); continue; } // mypy then stops reporting import-untyped
     if (name === 'exclude') { if (!empty(value)) hide('exclude', place); continue; }
     if (name === 'always_true' || name === 'always_false') { if (!empty(value)) hide('reachability', place); continue; }
     if (name === 'plugins') { if (!empty(value)) hide('plugins', place); continue; }
@@ -399,7 +400,7 @@ export function hidingIgnores(
           used = ignore.codes.filter(code => !unusedCodes.includes(code));
         }
       }
-      const relevant = used === null || used.some(code => watched.some(chosen => relatedCodes(chosen, code)));
+      const relevant = used === null || used.some(code => watched.some(chosen => ignoreMayHide(chosen, code)));
       if (relevant) hiding.push(`${file.path}:${ignore.line}: # type: ignore${ignore.codes ? `[${ignore.codes.join(',')}]` : ''}`);
     }
   }

@@ -164,6 +164,8 @@ What the one comparison cannot see. Each of these can still give a PASS that say
 
 - **Unannotated code passes type rules vacuously.** Bodies are checked (`--check-untyped-defs`), but parameters without annotations are `Any`, so `arg-type`,
   `return-value`, `attr-defined` and friends have nothing to compare there. `no-untyped-def` is the rule that says so.
+- `# type: ignore[misc]` is treated as able to hide a selected `call-arg` on every version: mypy 2.x reports "Too many positional arguments" as `call-arg` under `misc`, and 1.11 as `misc`. On 1.11 this refuses a program that would have passed.
+- `follow_untyped_imports = true` refuses like `follow_imports = skip` (mypy then stops reporting `import-untyped`).
 - `warn_unused_configs` is accepted, but a `[mypy-x]` section that matches no module makes mypy report it, and the Gate then REFUSES (`mypy-unexpected-stderr` on 1.11.0, `mypy-report-unavailable` on 2.x). That is a wrong REFUSE, not a PASS.
 - A configuration file that sets `python_version` or `platform` to the very value the host has counts as unpinned (the probe compares against the no-config baseline), so it REFUSES `mypy-host-dependent` on that host and runs elsewhere. Pin `pythonVersion` and `platform` in the Gate.
 - A `# type: ignore[unused-ignore]` makes a stale ignore invisible to the `unused-ignore` rule; that is mypy's own semantics.

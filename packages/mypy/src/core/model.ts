@@ -103,6 +103,14 @@ export function coversCode(wide: string, narrow: string): boolean {
 /** Either covers the other: a `# type: ignore[a]` hides a finding of `b` when this holds. */
 export const relatedCodes = (a: string, b: string): boolean => coversCode(a, b) || coversCode(b, a);
 
+/**
+ * Whether `# type: ignore[ignored]` can hide a finding of the selected `chosen`. Besides the code tree, mypy 2.x reports
+ * "Too many positional arguments" as `call-arg` with `misc` as its parent, which the tree cannot say for 1.11 (where it is `misc`),
+ * so the edge exists for ignore comments only: a wrong edge there is a REFUSE, never a wrong breach.
+ */
+export const ignoreMayHide = (chosen: string, ignored: string): boolean =>
+  relatedCodes(chosen, ignored) || (chosen === 'call-arg' && ignored === 'misc');
+
 /** The import-resolution codes: when they fire, mypy typed the import as `Any`, so other rules saw less than they should. */
 export const unresolvedImportCodes: readonly string[] = ['import-not-found', 'import-untyped'];
 

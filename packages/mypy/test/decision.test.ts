@@ -236,6 +236,11 @@ test('a global disable of a sub-code of the selected code hides it, because the 
   refusedWith(await decide('clean', { probe, codes: ['assignment'] }), 'mypy-setting-hides-findings');
 });
 
+test('follow_untyped_imports hides import-untyped, so it refuses like follow_imports', async () => {
+  const probe = tweak('clean', f => { f.changed.follow_untyped_imports = true; });
+  refusedWith(await decide('clean', { probe }), 'mypy-setting-hides-findings');
+});
+
 test('settings that only tighten, or only change how mypy talks, are accepted', async () => {
   const probe = tweak('clean', f => {
     Object.assign(f.changed, { disallow_untyped_defs: true, warn_unreachable: true, strict_equality: true, implicit_reexport: false, show_column_numbers: true, pretty: true, warn_unused_configs: true });

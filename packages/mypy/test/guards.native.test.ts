@@ -106,6 +106,8 @@ const matrix: ReadonlyArray<readonly [string, Files, Partial<MypyOptions>, Outco
   ['B1: global disable of typeddict-unknown-key, rule typeddict-item', { 'a.py': 'from typing import TypedDict\nclass T(TypedDict):\n    a: int\nt: T = {"a": 1, "b": 2}\n', 'mypy.ini': '[mypy]\ndisable_error_code = typeddict-unknown-key\n' }, {}, 'mypy-setting-hides-findings', 'typeddict-item'],
   ['B1 control: a global disable of the selected code still fails (the command line enables it)', { 'a.py': BAD, 'mypy.ini': '[mypy]\ndisable_error_code = assignment\n' }, {}, 'fail'],
   ['B1 control: a global disable of a parent, with the child selected, still fails', { 'a.py': 'class A:\n    def f(self) -> None: ...\nA().f = lambda: None\n', 'mypy.ini': '[mypy]\ndisable_error_code = assignment\n' }, {}, 'fail', 'method-assign'],
+  ['R6: follow_untyped_imports makes mypy stop reporting import-untyped (2.x); 1.11 does not know the option', { 'a.py': 'x: int = 1\n', 'mypy.ini': '[mypy]\nfollow_untyped_imports = True\n' }, {}, 'mypy-setting-hides-findings|mypy-config-warning'],
+  ['R6: follow_untyped_imports in a section', { 'a.py': 'x: int = 1\n', 'mypy.ini': '[mypy]\n[mypy-untypedpkg]\nfollow_untyped_imports = True\n' }, {}, 'mypy-setting-hides-findings|mypy-config-warning'],
   // Review round 3
   ['an empty module and a comment-only module are not whole-file ignores', { 'a.py': 'x: int = 1\n', 'pkg/__init__.py': '', 'pkg/notes.py': '# only a comment\n\n# and another\n' }, { paths: ['.'] }, 'pass'],
   ['B9: a lone CR before the used ignore does not move it onto the unused one', { 'a.py': Buffer.from('y = 1  # type: ignore\rx: int = "a"  # type: ignore\n') }, {}, 'mypy-ignore-comments'],
@@ -140,6 +142,12 @@ for (const [name, files, options, expected, rule] of matrix) {
     });
   });
 }
+
+native('R6: ignore[misc] on a call-arg rule refuses (mypy 2.x makes call-arg a sub-code of misc; on 1.11 the refusal is conservative)', async () => {
+  await withFiles({ 'a.py': 'def g(*, k: int) -> None: ...\ng(1)  # type: ignore[misc]\n' }, async root => {
+    assert.equal(outcome(await run(root, {}, 'call-arg')), 'mypy-ignore-comments');
+  });
+});
 
 native('REFUSE, never PASS: a mypy that cannot import (a Python with no mypy installed)', async () => {
   await withFiles({ 'a.py': BAD }, async root => {
