@@ -1,0 +1,5 @@
+{
+ "exitCode": 1,
+ "stdout": "{\"file\": \"a.py\", \"line\": 2, \"column\": -1, \"end_line\": 2, \"end_column\": -1, \"message\": \"Unused \\\"type: ignore\\\" comment\", \"hint\": null, \"code\": \"unused-ignore\", \"severity\": \"error\"}\n",
+ "stderr": ""
+}

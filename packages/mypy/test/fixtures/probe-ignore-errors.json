@@ -1,0 +1,1 @@
+{"kind": "facts", "mypyVersion": "2.4.1", "hostVersion": [3, 15], "hostPlatform": "darwin", "configFile": "mypy.ini", "stdout": "", "stderr": "", "sources": [{"path": "./a.py", "module": "a"}], "changed": {"config_file": "mypy.ini"}, "sections": {"a": {"ignore_errors": true, "disable_error_code": [], "enable_error_code": []}}}

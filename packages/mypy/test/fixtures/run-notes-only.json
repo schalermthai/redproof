@@ -1,0 +1,5 @@
+{
+ "exitCode": 1,
+ "stdout": "{\"file\": \"a.py\", \"line\": 2, \"column\": 13, \"end_line\": 2, \"end_column\": 16, \"message\": \"Incompatible types in assignment (expression has type \\\"str\\\", variable has type \\\"int\\\")\", \"hint\": null, \"code\": \"assignment\", \"severity\": \"error\"}\n",
+ "stderr": ""
+}

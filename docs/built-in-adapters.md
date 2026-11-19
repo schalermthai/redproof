@@ -14,6 +14,7 @@ You keep using Vitest, ESLint, dependency-cruiser, Stryker, or another supported
 | Mutation-testing requirements hold | [`@redproof/stryker`](#stryker) |
 | Unused files, exports, or dependencies are absent | [`@redproof/knip`](#knip) |
 | Python code has no findings from Ruff rules | [`@redproof/ruff`](#ruff) |
+| Python code has no type errors of the codes you select | [`@redproof/mypy`](#mypy) |
 | Coverage thresholds hold | [`@redproof/istanbul`](#coverage) |
 | A Python project declares exactly the dependencies it imports | [`@redproof/deptry`](#deptry) |
 | A Python project has no dead code | [`@redproof/vulture`](#vulture) |
@@ -660,6 +661,34 @@ Each kind is its own Rule `vulture/<kind>`, and `minConfidence` (default 60) dec
 It also REFUSES when a directory cannot be read, when the Gate root sits under a directory whose name starts with `test` (vulture would then count `test_*` functions as used, so the verdict would depend on the checkout path; `allowTestPathAncestors` accepts it), when a Python file is a symbolic link that leads outside the Gate root, and when a file name holds a line break. vulture also ships whitelists for a few standard-library modules (`sys`, `logging`, `threading`, `unittest`, ...): once any file imports one, the names in it count as used everywhere, so an unused `import sys` and dead functions called `run`, `emit` or `setUp` are invisible. `exclude: ['whitelists/*_whitelist.py']` reveals them (see the package README).
 
 See the [vulture package](../packages/vulture/README.md) for every refusal and blind spot.
+
+## mypy
+
+Select mypy error codes. Each code becomes a Rule named `mypy/<code>`:
+
+```ts
+import { mypy } from '@redproof/mypy';
+import { defineGate } from 'redproof';
+
+const adapter = mypy({
+  paths: ['src'],
+  pythonVersion: '3.12',
+  platform: 'linux',
+  rules: {
+    args: 'arg-type',
+    returns: 'return-value',
+    untyped: 'no-untyped-def',
+  },
+});
+
+export default defineGate({ id: 'python-types', adapter });
+```
+
+Any error of a selected code breaches that Rule; errors of other codes are ignored. Codes that mypy keeps silent unless a flag asks for them (such as `no-untyped-def`) get that flag from the adapter. mypy 1.11.0 or newer is required, and it must be installed in the Python named by `python`.
+
+Anything that can hide a finding is REFUSE, not PASS, except code behind a condition mypy evaluates as false (a `sys.version_info` or `sys.platform` branch for the pinned version, the `else` of `if TYPE_CHECKING:`), which mypy skips without a word: `ignore_errors`, `follow_imports = skip`, `exclude`, a `[mypy-x]` section that disables a selected code, a `# mypy:` comment, a `# type: ignore` that suppressed an error, a `@no_type_check` body, a Python file mypy never loaded, code mypy considers unreachable, an import mypy could not resolve, a configuration outside the Gate root, and a Python version or platform the Gate did not pin. A run that crashed, was killed, timed out, or printed a truncated report is REFUSE too. `allow` accepts one named setting knowingly.
+
+See the [mypy package](../packages/mypy/README.md) for every rule, every REFUSE code and the blind spots.
 
 ## Coverage
 

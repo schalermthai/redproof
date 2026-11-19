@@ -14,6 +14,7 @@ const dependencies = dependencyCruiser({
     'packages/knip/src',
     'packages/istanbul/src',
     'packages/ruff/src',
+    'packages/mypy/src',
     'packages/coverage-py/src',
     'packages/deptry/src',
     'packages/vulture/src',
@@ -164,6 +165,11 @@ export const proofs = defineProofs(gate, [
     rules.adaptersPublicCoreApiOnly,
     'keeps the vulture adapter inside the scan and public API boundary',
     mutate.appendText('packages/vulture/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
+  ),
+  proof.red(
+    rules.adaptersPublicCoreApiOnly,
+    'keeps the mypy adapter inside the scan and public API boundary',
+    mutate.appendText('packages/mypy/src/index.ts', "\nimport '../../redproof/src/run/core/exit-code.ts';\n"),
   ),
   proof.red(
     rules.adaptersNoCrossAdapterImports,

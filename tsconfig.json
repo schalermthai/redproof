@@ -15,6 +15,7 @@
     "paths": {
       "@redproof/knip": ["packages/knip/src/index.ts"],
       "@redproof/ruff": ["packages/ruff/src/index.ts"],
+      "@redproof/mypy": ["packages/mypy/src/index.ts"],
       "redproof": [
         "packages/redproof/src/index.ts"
       ],

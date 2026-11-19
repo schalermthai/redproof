@@ -1,0 +1,5 @@
+{
+ "exitCode": 1,
+ "stdout": "{\"file\": \"a.py\", \"line\": 2, \"column\": 2, \"end_line\": 2, \"end_column\": 5, \"message\": \"Argument 1 to \\\"f\\\" has incompatible type \\\"str\\\"; expected \\\"int\\\"\", \"hint\": null, \"code\": \"arg-type\", \"severity\": \"error\"}\n",
+ "stderr": ""
+}

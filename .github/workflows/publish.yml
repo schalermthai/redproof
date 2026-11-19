@@ -85,6 +85,19 @@ jobs:
       - name: Install Ruff
         run: pipx install ruff==0.17.5
 
+      # The @redproof/mypy native tests run the real tool and are required to run.
+      - name: Install Python for mypy
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Point the native tests at mypy
+        run: |
+          python -m venv "$RUNNER_TEMP/mypy-venv"
+          "$RUNNER_TEMP/mypy-venv/bin/python" -m pip install mypy==2.4.1
+          echo "REDPROOF_MYPY_PYTHON=$RUNNER_TEMP/mypy-venv/bin/python" >> "$GITHUB_ENV"
+          echo "REDPROOF_MYPY_REQUIRED=1" >> "$GITHUB_ENV"
+
       - name: Run the full project check
         run: npm run check
 
@@ -112,7 +125,7 @@ jobs:
           set -euo pipefail
 
           MISSING_PACKAGES=()
-          for READY_PACKAGE in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/istanbul @redproof/coverage-py @redproof/deptry @redproof/vulture @redproof/knip @redproof/ruff; do
+          for READY_PACKAGE in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/istanbul @redproof/coverage-py @redproof/deptry @redproof/vulture @redproof/knip @redproof/ruff @redproof/mypy; do
             if LOOKUP=$(npm view "$READY_PACKAGE" name --json 2>&1); then
               continue
             fi
@@ -160,7 +173,7 @@ jobs:
           set -euo pipefail
 
           PUBLISHED_PACKAGES=()
-          for PKG in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/istanbul @redproof/coverage-py @redproof/deptry @redproof/vulture @redproof/knip @redproof/ruff; do
+          for PKG in redproof @redproof/adapter-tck @redproof/eslint @redproof/dependency-cruiser @redproof/stryker @redproof/testing @redproof/istanbul @redproof/coverage-py @redproof/deptry @redproof/vulture @redproof/knip @redproof/ruff @redproof/mypy; do
             if npm view "${PKG}@${VERSION}" version --json >/dev/null 2>&1; then
               echo "Skipping ${PKG}@${VERSION}: already published"
               continue

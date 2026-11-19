@@ -19,6 +19,7 @@ const APPROVED_EFFECT_BOUNDARIES = new Set([
   'packages/knip/src/index.ts',
   'packages/knip/src/reporter.ts',
   'packages/ruff/src/shell/check.ts',
+  'packages/mypy/src/shell/check.ts',
   'packages/adapter-tck/src/index.ts',
   'packages/dependency-cruiser/src/index.ts',
   'packages/dependency-cruiser/src/shell/config-worker.ts',
