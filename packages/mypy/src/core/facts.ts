@@ -1,6 +1,6 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { Allowance } from './options.ts';
-import { ignoreCodes, parseMypyVersion, relatedCodes, unresolvedImportCodes } from './model.ts';
+import { coversCode, ignoreCodes, parseMypyVersion, relatedCodes, unresolvedImportCodes } from './model.ts';
 
 /** One file mypy loaded, with what no option shows about it. */
 type LoadedFile = {
@@ -258,8 +258,11 @@ export function judgeFacts(input: PolicyInput): Problem | undefined {
     if (name === 'mypy_path') continue; // checked against the root above
     if (name === 'disable_error_code' || name === 'disabled_error_codes') {
       const codes = Array.isArray(value) ? value.map(String) : [];
-      // A global disable loses to the command line's --enable-error-code; a section's does not.
-      if (place.where !== 'the configuration' && codes.some(code => input.selected.some(chosen => relatedCodes(chosen, code)))) {
+      // The command line enables the exact selected code, which beats a global disable of it (or of its parent),
+      // but not a global disable of one of its sub-codes. A section's disable beats the command line outright.
+      const hidesSelected = (code: string): boolean => input.selected.some(chosen =>
+        place.where === 'the configuration' ? chosen !== code && coversCode(chosen, code) : relatedCodes(chosen, code));
+      if (codes.some(hidesSelected)) {
         hide('disabled-codes', place);
       }
       continue;

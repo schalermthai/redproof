@@ -25,6 +25,8 @@ mypy type-checks against the packages that interpreter can see). mypy 1.11.0 or 
 
 ## Rules
 
+Codes that mypy 1.11.0 does not know (`deprecated`, `exhaustive-match`, `explicit-any`, `overload-cannot-match`, `redundant-cast`, `untyped-decorator`) refuse `mypy-unknown-rule` there and need mypy 2.x.
+
 Selecting a code selects that code and its sub-codes (`import` covers `import-not-found` and `import-untyped`; `assignment` covers
 `method-assign`). Two selected codes may not overlap. A code is selectable only if a minimal program went red at the Gate with that
 code alone, an empty configuration, and green once fixed; a code that mypy keeps silent unless a flag asks for it gets that
@@ -162,12 +164,14 @@ What the one comparison cannot see. Each of these can still give a PASS that say
 
 - **Unannotated code passes type rules vacuously.** Bodies are checked (`--check-untyped-defs`), but parameters without annotations are `Any`, so `arg-type`,
   `return-value`, `attr-defined` and friends have nothing to compare there. `no-untyped-def` is the rule that says so.
+- `warn_unused_configs` is accepted, but a `[mypy-x]` section that matches no module makes mypy report it, and the Gate then REFUSES (`mypy-unexpected-stderr` on 1.11.0, `mypy-report-unavailable` on 2.x). That is a wrong REFUSE, not a PASS.
+- A configuration file that sets `python_version` or `platform` to the very value the host has counts as unpinned (the probe compares against the no-config baseline), so it REFUSES `mypy-host-dependent` on that host and runs elsewhere. Pin `pythonVersion` and `platform` in the Gate.
 - A `# type: ignore[unused-ignore]` makes a stale ignore invisible to the `unused-ignore` rule; that is mypy's own semantics.
 - A source file reached through a symlink that leaves the Gate root is still checked (and scanned); the verdict then follows the host.
 - Each of the three Python processes (option probe, build probe, the run) gets the full `timeoutMs`.
 
 - Code behind a condition mypy evaluates as false: `sys.platform` and `sys.version_info` branches for the pinned version and platform (your choice,
-  made explicit by `pythonVersion` and `platform`), and the `else` of `if TYPE_CHECKING:`. mypy skips these silently and `--warn-unreachable` does not report them, so the Gate passes with the code unchecked.
+  made explicit by `pythonVersion` and `platform`), `if not TYPE_CHECKING:`, the `else` of `if TYPE_CHECKING:` (also `typing.TYPE_CHECKING`) and of the `MYPY = False` idiom. mypy skips these silently and `--warn-unreachable` does not report them, so the Gate passes with the code unchecked.
   Dead code after `assert False`, `sys.exit()` or a `NoReturn` call is different: mypy reports it, and the Gate REFUSES with `mypy-unreachable-code`.
 - The verdict depends on the packages and stubs installed for `python`. Missing ones surface as `import-not-found` / `import-untyped`, which refuse, but a
   different version of a library can still change a finding.

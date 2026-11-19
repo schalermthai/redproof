@@ -231,6 +231,11 @@ test('a global disable of the selected code does not hide it: the command line e
   assert.equal((await decide('clean', { probe })).kind, 'evidence');
 });
 
+test('a global disable of a sub-code of the selected code hides it, because the command line enables only the exact code', async () => {
+  const probe = tweak('clean', f => { f.changed.disable_error_code = ['method-assign']; });
+  refusedWith(await decide('clean', { probe, codes: ['assignment'] }), 'mypy-setting-hides-findings');
+});
+
 test('settings that only tighten, or only change how mypy talks, are accepted', async () => {
   const probe = tweak('clean', f => {
     Object.assign(f.changed, { disallow_untyped_defs: true, warn_unreachable: true, strict_equality: true, implicit_reexport: false, show_column_numbers: true, pretty: true, warn_unused_configs: true });
